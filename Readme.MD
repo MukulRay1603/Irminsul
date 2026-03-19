@@ -1,8 +1,10 @@
-# llmops-serve
+# Irminsul
 
 > Fine-tuned Llama 3.1 8B · QLoRA · Pinecone RAG · FastAPI · Azure Container Apps
 
 A full end-to-end LLMOps serving stack — from a QLoRA fine-tuned model running in 4-bit NF4 on consumer hardware, through a retrieval-augmented generation pipeline, to a containerized API deployed on Azure. Built to be production-shaped, not just a demo.
+
+**[→ Live Demo](https://mukulray1603.github.io/Irminsul/demo.html)**
 
 ---
 
@@ -64,7 +66,7 @@ Grounded answer + source attribution
 ```bash
 # 1. Clone and set up environment
 git clone https://github.com/MukulRay1603/Irminsul.git
-cd llmops-serve
+cd Irminsul
 python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
@@ -144,7 +146,7 @@ The script provisions a resource group, builds and pushes the image via ACR Task
 ## Project structure
 
 ```
-llmops-serve/
+Irminsul/
 ├── main.py           # FastAPI app — endpoints, lifespan, CORS
 ├── rag.py            # Model loading, 4-bit config, LangChain RAG chain
 ├── embedder.py       # sentence-transformers singleton wrapper
@@ -153,7 +155,9 @@ llmops-serve/
 ├── Dockerfile
 ├── deploy_azure.sh   # One-shot Azure Container Apps deploy
 ├── requirements.txt
-└── .env.example
+├── .env.example
+└── docs/             # Corpus + GitHub Pages demo
+    └── demo.html
 ```
 
 ---
