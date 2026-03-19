@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLMOps — Llama 3.1 RAG</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0b;
+    --surface: #111113;
+    --surface2: #18181c;
+    --border: #2a2a30;
+    --border2: #3a3a42;
+    --accent: #7c6af7;
+    --accent2: #a89cf7;
+    --green: #3dd68c;
+    --red: #f76a6a;
+    --amber: #f7c26a;
+    --text: #e8e8f0;
+    --text2: #8888a0;
+    --text3: #555568;
+    --mono: 'JetBrains Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(124,106,247,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(124,106,247,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  header {
+    position: relative;
+    z-index: 1;
+    padding: 28px 40px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .logo-mark {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 500;
+    color: #fff;
+    letter-spacing: -0.5px;
+  }
+
+  .logo-text {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-top: 1px;
+  }
+
+  .status-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 6px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text2);
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--text3);
+    transition: background 0.3s;
+  }
+  .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .status-dot.error { background: var(--red); }
+  .status-dot.loading { background: var(--amber); animation: pulse 1s ease-in-out infinite; }
+
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  main {
+    position: relative;
+    z-index: 1;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    max-width: 860px;
+    width: 100%;
+    margin: 0 auto;
+    padding: 40px 40px 0;
+  }
+
+  .hero {
+    margin-bottom: 40px;
+    animation: fadeUp 0.5s ease both;
+  }
+
+  @keyframes fadeUp {
+    from { opacity:0; transform: translateY(12px); }
+    to   { opacity:1; transform: translateY(0); }
+  }
+
+  .hero h1 {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.8px;
+    line-height: 1.2;
+    margin-bottom: 10px;
+  }
+
+  .hero h1 span { color: var(--accent2); }
+
+  .hero p {
+    font-size: 14px;
+    color: var(--text2);
+    font-family: var(--mono);
+    line-height: 1.6;
+  }
+
+  .model-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: var(--surface2);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+  }
+
+  /* Query input area */
+  .query-box {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0;
+    overflow: hidden;
+    transition: border-color 0.2s;
+    animation: fadeUp 0.5s 0.1s ease both;
+  }
+
+  .query-box:focus-within {
+    border-color: var(--accent);
+  }
+
+  .query-label {
+    padding: 12px 16px 0;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  textarea {
+    width: 100%;
+    background: transparent;
+    border: none;
+    outline: none;
+    resize: none;
+    padding: 10px 16px 14px;
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 90px;
+    caret-color: var(--accent);
+  }
+
+  textarea::placeholder { color: var(--text3); }
+
+  .query-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 14px;
+    border-top: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .top-k-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+  }
+
+  .top-k-wrap select {
+    background: var(--surface);
+    border: 1px solid var(--border2);
+    border-radius: 4px;
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 3px 8px;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .send-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: var(--sans);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+    letter-spacing: 0.2px;
+  }
+
+  .send-btn:hover { background: var(--accent2); }
+  .send-btn:active { transform: scale(0.97); }
+  .send-btn:disabled { background: var(--border2); color: var(--text3); cursor: not-allowed; transform: none; }
+
+  .send-btn .arrow { font-size: 14px; transition: transform 0.15s; }
+  .send-btn:not(:disabled):hover .arrow { transform: translateX(3px); }
+
+  /* Response area */
+  #response-area {
+    margin-top: 28px;
+    animation: fadeUp 0.4s ease both;
+    display: none;
+  }
+
+  #response-area.visible { display: block; }
+
+  .response-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .response-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface2);
+  }
+
+  .response-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  .response-label .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+  }
+
+  .latency-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    padding: 2px 8px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+  }
+
+  .response-body {
+    padding: 20px;
+    font-size: 15px;
+    line-height: 1.75;
+    color: var(--text);
+    min-height: 60px;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* loading state */
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text2);
+  }
+
+  .thinking-dots span {
+    display: inline-block;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--accent);
+    margin: 0 2px;
+    animation: bounce 1.2s ease-in-out infinite;
+  }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+
+  .sources-section {
+    border-top: 1px solid var(--border);
+    padding: 12px 20px;
+    background: var(--surface2);
+  }
+
+  .sources-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+
+  .source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 4px;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent2);
+    margin: 3px 4px 3px 0;
+  }
+
+  .no-sources {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text3);
+    font-style: italic;
+  }
+
+  .error-card {
+    background: rgba(247,106,106,0.06);
+    border: 1px solid rgba(247,106,106,0.25);
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--red);
+    margin-top: 16px;
+    display: none;
+  }
+  .error-card.visible { display: block; }
+
+  /* history */
+  .history-section {
+    margin-top: 32px;
+    padding-bottom: 40px;
+    animation: fadeUp 0.4s 0.15s ease both;
+  }
+
+  .history-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+  }
+
+  .history-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color 0.15s;
+  }
+
+  .history-item:hover { border-color: var(--border2); }
+
+  .history-q {
+    font-size: 13px;
+    color: var(--text2);
+    font-family: var(--mono);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .history-meta {
+    font-size: 11px;
+    color: var(--text3);
+    font-family: var(--mono);
+    margin-top: 4px;
+  }
+
+  footer {
+    position: relative;
+    z-index: 1;
+    text-align: center;
+    padding: 20px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-mark">λ</div>
+    <div>
+      <div class="logo-text">LLMOps RAG</div>
+      <div class="logo-sub">Llama 3.1 · QLoRA · Pinecone</div>
+    </div>
+  </div>
+  <div class="status-pill">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">checking...</span>
+  </div>
+</header>
+
+<main>
+  <div class="hero">
+    <h1>Ask your <span>fine-tuned</span> model</h1>
+    <p>Llama 3.1 8B · QLoRA exp2_lr2e-4_r16 · RTX 3060 · 4-bit NF4</p>
+    <div class="model-tag">
+      <span>●</span> Retrieval-augmented · semantic search over ingested docs
+    </div>
+  </div>
+
+  <div class="query-box">
+    <div class="query-label">query</div>
+    <textarea
+      id="query-input"
+      placeholder="What is QLoRA and how does it differ from full fine-tuning?"
+      rows="3"
+    ></textarea>
+    <div class="query-footer">
+      <div class="top-k-wrap">
+        <span>top_k</span>
+        <select id="top-k">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3" selected>3</option>
+          <option value="5">5</option>
+        </select>
+        <span style="color:var(--text3)">retrieved chunks</span>
+      </div>
+      <button class="send-btn" id="send-btn" onclick="submitQuery()">
+        Run query <span class="arrow">→</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="error-card" id="error-card"></div>
+
+  <div id="response-area">
+    <div class="response-card">
+      <div class="response-header">
+        <div class="response-label">
+          <div class="dot"></div>
+          response
+        </div>
+        <div class="latency-tag" id="latency-tag">—</div>
+      </div>
+      <div id="response-body" class="response-body"></div>
+      <div class="sources-section">
+        <div class="sources-label">sources</div>
+        <div id="sources-list"><span class="no-sources">no documents ingested yet</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="history-section" id="history-section" style="display:none">
+    <div class="history-label">recent queries</div>
+    <div id="history-list"></div>
+  </div>
+</main>
+
+<footer>
+  running locally · http://localhost:8000 · <span id="footer-model">exp2_lr2e-4_r16</span>
+</footer>
+
+<script>
+const API = 'http://localhost:8000';
+const history = [];
+
+async function checkHealth() {
+  const dot = document.getElementById('status-dot');
+  const txt = document.getElementById('status-text');
+  dot.className = 'status-dot loading';
+  txt.textContent = 'connecting...';
+  try {
+    const r = await fetch(`${API}/health`);
+    const d = await r.json();
+    if (d.model_loaded) {
+      dot.className = 'status-dot online';
+      txt.textContent = 'model ready';
+    } else {
+      dot.className = 'status-dot loading';
+      txt.textContent = 'loading model...';
+      setTimeout(checkHealth, 3000);
+    }
+  } catch {
+    dot.className = 'status-dot error';
+    txt.textContent = 'server offline';
+    setTimeout(checkHealth, 5000);
+  }
+}
+
+async function submitQuery() {
+  const query = document.getElementById('query-input').value.trim();
+  if (!query) return;
+
+  const top_k = parseInt(document.getElementById('top-k').value);
+  const btn = document.getElementById('send-btn');
+  const responseArea = document.getElementById('response-area');
+  const responseBody = document.getElementById('response-body');
+  const errorCard = document.getElementById('error-card');
+  const latencyTag = document.getElementById('latency-tag');
+  const sourcesList = document.getElementById('sources-list');
+
+  // reset
+  errorCard.className = 'error-card';
+  responseArea.className = 'response-area visible';
+  responseArea.style.display = 'block';
+  latencyTag.textContent = '—';
+  sourcesList.innerHTML = '';
+  btn.disabled = true;
+
+  // show thinking
+  responseBody.innerHTML = `
+    <div class="thinking">
+      <div class="thinking-dots">
+        <span></span><span></span><span></span>
+      </div>
+      generating response...
+    </div>`;
+
+  try {
+    const res = await fetch(`${API}/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, top_k })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(JSON.stringify(err.detail || err));
+    }
+
+    const data = await res.json();
+
+    // render answer
+    responseBody.textContent = data.answer;
+
+    // latency
+    const ms = Math.round(data.latency_ms);
+    latencyTag.textContent = ms >= 1000 ? `${(ms/1000).toFixed(1)}s` : `${ms}ms`;
+
+    // sources
+    if (data.sources && data.sources.length > 0) {
+      sourcesList.innerHTML = data.sources.map(s => {
+        const name = s.split(/[\\/]/).pop();
+        return `<span class="source-chip">📄 ${name}</span>`;
+      }).join('');
+    } else {
+      sourcesList.innerHTML = '<span class="no-sources">no docs ingested — run ingest.py to add documents</span>';
+    }
+
+    // add to history
+    addHistory(query, ms);
+
+  } catch (err) {
+    responseBody.innerHTML = '';
+    responseArea.style.display = 'none';
+    errorCard.className = 'error-card visible';
+    errorCard.textContent = `Error: ${err.message}`;
+  }
+
+  btn.disabled = false;
+}
+
+function addHistory(query, latency_ms) {
+  history.unshift({ query, latency_ms, time: new Date().toLocaleTimeString() });
+  if (history.length > 5) history.pop();
+
+  const section = document.getElementById('history-section');
+  const list = document.getElementById('history-list');
+
+  section.style.display = 'block';
+  list.innerHTML = history.map((h, i) => `
+    <div class="history-item" onclick="rerun(${i})">
+      <div class="history-q">${h.query}</div>
+      <div class="history-meta">${h.time} · ${Math.round(h.latency_ms/1000).toFixed(1)}s</div>
+    </div>
+  `).join('');
+}
+
+function rerun(i) {
+  document.getElementById('query-input').value = history[i].query;
+  submitQuery();
+}
+
+// Ctrl+Enter to submit
+document.getElementById('query-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    submitQuery();
+  }
+});
+
+// check health on load
+checkHealth();
+</script>
+</body>
+</html>
