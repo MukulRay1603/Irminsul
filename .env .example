@@ -1,0 +1,4 @@
+MODEL_PATH=./models/merged/exp2_lr2e-4_r16
+PINECONE_API_KEY=your_pinecone_api_key_here
+PINECONE_INDEX=llmops-rag
+EMBED_MODEL=sentence-transformers/all-MiniLM-L6-v2

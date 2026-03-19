@@ -10,7 +10,8 @@ from rag import RAGChain
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-rag_chain: RAGChain = None
+from typing import Optional
+rag_chain: Optional[RAGChain] = None
 
 
 @asynccontextmanager

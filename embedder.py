@@ -1,5 +1,6 @@
-from sentence_transformers import SentenceTransformer
 import os
+
+from sentence_transformers import SentenceTransformer
 
 EMBED_MODEL = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
 

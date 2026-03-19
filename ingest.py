@@ -11,7 +11,9 @@ import uuid
 import argparse
 import logging
 from pathlib import Path
+
 from dotenv import load_dotenv 
+
 load_dotenv()                  
 
 from pinecone import Pinecone, ServerlessSpec

@@ -1,5 +1,6 @@
 import os
 import logging
+
 import torch
 from dotenv import load_dotenv
 
@@ -72,7 +73,6 @@ class RAGChain:
             return_full_text=False,
             eos_token_id=tokenizer.eos_token_id,
             pad_token_id=tokenizer.eos_token_id,
-        
         )
         llm = HuggingFacePipeline(pipeline=hf_pipe)
         logger.info("Model loaded.")

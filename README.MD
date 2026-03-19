@@ -17,7 +17,7 @@ Most LLM projects stop at inference. This one goes further:
 - **Serving layer** — FastAPI with async lifespan model loading, typed Pydantic request/response models, CORS, health check, and a clean browser UI served from the same process
 - **Containerized** — Dockerfile built for slim Python 3.12, model loaded at runtime via env-configurable path (not baked in)
 - **Cloud-ready** — One-shot Azure deployment via ACR + Container Apps, with Pinecone key injected as a secret
-- **Intelligence-area** — Trained a personalized Corpus with Genshin Impact Game's Vast Lore and Character Builds
+- **Domain knowledge** — RAG corpus built around Genshin Impact lore, character builds, and elemental mechanics, serving as a rich real-world knowledge base for retrieval evaluation
 
 ---
 
