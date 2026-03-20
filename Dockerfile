@@ -14,7 +14,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy app code
-COPY main.py rag.py embedder.py ingest.py index.html ./
+COPY main.py rag.py embedder.py ingest.py guardrails.py index.html ./
 
 # Model is NOT baked in — mount via Azure Blob or provide MODEL_PATH env var
 # See README for options
