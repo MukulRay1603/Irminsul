@@ -10,7 +10,7 @@ from langchain_classic.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Pinecone as LangchainPinecone
-import Pinecone as PineconeClient
+from pinecone import Pinecone as PineconeClient
 
 logger = logging.getLogger(__name__)
 
