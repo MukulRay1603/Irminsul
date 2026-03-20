@@ -10,7 +10,7 @@ from langchain_classic.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Pinecone as LangchainPinecone
-from pinecone import Pinecone as PineconeClient
+from pinecone import Pinecone
 
 logger = logging.getLogger(__name__)
 
@@ -109,9 +109,9 @@ class RAGChain:
 
         logger.info("Connecting to Pinecone...")
         embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
-        pc = PineconeClient(api_key=PINECONE_API_KEY)
+        pc = Pinecone(api_key=PINECONE_API_KEY)
         index = pc.Index(PINECONE_INDEX)
-        self.vectorstore = LangchainPinecone(index=index, embedding=embeddings, text_key="text")
+        self.vectorstore = LangchainPinecone(index, embeddings, "text")
         logger.info("Pinecone connected.")
 
         prompt = PromptTemplate(

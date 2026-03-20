@@ -16,7 +16,7 @@ langchain-community==0.4.1
 langchain-classic==1.0.3
 langchain-groq==1.1.2
 groq==0.37.1
-pinecone==7.3.0
+pinecone-client==3.2.2
 sentence-transformers==4.1.0
 
 # Utilities
