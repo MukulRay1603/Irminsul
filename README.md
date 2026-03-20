@@ -1,3 +1,12 @@
+---
+title: Irminsul
+emoji: 🌿
+colorFrom: green
+colorTo: green
+sdk: docker
+pinned: false
+---
+
 # Irminsul
 
 > Fine-tuned Llama 3.1 8B · QLoRA · Pinecone RAG · FastAPI · Azure Container Apps
