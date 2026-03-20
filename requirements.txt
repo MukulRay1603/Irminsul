@@ -13,7 +13,7 @@ accelerate==1.6.0
 # RAG
 langchain==1.2.13
 langchain-community==0.4.1
-pinecone-client==5.0.1
+pinecone==7.3.0
 sentence-transformers==4.1.0
 
 # Utilities
@@ -21,6 +21,3 @@ python-dotenv==1.0.1
 
 groq==0.37.1
 langchain-groq==1.1.2
-
-langchain-huggingface
-langchain-pinecone
