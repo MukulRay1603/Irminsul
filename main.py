@@ -1,16 +1,19 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from contextlib import asynccontextmanager
 import logging
 import time
+from contextlib import asynccontextmanager
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
+
+from guardrails import validate_input, validate_output
 from rag import RAGChain
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from typing import Optional
 rag_chain: Optional[RAGChain] = None
 
 
@@ -26,9 +29,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="LLMOps RAG API",
-    description="Llama 3.1 8B QLoRA fine-tuned + Pinecone RAG",
-    version="1.0.0",
+    title="Irminsul — Genshin Impact AI Assistant",
+    description="RAG-powered assistant for Genshin Impact lore, builds, and mechanics.",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -43,37 +46,61 @@ app.add_middleware(
 class GenerateRequest(BaseModel):
     query: str
     top_k: int = 3
-    max_new_tokens: int = 512
 
 
 class GenerateResponse(BaseModel):
     answer: str
     sources: list[str]
     latency_ms: float
+    blocked: bool = False
 
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "model_loaded": rag_chain is not None and rag_chain.ready}
-
-    
 @app.get("/")
 def ui():
     return FileResponse("index.html")
 
 
+@app.get("/health")
+def health():
+    return {
+        "status": "ok",
+        "model_loaded": rag_chain is not None and rag_chain.ready,
+    }
+
+
 @app.post("/generate", response_model=GenerateResponse)
 def generate(req: GenerateRequest):
     if not rag_chain or not rag_chain.ready:
-        raise HTTPException(status_code=503, detail="Model not loaded yet")
-    if not req.query.strip():
-        raise HTTPException(status_code=400, detail="Query cannot be empty")
+        raise HTTPException(status_code=503, detail="Model not loaded yet.")
+
+    allowed, reason = validate_input(req.query)
+    if not allowed:
+        return GenerateResponse(
+            answer=reason,
+            sources=[],
+            latency_ms=0.0,
+            blocked=True,
+        )
 
     start = time.time()
-    answer, sources = rag_chain.query(req.query, top_k=req.top_k, max_new_tokens=req.max_new_tokens)
+    answer, sources = rag_chain.query(req.query, top_k=req.top_k)
     latency_ms = (time.time() - start) * 1000
 
-    return GenerateResponse(answer=answer, sources=sources, latency_ms=round(latency_ms, 1))
+    is_clean, answer = validate_output(answer)
+    if not is_clean:
+        return GenerateResponse(
+            answer=answer,
+            sources=[],
+            latency_ms=round(latency_ms, 1),
+            blocked=True,
+        )
+
+    return GenerateResponse(
+        answer=answer,
+        sources=sources,
+        latency_ms=round(latency_ms, 1),
+        blocked=False,
+    )
 
 
 @app.post("/ingest")

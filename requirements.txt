@@ -11,10 +11,13 @@ bitsandbytes==0.43.3  # CPU-compatible for Docker; swap 0.49.2 if CUDA 12.8
 accelerate==1.6.0
 
 # RAG
-langchain==0.3.25
-langchain-community==0.3.23
+langchain==1.2.13
+langchain-community==0.4.1
 pinecone-client==5.0.1
 sentence-transformers==4.1.0
 
 # Utilities
 python-dotenv==1.0.1
+
+groq==0.37.1
+langchain-groq==1.1.2

@@ -3,26 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LLMOps — Llama 3.1 RAG</title>
+<title>Irminsul — Genshin Impact AI Assistant</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Syne:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0a0a0b;
-    --surface: #111113;
-    --surface2: #18181c;
-    --border: #2a2a30;
-    --border2: #3a3a42;
-    --accent: #7c6af7;
-    --accent2: #a89cf7;
-    --green: #3dd68c;
-    --red: #f76a6a;
-    --amber: #f7c26a;
-    --text: #e8e8f0;
-    --text2: #8888a0;
-    --text3: #555568;
-    --mono: 'JetBrains Mono', monospace;
-    --sans: 'Syne', sans-serif;
+    --bg:        #060d08;
+    --bg2:       #0a1410;
+    --surface:   rgba(8,18,12,0.88);
+    --surface2:  rgba(12,24,16,0.92);
+    --border:    rgba(80,180,100,0.12);
+    --border2:   rgba(80,180,100,0.22);
+    --dendro:    #7ecb6a;
+    --dendro2:   #a8e090;
+    --dendro3:   #c8f0b0;
+    --parchment: #c8b888;
+    --parchment2:#e0d0a8;
+    --teal:      #4ab890;
+    --text:      #d8e8d0;
+    --text2:     #7a9878;
+    --text3:     #3a5038;
+    --green:     #5dd68c;
+    --red:       #e87878;
+    --amber:     #d8a84a;
+    --mono:      'JetBrains Mono', monospace;
+    --serif:     'EB Garamond', serif;
+    --display:   'Cinzel', serif;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -30,442 +36,447 @@
   body {
     background: var(--bg);
     color: var(--text);
-    font-family: var(--sans);
+    font-family: var(--serif);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
+    overflow-x: hidden;
   }
 
-  /* subtle grid background */
-  body::before {
-    content: '';
+  canvas#bg { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+
+  /* deep forest atmospheric glow */
+  .atmo {
     position: fixed;
-    inset: 0;
-    background-image:
-      linear-gradient(rgba(124,106,247,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(124,106,247,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
+    border-radius: 50%;
     pointer-events: none;
     z-index: 0;
+    filter: blur(80px);
+  }
+  .atmo-1 {
+    width: 700px; height: 500px;
+    top: -100px; left: -100px;
+    background: radial-gradient(ellipse, rgba(40,100,50,0.18) 0%, transparent 70%);
+  }
+  .atmo-2 {
+    width: 500px; height: 400px;
+    top: 30%; right: -80px;
+    background: radial-gradient(ellipse, rgba(60,160,80,0.1) 0%, transparent 70%);
+  }
+  .atmo-3 {
+    width: 600px; height: 300px;
+    bottom: 0; left: 20%;
+    background: radial-gradient(ellipse, rgba(30,80,40,0.14) 0%, transparent 70%);
   }
 
   header {
-    position: relative;
-    z-index: 1;
-    padding: 28px 40px 24px;
-    border-bottom: 1px solid var(--border);
+    position: relative; z-index: 10;
+    padding: 20px 48px;
     display: flex;
     align-items: center;
     justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    backdrop-filter: blur(20px);
+    background: rgba(6,13,8,0.7);
   }
 
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-  }
+  .logo { display: flex; align-items: center; gap: 14px; }
 
   .logo-mark {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-    background: var(--accent);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: var(--mono);
-    font-size: 14px;
-    font-weight: 500;
-    color: #fff;
-    letter-spacing: -0.5px;
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    border: 1px solid rgba(126,203,106,0.3);
+    background: radial-gradient(circle at 40% 35%, rgba(80,180,80,0.15), rgba(6,13,8,0.95));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 0 16px rgba(80,200,80,0.12), inset 0 0 12px rgba(80,200,80,0.06);
+    animation: runeGlow 3s ease-in-out infinite;
+  }
+
+  @keyframes runeGlow {
+    0%,100% { box-shadow: 0 0 16px rgba(80,200,80,0.12), inset 0 0 12px rgba(80,200,80,0.06); }
+    50%      { box-shadow: 0 0 28px rgba(80,200,80,0.25), inset 0 0 16px rgba(80,200,80,0.12); }
   }
 
   .logo-text {
-    font-size: 16px;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: -0.3px;
+    font-family: var(--display);
+    font-size: 17px; font-weight: 500;
+    color: var(--dendro2);
+    letter-spacing: 0.08em;
   }
 
   .logo-sub {
-    font-size: 11px;
-    color: var(--text3);
+    font-size: 10px; color: var(--text3);
     font-family: var(--mono);
-    margin-top: 1px;
+    margin-top: 2px; letter-spacing: 0.04em;
   }
 
   .status-pill {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 6px 12px;
-    border-radius: 20px;
+    display: flex; align-items: center; gap: 7px;
+    padding: 5px 13px; border-radius: 20px;
     border: 1px solid var(--border);
-    background: var(--surface);
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text2);
+    background: rgba(8,18,12,0.8);
+    font-family: var(--mono); font-size: 11px; color: var(--text2);
+    backdrop-filter: blur(8px);
   }
 
   .status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--text3);
-    transition: background 0.3s;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--text3); transition: background 0.3s;
   }
-  .status-dot.online { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .status-dot.error { background: var(--red); }
+  .status-dot.online  { background: var(--green); box-shadow: 0 0 7px var(--green); }
+  .status-dot.error   { background: var(--red); }
   .status-dot.loading { background: var(--amber); animation: pulse 1s ease-in-out infinite; }
-
-  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
   main {
-    position: relative;
-    z-index: 1;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    max-width: 860px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 40px 40px 0;
+    position: relative; z-index: 10;
+    flex: 1; display: flex; flex-direction: column;
+    max-width: 800px; width: 100%;
+    margin: 0 auto; padding: 52px 40px 0;
   }
 
+  /* parchment scroll hero */
   .hero {
-    margin-bottom: 40px;
-    animation: fadeUp 0.5s ease both;
+    margin-bottom: 44px;
+    text-align: center;
+    animation: fadeUp 0.7s ease both;
   }
 
   @keyframes fadeUp {
-    from { opacity:0; transform: translateY(12px); }
+    from { opacity:0; transform: translateY(14px); }
     to   { opacity:1; transform: translateY(0); }
   }
 
-  .hero h1 {
-    font-size: 32px;
-    font-weight: 700;
-    color: var(--text);
-    letter-spacing: -0.8px;
-    line-height: 1.2;
-    margin-bottom: 10px;
+  .rune-row {
+    display: flex; align-items: center; justify-content: center;
+    gap: 12px; margin-bottom: 18px;
+    font-size: 14px; color: var(--dendro);
+    opacity: 0.6; letter-spacing: 0.3em;
   }
 
-  .hero h1 span { color: var(--accent2); }
+  .rune-row span { animation: runeFlicker 4s ease-in-out infinite; }
+  .rune-row span:nth-child(2) { animation-delay: 0.8s; }
+  .rune-row span:nth-child(3) { animation-delay: 1.6s; }
+  @keyframes runeFlicker {
+    0%,100%{opacity:0.5} 50%{opacity:1;text-shadow:0 0 8px var(--dendro);}
+  }
 
-  .hero p {
-    font-size: 14px;
-    color: var(--text2);
-    font-family: var(--mono);
-    line-height: 1.6;
+  .hero h1 {
+    font-family: var(--display);
+    font-size: 40px; font-weight: 500;
+    color: var(--parchment2);
+    letter-spacing: 0.06em; line-height: 1.2;
+    margin-bottom: 8px;
+    text-shadow: 0 0 60px rgba(100,200,80,0.15);
+  }
+
+  .hero h1 em {
+    font-style: normal;
+    color: var(--dendro2);
+    text-shadow: 0 0 30px rgba(126,203,106,0.5);
+  }
+
+  .hero-sub {
+    font-size: 16px; font-style: italic;
+    color: var(--text2); line-height: 1.75;
+    max-width: 480px; margin: 0 auto 20px;
   }
 
   .model-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    margin-top: 12px;
-    padding: 4px 10px;
-    border-radius: 4px;
-    border: 1px solid var(--border2);
-    background: var(--surface2);
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--accent2);
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 16px; border-radius: 3px;
+    border: 1px solid rgba(126,203,106,0.2);
+    background: rgba(40,80,30,0.2);
+    font-family: var(--mono); font-size: 11px;
+    color: var(--dendro); letter-spacing: 0.04em;
   }
 
-  /* Query input area */
+  /* ornamental divider */
+  .ornament {
+    display: flex; align-items: center;
+    gap: 12px; margin-bottom: 36px; opacity: 0.25;
+  }
+  .ornament-line {
+    flex: 1; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--dendro), transparent);
+  }
+  .ornament-glyph {
+    font-size: 12px; color: var(--dendro);
+    letter-spacing: 4px;
+  }
+
+  /* query box — parchment card feel */
   .query-box {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    padding: 0;
+    border-radius: 4px;
     overflow: hidden;
-    transition: border-color 0.2s;
-    animation: fadeUp 0.5s 0.1s ease both;
+    transition: border-color 0.3s, box-shadow 0.3s;
+    animation: fadeUp 0.7s 0.1s ease both;
+    backdrop-filter: blur(20px);
+    position: relative;
   }
 
+  /* corner rune accents */
+  .query-box::before,
+  .query-box::after {
+    content: '✦';
+    position: absolute;
+    font-size: 10px;
+    color: var(--dendro);
+    opacity: 0.3;
+    top: 8px;
+  }
+  .query-box::before { left: 10px; }
+  .query-box::after  { right: 10px; }
+
   .query-box:focus-within {
-    border-color: var(--accent);
+    border-color: rgba(126,203,106,0.35);
+    box-shadow: 0 0 32px rgba(80,180,60,0.08);
   }
 
   .query-label {
-    padding: 12px 16px 0;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text3);
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
+    padding: 14px 18px 0;
+    font-family: var(--display);
+    font-size: 9px; color: var(--text3);
+    letter-spacing: 0.18em; text-transform: uppercase;
   }
 
   textarea {
-    width: 100%;
-    background: transparent;
-    border: none;
-    outline: none;
-    resize: none;
-    padding: 10px 16px 14px;
-    font-family: var(--mono);
-    font-size: 14px;
-    color: var(--text);
-    line-height: 1.6;
-    min-height: 90px;
-    caret-color: var(--accent);
+    width: 100%; background: transparent;
+    border: none; outline: none; resize: none;
+    padding: 10px 18px 16px;
+    font-family: var(--serif); font-size: 15px;
+    color: var(--text); line-height: 1.75;
+    min-height: 100px; caret-color: var(--dendro);
   }
 
-  textarea::placeholder { color: var(--text3); }
+  textarea::placeholder { color: var(--text3); font-style: italic; }
 
   .query-footer {
-    display: flex;
-    align-items: center;
+    display: flex; align-items: center;
     justify-content: space-between;
-    padding: 10px 14px;
+    padding: 10px 16px;
     border-top: 1px solid var(--border);
     background: var(--surface2);
   }
 
   .top-k-wrap {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text2);
+    display: flex; align-items: center;
+    gap: 8px; font-family: var(--mono);
+    font-size: 11px; color: var(--text2);
   }
 
   .top-k-wrap select {
-    background: var(--surface);
+    background: rgba(6,13,8,0.8);
     border: 1px solid var(--border2);
-    border-radius: 4px;
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 12px;
-    padding: 3px 8px;
-    cursor: pointer;
-    outline: none;
+    border-radius: 3px; color: var(--text);
+    font-family: var(--mono); font-size: 11px;
+    padding: 3px 8px; cursor: pointer; outline: none;
   }
 
   .send-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 18px;
-    background: var(--accent);
-    border: none;
-    border-radius: 6px;
-    color: #fff;
-    font-family: var(--sans);
-    font-size: 13px;
-    font-weight: 600;
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 22px;
+    background: linear-gradient(135deg, rgba(60,140,50,0.8), rgba(40,100,35,0.9));
+    border: 1px solid rgba(126,203,106,0.3);
+    border-radius: 3px;
+    color: var(--dendro3);
+    font-family: var(--display);
+    font-size: 11px; font-weight: 500;
     cursor: pointer;
-    transition: background 0.15s, transform 0.1s;
-    letter-spacing: 0.2px;
+    transition: all 0.2s;
+    letter-spacing: 0.1em;
+    box-shadow: 0 2px 20px rgba(60,180,50,0.15);
   }
 
-  .send-btn:hover { background: var(--accent2); }
+  .send-btn:hover {
+    background: linear-gradient(135deg, rgba(80,160,60,0.9), rgba(55,120,45,0.95));
+    box-shadow: 0 4px 28px rgba(60,200,60,0.25);
+    border-color: rgba(126,203,106,0.5);
+    transform: translateY(-1px);
+  }
+
   .send-btn:active { transform: scale(0.97); }
-  .send-btn:disabled { background: var(--border2); color: var(--text3); cursor: not-allowed; transform: none; }
+  .send-btn:disabled {
+    background: rgba(20,35,20,0.7);
+    color: var(--text3); cursor: not-allowed;
+    transform: none; box-shadow: none;
+    border-color: var(--border);
+  }
 
-  .send-btn .arrow { font-size: 14px; transition: transform 0.15s; }
-  .send-btn:not(:disabled):hover .arrow { transform: translateX(3px); }
-
-  /* Response area */
   #response-area {
     margin-top: 28px;
-    animation: fadeUp 0.4s ease both;
+    animation: fadeUp 0.5s ease both;
     display: none;
   }
-
   #response-area.visible { display: block; }
 
   .response-card {
     background: var(--surface);
     border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
+    border-radius: 4px; overflow: hidden;
+    backdrop-filter: blur(20px);
   }
 
   .response-header {
-    display: flex;
-    align-items: center;
+    display: flex; align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 11px 18px;
     border-bottom: 1px solid var(--border);
     background: var(--surface2);
   }
 
   .response-label {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    display: flex;
-    align-items: center;
-    gap: 7px;
+    font-family: var(--display); font-size: 9px;
+    color: var(--text3); text-transform: uppercase;
+    letter-spacing: 0.14em;
+    display: flex; align-items: center; gap: 8px;
   }
 
   .response-label .dot {
     width: 6px; height: 6px; border-radius: 50%;
-    background: var(--green);
+    background: var(--dendro);
+    box-shadow: 0 0 8px var(--dendro);
+    animation: dendroFlicker 2s ease-in-out infinite;
+  }
+  @keyframes dendroFlicker {
+    0%,100%{opacity:1;box-shadow:0 0 8px var(--dendro);}
+    50%{opacity:0.6;box-shadow:0 0 4px var(--dendro);}
   }
 
   .latency-tag {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text3);
-    padding: 2px 8px;
-    border-radius: 3px;
-    border: 1px solid var(--border);
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text3); padding: 2px 8px;
+    border-radius: 2px; border: 1px solid var(--border);
   }
 
   .response-body {
-    padding: 20px;
-    font-size: 15px;
-    line-height: 1.75;
-    color: var(--text);
-    min-height: 60px;
-    white-space: pre-wrap;
-    word-break: break-word;
+    padding: 22px 24px;
+    font-size: 15.5px; line-height: 1.9;
+    color: var(--text); font-family: var(--serif);
+    white-space: pre-wrap; word-break: break-word;
   }
 
-  /* loading state */
   .thinking {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 20px;
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--text2);
+    display: flex; align-items: center; gap: 12px;
+    padding: 22px 24px;
+    font-family: var(--serif); font-size: 14px;
+    color: var(--text3); font-style: italic;
   }
 
   .thinking-dots span {
     display: inline-block;
-    width: 5px; height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    margin: 0 2px;
-    animation: bounce 1.2s ease-in-out infinite;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--dendro); margin: 0 2px;
+    animation: dendroOrb 1.6s ease-in-out infinite;
+    opacity: 0.4;
   }
-  .thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
-  .thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
-  @keyframes bounce { 0%,80%,100%{transform:translateY(0)} 40%{transform:translateY(-6px)} }
+  .thinking-dots span:nth-child(2) { animation-delay: 0.25s; }
+  .thinking-dots span:nth-child(3) { animation-delay: 0.5s; }
+  @keyframes dendroOrb {
+    0%,100%{opacity:0.3;transform:scale(0.9);}
+    50%{opacity:1;transform:scale(1.3);box-shadow:0 0 6px var(--dendro);}
+  }
 
   .sources-section {
     border-top: 1px solid var(--border);
-    padding: 12px 20px;
+    padding: 12px 22px;
     background: var(--surface2);
   }
 
   .sources-label {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 8px;
+    font-family: var(--display); font-size: 9px;
+    color: var(--text3); text-transform: uppercase;
+    letter-spacing: 0.14em; margin-bottom: 8px;
   }
 
   .source-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    padding: 3px 9px;
-    border-radius: 4px;
-    border: 1px solid var(--border2);
-    background: var(--surface);
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--accent2);
-    margin: 3px 4px 3px 0;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 2px;
+    border: 1px solid rgba(80,180,80,0.18);
+    background: rgba(40,80,30,0.15);
+    font-family: var(--mono); font-size: 11px;
+    color: var(--dendro); margin: 3px 4px 3px 0;
   }
 
   .no-sources {
-    font-family: var(--mono);
-    font-size: 12px;
-    color: var(--text3);
-    font-style: italic;
+    font-family: var(--mono); font-size: 11px;
+    color: var(--text3); font-style: italic;
   }
 
   .error-card {
-    background: rgba(247,106,106,0.06);
-    border: 1px solid rgba(247,106,106,0.25);
-    border-radius: 8px;
-    padding: 14px 16px;
-    font-family: var(--mono);
-    font-size: 13px;
-    color: var(--red);
-    margin-top: 16px;
-    display: none;
+    background: rgba(232,120,120,0.05);
+    border: 1px solid rgba(232,120,120,0.18);
+    border-radius: 4px; padding: 14px 18px;
+    font-family: var(--mono); font-size: 12px;
+    color: var(--red); margin-top: 16px; display: none;
   }
   .error-card.visible { display: block; }
 
-  /* history */
   .history-section {
-    margin-top: 32px;
-    padding-bottom: 40px;
-    animation: fadeUp 0.4s 0.15s ease both;
+    margin-top: 32px; padding-bottom: 48px;
+    animation: fadeUp 0.5s ease both;
   }
 
   .history-label {
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text3);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    margin-bottom: 12px;
+    font-family: var(--display); font-size: 9px;
+    color: var(--text3); text-transform: uppercase;
+    letter-spacing: 0.14em; margin-bottom: 12px;
   }
 
   .history-item {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 16px;
-    margin-bottom: 8px;
-    cursor: pointer;
-    transition: border-color 0.15s;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 3px; padding: 11px 16px;
+    margin-bottom: 6px; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    backdrop-filter: blur(8px);
   }
 
-  .history-item:hover { border-color: var(--border2); }
+  .history-item:hover {
+    border-color: rgba(80,180,80,0.28);
+    background: rgba(30,60,25,0.3);
+  }
 
   .history-q {
-    font-size: 13px;
-    color: var(--text2);
-    font-family: var(--mono);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    font-size: 13.5px; color: var(--text2);
+    font-family: var(--serif);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
 
   .history-meta {
-    font-size: 11px;
-    color: var(--text3);
-    font-family: var(--mono);
-    margin-top: 4px;
+    font-size: 10px; color: var(--text3);
+    font-family: var(--mono); margin-top: 4px;
   }
 
   footer {
-    position: relative;
-    z-index: 1;
-    text-align: center;
-    padding: 20px;
-    font-family: var(--mono);
-    font-size: 11px;
-    color: var(--text3);
+    position: relative; z-index: 10;
+    text-align: center; padding: 18px;
+    font-family: var(--mono); font-size: 10px;
+    color: var(--text3); letter-spacing: 0.06em;
     border-top: 1px solid var(--border);
+    backdrop-filter: blur(8px);
+    background: rgba(6,13,8,0.6);
     margin-top: auto;
   }
+
+  footer span { color: var(--dendro); opacity: 0.6; }
 </style>
 </head>
 <body>
 
+<canvas id="bg"></canvas>
+<div class="atmo atmo-1"></div>
+<div class="atmo atmo-2"></div>
+<div class="atmo atmo-3"></div>
+
 <header>
   <div class="logo">
-    <div class="logo-mark">λ</div>
+    <div class="logo-mark">᪥</div>
     <div>
-      <div class="logo-text">LLMOps RAG</div>
-      <div class="logo-sub">Llama 3.1 · QLoRA · Pinecone</div>
+      <div class="logo-text">Irminsul</div>
+      <div class="logo-sub">Llama 3.1 · QLoRA · Pinecone RAG</div>
     </div>
   </div>
   <div class="status-pill">
@@ -476,18 +487,27 @@
 
 <main>
   <div class="hero">
-    <h1>Ask your <span>fine-tuned</span> model</h1>
-    <p>Llama 3.1 8B · QLoRA exp2_lr2e-4_r16 · RTX 3060 · 4-bit NF4</p>
+    <div class="rune-row">
+      <span>᪥</span><span>✦</span><span>᪥</span>
+    </div>
+    <h1>The <em>Akasha</em> Speaks</h1>
+    <p class="hero-sub">All knowledge flows through the tree. Ask of Teyvat's lore, its people, their battles, and the elements that bind this world.</p>
     <div class="model-tag">
-      <span>●</span> Retrieval-augmented · semantic search over ingested docs
+      ◈ &nbsp; Dendro-augmented retrieval · Genshin Impact corpus
     </div>
   </div>
 
+  <div class="ornament">
+    <div class="ornament-line"></div>
+    <div class="ornament-glyph">✦ ᪥ ✦</div>
+    <div class="ornament-line"></div>
+  </div>
+
   <div class="query-box">
-    <div class="query-label">query</div>
+    <div class="query-label">Inscribe your query</div>
     <textarea
       id="query-input"
-      placeholder="What is QLoRA and how does it differ from full fine-tuning?"
+      placeholder="What does the Irminsul record of Nahida's imprisonment reveal..."
       rows="3"
     ></textarea>
     <div class="query-footer">
@@ -499,10 +519,10 @@
           <option value="3" selected>3</option>
           <option value="5">5</option>
         </select>
-        <span style="color:var(--text3)">retrieved chunks</span>
+        <span style="color:var(--text3)">retrieved branches</span>
       </div>
       <button class="send-btn" id="send-btn" onclick="submitQuery()">
-        Run query <span class="arrow">→</span>
+        Query the Tree →
       </button>
     </div>
   </div>
@@ -514,29 +534,123 @@
       <div class="response-header">
         <div class="response-label">
           <div class="dot"></div>
-          response
+          irminsul responds
         </div>
         <div class="latency-tag" id="latency-tag">—</div>
       </div>
       <div id="response-body" class="response-body"></div>
       <div class="sources-section">
-        <div class="sources-label">sources</div>
-        <div id="sources-list"><span class="no-sources">no documents ingested yet</span></div>
+        <div class="sources-label">branches consulted</div>
+        <div id="sources-list"><span class="no-sources">no records ingested</span></div>
       </div>
     </div>
   </div>
 
   <div class="history-section" id="history-section" style="display:none">
-    <div class="history-label">recent queries</div>
+    <div class="history-label">Recent queries</div>
     <div id="history-list"></div>
   </div>
 </main>
 
 <footer>
-  running locally · http://localhost:8000 · <span id="footer-model">exp2_lr2e-4_r16</span>
+  Irminsul &nbsp;·&nbsp; <span>Genshin Impact AI Assistant</span> &nbsp;·&nbsp; exp2_lr2e-4_r16 + Groq
 </footer>
 
 <script>
+// ── Floating spore particles + Dendro wisps ────────────────────────────────────
+(function() {
+  const canvas = document.getElementById('bg');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [], wisps = [];
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  function initParticles() {
+    particles = [];
+    const n = Math.floor(W * H / 8000);
+    for (let i = 0; i < n; i++) {
+      particles.push({
+        x: rand(0, W), y: rand(0, H),
+        r: rand(0.8, 2.5),
+        vx: rand(-0.15, 0.15),
+        vy: rand(-0.4, -0.1),
+        alpha: rand(0.1, 0.5),
+        flicker: rand(0.002, 0.006),
+        phase: rand(0, Math.PI * 2),
+        hue: rand(100, 150),
+      });
+    }
+  }
+
+  function initWisps() {
+    wisps = [];
+    for (let i = 0; i < 6; i++) {
+      wisps.push({
+        x: rand(0, W), y: rand(H * 0.3, H * 0.9),
+        r: rand(60, 140),
+        alpha: rand(0.02, 0.06),
+        speed: rand(0.0003, 0.0008),
+        phase: rand(0, Math.PI * 2),
+        hue: rand(110, 145),
+      });
+    }
+  }
+
+  function draw(t) {
+    ctx.clearRect(0, 0, W, H);
+
+    // Dendro wisps — soft glowing orbs drifting in the background
+    wisps.forEach(w => {
+      const a = w.alpha * (0.6 + 0.4 * Math.sin(t * w.speed * 1000 + w.phase));
+      const grd = ctx.createRadialGradient(w.x, w.y, 0, w.x, w.y, w.r);
+      grd.addColorStop(0, `hsla(${w.hue},70%,55%,${a})`);
+      grd.addColorStop(1, `hsla(${w.hue},70%,40%,0)`);
+      ctx.beginPath();
+      ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+      ctx.fillStyle = grd;
+      ctx.fill();
+      w.x += Math.sin(t * 0.0003 + w.phase) * 0.3;
+      w.y += Math.cos(t * 0.0002 + w.phase) * 0.2;
+    });
+
+    // spore particles — tiny glowing motes floating upward
+    particles.forEach(p => {
+      const a = p.alpha * (0.5 + 0.5 * Math.sin(t * p.flicker * 1000 + p.phase));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${p.hue},80%,70%,${a})`;
+      ctx.fill();
+
+      // tiny glow ring on larger motes
+      if (p.r > 1.8) {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 2.5, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${p.hue},80%,70%,${a * 0.15})`;
+        ctx.fill();
+      }
+
+      p.x += p.vx + Math.sin(t * 0.0005 + p.phase) * 0.2;
+      p.y += p.vy;
+
+      if (p.y < -10) { p.y = H + 10; p.x = rand(0, W); }
+      if (p.x < -10) p.x = W + 10;
+      if (p.x > W + 10) p.x = -10;
+    });
+
+    requestAnimationFrame(draw);
+  }
+
+  window.addEventListener('resize', () => { resize(); initParticles(); initWisps(); });
+  resize(); initParticles(); initWisps();
+  requestAnimationFrame(draw);
+})();
+
+// ── API ────────────────────────────────────────────────────────────────────────
 const API = 'http://localhost:8000';
 const history = [];
 
@@ -550,15 +664,15 @@ async function checkHealth() {
     const d = await r.json();
     if (d.model_loaded) {
       dot.className = 'status-dot online';
-      txt.textContent = 'model ready';
+      txt.textContent = 'akasha linked';
     } else {
       dot.className = 'status-dot loading';
-      txt.textContent = 'loading model...';
+      txt.textContent = 'loading...';
       setTimeout(checkHealth, 3000);
     }
   } catch {
     dot.className = 'status-dot error';
-    txt.textContent = 'server offline';
+    txt.textContent = 'offline';
     setTimeout(checkHealth, 5000);
   }
 }
@@ -567,29 +681,25 @@ async function submitQuery() {
   const query = document.getElementById('query-input').value.trim();
   if (!query) return;
 
-  const top_k = parseInt(document.getElementById('top-k').value);
-  const btn = document.getElementById('send-btn');
-  const responseArea = document.getElementById('response-area');
-  const responseBody = document.getElementById('response-body');
-  const errorCard = document.getElementById('error-card');
-  const latencyTag = document.getElementById('latency-tag');
-  const sourcesList = document.getElementById('sources-list');
+  const top_k    = parseInt(document.getElementById('top-k').value);
+  const btn       = document.getElementById('send-btn');
+  const respArea  = document.getElementById('response-area');
+  const respBody  = document.getElementById('response-body');
+  const errCard   = document.getElementById('error-card');
+  const latTag    = document.getElementById('latency-tag');
+  const srcList   = document.getElementById('sources-list');
 
-  // reset
-  errorCard.className = 'error-card';
-  responseArea.className = 'response-area visible';
-  responseArea.style.display = 'block';
-  latencyTag.textContent = '—';
-  sourcesList.innerHTML = '';
+  errCard.className = 'error-card';
+  respArea.style.display = 'block';
+  respArea.className = 'response-area visible';
+  latTag.textContent = '—';
+  srcList.innerHTML = '';
   btn.disabled = true;
 
-  // show thinking
-  responseBody.innerHTML = `
+  respBody.innerHTML = `
     <div class="thinking">
-      <div class="thinking-dots">
-        <span></span><span></span><span></span>
-      </div>
-      generating response...
+      <div class="thinking-dots"><span></span><span></span><span></span></div>
+      searching the branches...
     </div>`;
 
   try {
@@ -605,49 +715,41 @@ async function submitQuery() {
     }
 
     const data = await res.json();
+    respBody.textContent = data.answer;
 
-    // render answer
-    responseBody.textContent = data.answer;
-
-    // latency
     const ms = Math.round(data.latency_ms);
-    latencyTag.textContent = ms >= 1000 ? `${(ms/1000).toFixed(1)}s` : `${ms}ms`;
+    latTag.textContent = ms >= 1000 ? `${(ms/1000).toFixed(1)}s` : `${ms}ms`;
 
-    // sources
     if (data.sources && data.sources.length > 0) {
-      sourcesList.innerHTML = data.sources.map(s => {
+      srcList.innerHTML = data.sources.map(s => {
         const name = s.split(/[\\/]/).pop();
-        return `<span class="source-chip">📄 ${name}</span>`;
+        return `<span class="source-chip">◈ ${name}</span>`;
       }).join('');
     } else {
-      sourcesList.innerHTML = '<span class="no-sources">no docs ingested — run ingest.py to add documents</span>';
+      srcList.innerHTML = '<span class="no-sources">no records found — run ingest.py</span>';
     }
 
-    // add to history
-    addHistory(query, ms);
+    addToHistory(query, ms);
 
   } catch (err) {
-    responseBody.innerHTML = '';
-    responseArea.style.display = 'none';
-    errorCard.className = 'error-card visible';
-    errorCard.textContent = `Error: ${err.message}`;
+    respBody.innerHTML = '';
+    respArea.style.display = 'none';
+    errCard.className = 'error-card visible';
+    errCard.textContent = `Error: ${err.message}`;
   }
 
   btn.disabled = false;
 }
 
-function addHistory(query, latency_ms) {
+function addToHistory(query, latency_ms) {
   history.unshift({ query, latency_ms, time: new Date().toLocaleTimeString() });
   if (history.length > 5) history.pop();
 
-  const section = document.getElementById('history-section');
-  const list = document.getElementById('history-list');
-
-  section.style.display = 'block';
-  list.innerHTML = history.map((h, i) => `
+  document.getElementById('history-section').style.display = 'block';
+  document.getElementById('history-list').innerHTML = history.map((h, i) => `
     <div class="history-item" onclick="rerun(${i})">
       <div class="history-q">${h.query}</div>
-      <div class="history-meta">${h.time} · ${Math.round(h.latency_ms/1000).toFixed(1)}s</div>
+      <div class="history-meta">${h.time} · ${(h.latency_ms / 1000).toFixed(1)}s</div>
     </div>
   `).join('');
 }
@@ -657,7 +759,6 @@ function rerun(i) {
   submitQuery();
 }
 
-// Ctrl+Enter to submit
 document.getElementById('query-input').addEventListener('keydown', e => {
   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
     e.preventDefault();
@@ -665,7 +766,6 @@ document.getElementById('query-input').addEventListener('keydown', e => {
   }
 });
 
-// check health on load
 checkHealth();
 </script>
 </body>
