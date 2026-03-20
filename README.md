@@ -1,6 +1,5 @@
 ---
 title: Irminsul
-emoji: 🌿
 colorFrom: green
 colorTo: green
 sdk: docker
