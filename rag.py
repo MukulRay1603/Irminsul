@@ -8,7 +8,7 @@ load_dotenv()
 
 from langchain_classic.chains import RetrievalQA
 from langchain_core.prompts import PromptTemplate
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_pinecone import PineconeVectorStore as LangchainPinecone
 from pinecone import Pinecone
 
