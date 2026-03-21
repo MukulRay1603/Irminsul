@@ -1,7 +1,9 @@
 import os
 import logging
+import re
 
 import torch
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,31 +22,96 @@ EMBED_MODEL      = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX   = os.getenv("PINECONE_INDEX", "llmops-rag")
 GROQ_API_KEY     = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL       = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-PROMPT_TEMPLATE = """You are Akasha, the Irminsul terminal for Genshin Impact.
-Answer using ONLY the context provided. Be thorough and structured.
+# Minimum Pinecone score to trust corpus — below this triggers web fallback
+CORPUS_CONFIDENCE_THRESHOLD = 0.35
 
-For BUILD questions, always cover:
-- Artifact sets with set bonus explained
-- Stats: Sands/Goblet/Circlet main stats + substat priority with thresholds
-- Weapons: BiS and F2P alternatives with reasoning  
-- Teams: 2-3 strong compositions with role explanation
-- Playstyle notes: rotations, synergies, what makes this build work
+PROMPT_TEMPLATE = """You are Akasha — the living memory of Teyvat, an omniscient Genshin Impact assistant with the depth of a master theorycafter and the storytelling of a lore scholar.
 
-For LORE questions: relationships, motivations, key events, story significance.
-For MECHANICS: exact multipliers, how it interacts with reactions, practical examples.
+You have access to peer-reviewed theorycrafting data, exact game stats, and synthesized knowledge across all of Teyvat's history.
 
-CRITICAL: If the context does not contain enough information to answer confidently,
-say exactly: "The Irminsul has limited records on this — my knowledge may be incomplete."
-Never invent stats, story details, or character abilities not present in the context.
+ANSWER RULES:
+- Be thorough, specific, and structured. Never give one-liners for complex questions.
+- Use exact numbers from the context — ER thresholds, EM values, CRIT ratios, multipliers.
+- If context is thin on a topic, say: "The Irminsul's records on this are limited." Then share what you do know.
+- Never invent stats, story details, or abilities not present in the context.
+- Write like an expert who genuinely loves the game — not a generic AI assistant.
 
-Context:
+FORMAT GUIDE by question type:
+
+For BUILD questions:
+**[Character] — [Role] Build**
+**How it works:** [brief kit explanation — what makes this character deal damage or provide value]
+**Artifacts:** [set name] — [why this set, what the bonus does for this character]
+**Main stats:** Sands: [stat] | Goblet: [stat] | Circlet: [stat]
+**Substat priority:** [ordered list with thresholds e.g. ER ≥180% → EM → CRIT 1:2]
+**Weapons:** BiS: [weapon + why] | F2P: [weapon + why]
+**Teams:** [2-3 comps with role explanation]
+**Notes:** [rotation tips, constellation breakpoints, common mistakes]
+
+For LORE questions:
+Answer in flowing prose. Cover: who they are, their motivations, key relationships, their role in the story, and what makes them memorable. Include specific quest/event references where available.
+
+For MECHANICS questions:
+Explain the concept clearly, give the exact formula or interaction, then a practical example showing when/why it matters in actual gameplay.
+
+---
+Context from Irminsul records:
 {context}
 
 Question: {question}
 
 Akasha:"""
+
+WEB_PROMPT_TEMPLATE = """You are Akasha — the Genshin Impact assistant. The Irminsul's local records didn't have strong coverage for this query, so you retrieved live data from trusted sources.
+
+Trusted source data:
+{context}
+
+Answer the question thoroughly using this data. Follow the same format rules:
+- Builds: cover artifacts, stats, weapons, teams
+- Lore: prose with relationships and story significance  
+- Mechanics: formula + practical example
+
+Question: {question}
+
+Akasha (from live sources):"""
+
+
+def _fetch_wiki_page(character_name: str) -> str:
+    """Fetch a character page from wiki.gg as web fallback."""
+    slug = character_name.lower().replace(" ", "_")
+    urls = [
+        f"https://genshin-impact.fandom.com/wiki/{character_name.replace(' ', '_')}",
+        f"https://game8.co/games/Genshin-Impact/archives/search?q={character_name}+build",
+    ]
+    headers = {"User-Agent": "Irminsul-RAG/1.0 (Genshin Impact assistant; educational)"}
+
+    for url in urls:
+        try:
+            r = requests.get(url, headers=headers, timeout=8)
+            if r.status_code == 200:
+                text = r.text
+                # Strip HTML tags
+                text = re.sub(r'<[^>]+>', ' ', text)
+                # Strip excessive whitespace
+                text = re.sub(r'\s{3,}', '\n\n', text)
+                # Return first 4000 chars of meaningful content
+                return text[:4000].strip()
+        except Exception as e:
+            logger.warning(f"Web fallback failed for {url}: {e}")
+    return ""
+
+
+def _extract_subject(query: str) -> str:
+    """Best-effort extract character/topic name from query for web fallback."""
+    query = query.lower()
+    for word in ["build", "lore", "skill", "burst", "talent", "team", "artifact",
+                 "who is", "tell me about", "what is", "how does", "explain"]:
+        query = query.replace(word, "")
+    return query.strip().title()
+
 
 def _build_groq_llm():
     from langchain_groq import ChatGroq
@@ -56,8 +123,8 @@ def _build_groq_llm():
     return ChatGroq(
         api_key=GROQ_API_KEY,
         model_name=GROQ_MODEL,
-        temperature=0.2,
-        max_tokens=1024,
+        temperature=0.3,
+        max_tokens=1500,
     )
 
 
@@ -95,7 +162,7 @@ def _build_local_llm():
         "text-generation",
         model=model,
         tokenizer=tokenizer,
-        max_new_tokens=256,
+        max_new_tokens=512,
         do_sample=False,
         temperature=None,
         top_p=None,
@@ -113,10 +180,12 @@ class RAGChain:
     def __init__(self):
         self.ready = False
         self.chain = None
+        self.web_chain = None
         self.vectorstore = None
+        self.llm = None
 
     def load(self):
-        llm = _build_groq_llm() if LLM_BACKEND == "groq" else _build_local_llm()
+        self.llm = _build_groq_llm() if LLM_BACKEND == "groq" else _build_local_llm()
 
         logger.info("Connecting to Pinecone...")
         embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
@@ -130,20 +199,68 @@ class RAGChain:
             input_variables=["context", "question"],
         )
         self.chain = RetrievalQA.from_chain_type(
-            llm=llm,
+            llm=self.llm,
             chain_type="stuff",
-            retriever=self.vectorstore.as_retriever(search_kwargs={"k": 8}),
+            retriever=self.vectorstore.as_retriever(
+                search_kwargs={"k": 8}
+            ),
             return_source_documents=True,
             chain_type_kwargs={"prompt": prompt},
         )
-        self.ready = True
-        logger.info(f"RAG chain ready — backend: {LLM_BACKEND}")
 
-    def query(self, question: str, top_k: int = 3) -> tuple[str, list[str]]:
+        self.ready = True
+        logger.info(f"RAG chain ready — backend: {LLM_BACKEND}, model: {GROQ_MODEL}")
+
+    def _corpus_has_coverage(self, question: str) -> tuple[bool, list]:
+        """Check if Pinecone has meaningful coverage for this query."""
+        try:
+            docs_with_scores = self.vectorstore.similarity_search_with_score(
+                question, k=3
+            )
+            if not docs_with_scores:
+                return False, []
+            top_score = docs_with_scores[0][1]
+            logger.info(f"Top Pinecone score: {top_score:.3f}")
+            # Pinecone cosine: higher = more similar
+            has_coverage = top_score >= CORPUS_CONFIDENCE_THRESHOLD
+            return has_coverage, [doc for doc, _ in docs_with_scores]
+        except Exception as e:
+            logger.warning(f"Coverage check failed: {e}")
+            return True, []  # fail open — try corpus anyway
+
+    def query(self, question: str, top_k: int = 8) -> tuple[str, list[str]]:
         if not self.ready:
             raise RuntimeError("RAG chain is not loaded.")
 
         self.chain.retriever.search_kwargs["k"] = top_k
+
+        # Check corpus coverage
+        has_coverage, _ = self._corpus_has_coverage(question)
+
+        if not has_coverage:
+            logger.info("Low corpus coverage — attempting web fallback")
+            subject = _extract_subject(question)
+            web_content = _fetch_wiki_page(subject)
+
+            if web_content:
+                # Answer from web data using the LLM directly
+                web_prompt = PromptTemplate(
+                    template=WEB_PROMPT_TEMPLATE,
+                    input_variables=["context", "question"],
+                )
+                from langchain_core.output_parsers import StrOutputParser
+                web_chain = web_prompt | self.llm | StrOutputParser()
+                try:
+                    answer = web_chain.invoke({
+                        "context": web_content,
+                        "question": question,
+                    })
+                    answer = answer.strip().replace("</s>", "").strip()
+                    return answer, ["web: wiki.gg/game8.co (live)"]
+                except Exception as e:
+                    logger.warning(f"Web chain failed: {e}")
+
+        # Default: corpus RAG
         result = self.chain.invoke({"query": question})
         answer = result["result"].strip().replace("</s>", "").strip()
         sources = [
