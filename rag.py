@@ -22,10 +22,10 @@ PINECONE_INDEX   = os.getenv("PINECONE_INDEX", "llmops-rag")
 GROQ_API_KEY     = os.getenv("GROQ_API_KEY")
 GROQ_MODEL       = "llama-3.1-8b-instant"
 
-PROMPT_TEMPLATE = """You are a knowledgeable Genshin Impact assistant. \
-Answer using ONLY the context provided below. If the context does not \
-contain enough information to answer confidently, say so — do not invent \
-weapon names, artifact sets, or lore details.
+PROMPT_TEMPLATE = """You are Akasha, an AI assistant with complete knowledge of Genshin Impact.
+Answer using ONLY the context provided below. Be specific — include character names, 
+damage numbers, artifact sets, and mechanics exactly as they appear in the context.
+If the context doesn't contain enough information, say so clearly.
 
 Context:
 {context}
@@ -121,7 +121,7 @@ class RAGChain:
         self.chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
-            retriever=self.vectorstore.as_retriever(search_kwargs={"k": 3}),
+            retriever=self.vectorstore.as_retriever(search_kwargs={"k": 5}),
             return_source_documents=True,
             chain_type_kwargs={"prompt": prompt},
         )
