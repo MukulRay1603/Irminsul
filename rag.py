@@ -20,19 +20,29 @@ EMBED_MODEL      = os.getenv("EMBED_MODEL", "sentence-transformers/all-MiniLM-L6
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX   = os.getenv("PINECONE_INDEX", "llmops-rag")
 GROQ_API_KEY     = os.getenv("GROQ_API_KEY")
-GROQ_MODEL       = "llama-3.1-8b-instant"
+GROQ_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
-PROMPT_TEMPLATE = """You are Akasha, an AI assistant with complete knowledge of Genshin Impact.
-Answer using ONLY the context provided below. Be specific — include character names, 
-damage numbers, artifact sets, and mechanics exactly as they appear in the context.
-If the context doesn't contain enough information, say so clearly.
+PROMPT_TEMPLATE = """You are Akasha, the all-knowing Irminsul terminal for Genshin Impact.
+You speak with authority and depth. Using ONLY the context below, answer thoroughly.
+
+For character build questions, always structure your answer as:
+- What the skill/burst does and how it works mechanically
+- Recommended artifact sets (2pc and 4pc bonuses explained)
+- Stat priority with specific thresholds (e.g. ER 160%, EM 800+, CRIT 1:2 ratio)
+- Best weapons (BiS, F2P alternatives)
+- Team compositions that synergize
+
+For lore questions, include relationships, motivations, and key story events.
+For mechanic questions, include exact multipliers and practical examples.
+
+If the context lacks specific numbers or details, say so — never fabricate stats.
 
 Context:
 {context}
 
 Question: {question}
 
-Answer:"""
+Akasha:"""
 
 
 def _build_groq_llm():
@@ -46,7 +56,7 @@ def _build_groq_llm():
         api_key=GROQ_API_KEY,
         model_name=GROQ_MODEL,
         temperature=0.2,
-        max_tokens=512,
+        max_tokens=1024,
     )
 
 
@@ -121,7 +131,7 @@ class RAGChain:
         self.chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
-            retriever=self.vectorstore.as_retriever(search_kwargs={"k": 5}),
+            retriever=self.vectorstore.as_retriever(search_kwargs={"k": 8}),
             return_source_documents=True,
             chain_type_kwargs={"prompt": prompt},
         )
