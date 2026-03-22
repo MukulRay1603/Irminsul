@@ -8,10 +8,9 @@ pinned: false
 
 <div align="center">
 
-<img src="docs/assets/banner.png" alt="Irminsul Banner" width="100%">
-<!-- PLACEHOLDER: Add a banner image. Can be a dark-themed graphic with the Irminsul logo/name.
-     Recommended: 1280x320px, dark green/forest aesthetic matching the UI.
-     Tools: Figma, Canva, or even a screenshot of the UI works. -->
+<img src="Images\Banner.png" alt="Irminsul Banner" width="100%">
+<!-- PLACEHOLDER: Add a banner image. Recommended: 1280x320px, dark green/Dendro aesthetic.
+     Save as assets/banner.png. Tools: Figma, Canva, or a cropped screenshot of the UI. -->
 
 # Irminsul
 
@@ -32,7 +31,7 @@ Most LLM projects stop at inference. This one builds the full stack: a QLoRA fin
 
 ---
 
-## What This Is
+## About Irminsul
 
 Irminsul is a domain-specific AI assistant for Genshin Impact — built not because Genshin needed an AI assistant, but because it provided a concrete, evaluable knowledge domain to build an LLMOps pipeline around. Every component was chosen deliberately:
 
@@ -97,27 +96,40 @@ The domain is the test harness. The pipeline is the project.
 
 ### Fine-Tuned Model
 
-Llama 3.1 8B Instruct fine-tuned with QLoRA on a custom instruction dataset, trained on Google Colab Pro (A100). Local inference runs in 4-bit NF4 quantization on an RTX 3060 6GB.
+Llama 3.1 8B Instruct fine-tuned with QLoRA on the Stanford Alpaca dataset (52K instruction-following examples), trained on Google Colab Pro (A100). Local inference runs in 4-bit NF4 quantization on an RTX 3060 6GB.
 
-**[→ View training notebook on Colab](https://colab.research.google.com/drive/YOUR_NOTEBOOK_LINK_HERE)**
+**[→ View training notebook on Colab](https://colab.research.google.com/drive/1wXz6V196IXEEU3FKwxDJ7BBxRh79QqEF?usp=sharing)**
 <!-- PLACEHOLDER: Replace YOUR_NOTEBOOK_LINK_HERE with your actual Colab share link
      File → Share → Copy link (set to "Anyone with the link can view") -->
 
 | Parameter | Value |
 |---|---|
 | Base model | `meta-llama/Llama-3.1-8B-Instruct` |
+| Dataset | Stanford Alpaca (`tatsu-lab/alpaca`, 52K examples) |
 | Method | QLoRA via PEFT |
-| Rank / Alpha | r=16, α=32 |
-| Learning rate | 2e-4 |
-| Quantization (inference) | 4-bit NF4, bfloat16 compute |
-| Training infra | Google Colab Pro (A100) |
+| Rank / Alpha | r=16, α=32, dropout=0.05 |
+| Target modules | q_proj, v_proj, k_proj, o_proj |
+| Learning rate | 2e-4 (cosine schedule, warmup 3%) |
+| Batch size | 4 per device × 4 grad accumulation = effective 16 |
+| Epochs | 2 |
+| Optimizer | paged_adamw_32bit |
+| Quantization (inference) | 4-bit NF4, bfloat16 compute dtype |
+| Training infra | Google Colab Pro (A100 40GB) |
 | Experiment tracking | MLflow (3 runs) |
 
-Three experiments were tracked in MLflow. Winning checkpoint selected by faithfulness score (0.826) and ROUGE-L (0.466) on a held-out eval set.
+**[→ Download exp2_lr2e-4_r16 model ](https://drive.google.com/drive/folders/1vAVXDXzT5lThnvlgQwXRi0ParmyB3V0P?usp=sharing)**
 
-<!-- PLACEHOLDER: Add MLflow experiment screenshot here
-     docs/assets/mlflow_experiments.png
-     A screenshot of your MLflow UI showing the 3 runs and metrics comparison -->
+Three experiments run sequentially, each tracked in MLflow:
+
+| Experiment | LR | Rank | Result |
+|---|---|---|---|
+| exp1_lr1e-4_r16 | 1e-4 | 16 | Conservative baseline |
+| exp2_lr2e-4_r16 | 2e-4 | 16 | **Winner** — best loss/quality balance |
+| exp3_lr2e-4_r8 | 2e-4 | 8 | Tests if rank=16 is worth the extra params |
+
+Winning checkpoint (`exp2_lr2e-4_r16`) selected by faithfulness (0.826) and ROUGE-L (0.466), both computed locally via cosine similarity and token overlap against a held-out eval set.
+
+<!-- PLACEHOLDER: Add MLflow experiment screenshot here — images/mlflow_runs.png -->
 
 ### RAG Pipeline
 
@@ -290,60 +302,41 @@ Serving the fine-tuned Llama 3.1 8B requires a GPU instance. The minimum viable 
 
 ```
 Irminsul/
-├── main.py              # FastAPI app: endpoints, lifespan, CORS, response models
-├── rag.py               # LangChain RAG chain, dual backend (Groq / local Llama)
-├── embedder.py          # sentence-transformers singleton (loads once, reused)
-├── ingest.py            # Doc loader → word chunker → Pinecone upsert
-├── guardrails.py        # Input validation: injection detection + domain cosine check
-├── index.html           # Browser UI: dark Dendro theme, query history, source display
+├── main.py                  # FastAPI app: endpoints, lifespan, CORS, response models
+├── rag.py                   # LangChain RAG chain, dual backend (Groq / local Llama)
+├── embedder.py              # sentence-transformers singleton (loads once, reused)
+├── ingest.py                # Doc loader → word chunker → Pinecone upsert
+├── guardrails.py            # Input validation: injection detection + domain cosine check
+├── index.html               # Browser UI: dark Dendro theme, query history, source display
 │
-├── Dockerfile           # python:3.12-slim, model NOT baked in
-├── deploy_azure.sh      # One-shot ACR build + Container Apps deploy
-├── .env.example         # Environment variable reference
+├── LLMOps_Pipeline.ipynb    # Full training notebook: QLoRA, MLflow, eval (Colab A100)
 │
-├── DEPLOYMENT.md        # Full deployment guide + cost analysis
+├── Dockerfile               # python:3.12-slim, model NOT baked in
+├── deploy_azure.sh          # One-shot ACR build + Container Apps deploy
+├── .env.example             # Environment variable reference
+│
+├── DEPLOYMENT.md            # Full deployment guide + cost analysis
 ├── requirements.txt
-├── images/              # Screenshots and assets used in this README
+├── assets/                  # Screenshots and assets used in this README
 │   ├── banner.png
 │   ├── ui_main.png
 │   ├── ui_response.png
 │   └── mlflow_runs.png
-└── docs/
-    ├── corpus/          # Legacy manual corpus docs
-    └── demo.html        # GitHub Pages demo page
+└── models/                  # gitignored — place merged model here locally
+    └── merged/
+        └── exp2_lr2e-4_r16/
 ```
 
 ---
 
 ## Evaluation
 
-<!-- PLACEHOLDER: Fill this section once you have eval numbers ready.
-     Consider running a small eval set (20-50 questions) with:
-     - Faithfulness: Does the answer contradict the retrieved context?
-     - Answer relevance: Does the answer address the question?
-     - Context recall: Did retrieval find the right documents?
-     
-     Tools to consider: RAGAS (pip install ragas) against your Pinecone index.
-     
-     Example format:
+Winning checkpoint evaluated against a held-out set using a custom local eval (cosine similarity for faithfulness, token overlap for ROUGE-L). RAGAS was attempted but hit async timeout issues on Colab — custom eval used instead, results are fully reproducible from the notebook.
 
 | Metric | Score | Method |
 |---|---|---|
-| Faithfulness | 0.826 | Custom eval, n=50 |
-| ROUGE-L | 0.466 | vs reference answers |
-| Context recall | TBD | RAGAS |
-| Answer relevance | TBD | RAGAS |
-
-     The fine-tuned model numbers (0.826 faithfulness, 0.466 ROUGE-L) came from
-     your MLflow eval during training — pull those into this table.
--->
-
-The fine-tuned model was evaluated during training with a held-out set:
-
-| Metric | Score |
-|---|---|
-| Faithfulness | 0.826 |
-| ROUGE-L | 0.466 |
+| Faithfulness | 0.826 | Cosine similarity: ground truth → answer embedding |
+| ROUGE-L | 0.466 | Token overlap vs reference answers |
 
 Full RAG pipeline evaluation (context recall, answer relevance) is a planned addition — see [What's Next](#whats-next).
 
@@ -352,16 +345,16 @@ Full RAG pipeline evaluation (context recall, answer relevance) is a planned add
 ## Screenshots
 
 <!-- PLACEHOLDER: Add screenshots once you have them.
-     Save to images/ and uncomment these lines:
+     Save to assets/ and uncomment these lines:
 
-![Irminsul UI](images/ui_main.png)
-![Response with sources](images/ui_response.png)
-![MLflow experiment runs](images/mlflow_runs.png)
+![Irminsul UI](assets/ui_main.png)
+![Response with sources](assets/ui_response.png)
+![MLflow experiment runs](assets/mlflow_runs.png)
 
      Tips:
      - ui_main.png: screenshot of http://localhost:8000 before any query
-     - ui_response.png: run a query (try "best build for Hu Tao") so the answer + sources section is visible
-     - mlflow_runs.png: from your Colab — the experiment comparison table showing 3 runs
+     - ui_response.png: run a query so the answer + sources section is visible
+     - mlflow_runs.png: Colab experiment comparison table showing 3 runs + metrics
 -->
 
 *Screenshots coming soon — [try the live demo](https://huggingface.co/spaces/MukulRay/Irminsul) to see it in action.*
@@ -399,6 +392,6 @@ Genshin Impact is owned by HoYoverse. This project is not affiliated with or end
 
 <div align="center">
 
-Built to learn the full MLOps lifecycle — fine-tuning, quantization, retrieval, serving, and cloud deployment — on consumer hardware. Every component chosen deliberately, not for hype.
+Built to learn the full MLOps lifecycle — fine-tuning on Colab, quantized inference on consumer hardware, retrieval, serving, and cloud deployment. Every component chosen deliberately, not for hype.
 
 </div>
