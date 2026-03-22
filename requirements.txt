@@ -1,23 +1,26 @@
-# Core serving
+# ── Core serving ───────────────────────────────────────────────────────────────
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 pydantic==2.7.4
 
-# LLM + fine-tuned model
+# ── LLM + fine-tuned model (local backend) ─────────────────────────────────────
+# Only needed when LLM_BACKEND=local
+# GPU with 6GB+ VRAM required; loads fine on CPU but very slow
 torch==2.3.1
 transformers==4.51.3
 peft==0.15.2
-bitsandbytes==0.43.3
+bitsandbytes==0.43.3          # 4-bit NF4 quantization (official Windows wheels since 0.42)
 accelerate==1.6.0
 
-# RAG
+# ── RAG ────────────────────────────────────────────────────────────────────────
 langchain==1.2.13
 langchain-community==0.4.1
-langchain-classic==1.0.3
+langchain-classic==1.0.3      # provides langchain_classic.chains.RetrievalQA
 langchain-groq==1.1.2
 groq==0.37.1
-pinecone-client==3.2.2
+pinecone-client==3.2.2        # langchain-community expects the v3 Pinecone client API
 sentence-transformers==4.1.0
 
-# Utilities
+# ── Utilities ──────────────────────────────────────────────────────────────────
 python-dotenv==1.0.1
+requests>=2.31.0
