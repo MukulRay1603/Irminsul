@@ -1,11 +1,3 @@
----
-title: Irminsul
-colorFrom: green
-colorTo: green
-sdk: docker
-pinned: false
----
-
 <div align="center">
 
 <img src="Images\Banner.png" alt="Irminsul Banner" width="100%">
