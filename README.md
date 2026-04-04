@@ -1,3 +1,13 @@
+---
+title: Irminsul
+emoji: 🌿
+colorFrom: green
+colorTo: green
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 <div align="center">
 
 <img src="Images\Banner.png" alt="Irminsul Banner" width="100%">
@@ -334,33 +344,19 @@ Full RAG pipeline evaluation (context recall, answer relevance) is a planned add
 
 ---
 
-## Screenshots
-
-<!-- PLACEHOLDER: Add screenshots once you have them.
-     Save to assets/ and uncomment these lines:
-
-![Irminsul UI](assets/ui_main.png)
-![Response with sources](assets/ui_response.png)
-![MLflow experiment runs](assets/mlflow_runs.png)
-
-     Tips:
-     - ui_main.png: screenshot of http://localhost:8000 before any query
-     - ui_response.png: run a query so the answer + sources section is visible
-     - mlflow_runs.png: Colab experiment comparison table showing 3 runs + metrics
--->
-
-*Screenshots coming soon — [try the live demo](https://huggingface.co/spaces/MukulRay/Irminsul) to see it in action.*
-
----
+## What's Next
 
 ## What's Next
 
-- [ ] **RAGAS evaluation** — systematic RAG eval (faithfulness, context recall, answer relevance) on a held-out question set
-- [ ] **MarkdownHeaderTextSplitter** — replace naive word chunker for section-aware chunking that respects document structure
-- [ ] **Metadata filtering** — filter Pinecone queries by character, content tier, or topic category
-- [ ] **Streaming responses** — SSE for lower perceived latency on long answers
-- [ ] **CI/CD pipeline** — GitHub Actions → ACR build → `az containerapp update` on push to main
-- [ ] **Corpus expansion** — constellation effects, rotation guides, and ER/EM thresholds per character
+- [ ] **End-to-end RAG evaluation** — RAGAS pipeline measuring faithfulness, context recall,
+      and answer relevance on a held-out Genshin question set; results logged to MLflow
+      alongside fine-tuning metrics for a single unified eval story
+- [ ] **Smarter chunking** — swap word-level splitter for `MarkdownHeaderTextSplitter`
+      so retrieval respects document structure (character sections stay together, 
+      stat tables don't get split mid-row)
+- [ ] **Streaming responses** — SSE endpoint for lower perceived latency on long answers
+- [ ] **CI/CD on push** — GitHub Actions → ACR build → `az containerapp update --image`
+      for zero-downtime rolling deploys to Azure on every merge to main
 
 ---
 
