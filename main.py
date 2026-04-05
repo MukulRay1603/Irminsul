@@ -53,6 +53,7 @@ class GenerateResponse(BaseModel):
     sources: list[str]
     latency_ms: float
     blocked: bool = False
+    retrieval_method: str = "rag"  # "rag" | "web_fallback" | "guardrail_blocked"
 
 
 @app.get("/")
@@ -83,7 +84,7 @@ def generate(req: GenerateRequest):
         )
 
     start = time.time()
-    answer, sources = rag_chain.query(req.query, top_k=req.top_k)
+    answer, sources, retrieval_method = rag_chain.query(req.query, top_k=req.top_k)
     latency_ms = (time.time() - start) * 1000
 
     is_clean, answer = validate_output(answer)
@@ -100,6 +101,7 @@ def generate(req: GenerateRequest):
         sources=sources,
         latency_ms=round(latency_ms, 1),
         blocked=False,
+        retrieval_method=retrieval_method,
     )
 
 

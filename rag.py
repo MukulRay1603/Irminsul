@@ -23,9 +23,10 @@ PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX   = os.getenv("PINECONE_INDEX", "llmops-rag")
 GROQ_API_KEY     = os.getenv("GROQ_API_KEY")
 GROQ_MODEL       = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+TAVILY_API_KEY   = os.getenv("TAVILY_API_KEY")
 
 # Minimum Pinecone score to trust corpus — below this triggers web fallback
-CORPUS_CONFIDENCE_THRESHOLD = 0.35
+CORPUS_CONFIDENCE_THRESHOLD = 0.60
 
 PROMPT_TEMPLATE = """You are Akasha — the living memory of Teyvat, an omniscient Genshin Impact assistant with the depth of a master theorycafter and the storytelling of a lore scholar.
 
@@ -111,6 +112,115 @@ def _extract_subject(query: str) -> str:
                  "who is", "tell me about", "what is", "how does", "explain"]:
         query = query.replace(word, "")
     return query.strip().title()
+
+
+def route_query(question: str) -> dict:
+    """
+    Detect query intent and return a Pinecone metadata filter dict.
+    Applied per-query, not at startup.
+    """
+    q = question.lower()
+
+    # Build/optimization intent
+    build_keywords = ["build", "weapon", "artifact", "bis", "best in slot",
+                      "team", "rotation", "er threshold", "em", "crit",
+                      "f2p", "free to play", "comps", "comp"]
+    # Lore intent
+    lore_keywords = ["lore", "story", "who is", "personality", "history",
+                     "background", "quest", "backstory", "relationship"]
+    # Stats/numbers intent
+    stats_keywords = ["stats", "talent", "constellation", "scaling",
+                      "multiplier", "numbers", "c0", "c1", "c2", "c3",
+                      "c4", "c5", "c6", "a1", "a4"]
+    # Mechanics intent
+    mechanics_keywords = ["reaction", "mechanic", "how does", "damage formula",
+                          "icd", "internal cooldown", "vaporize", "melt",
+                          "swirl", "freeze", "superconduct", "hyperbloom",
+                          "burgeon", "quicken", "aggravate", "spread"]
+
+    # Known Genshin character names for character-specific filter
+    # This list covers the major characters — not exhaustive
+    known_characters = [
+        "hu tao", "zhongli", "venti", "kazuha", "raiden", "raiden shogun",
+        "bennett", "xingqiu", "yelan", "xiangling", "fischl", "beidou",
+        "sucrose", "albedo", "ganyu", "ayaka", "ayato", "itto", "gorou",
+        "kokomi", "sara", "yoimiya", "thoma", "shenhe", "yunjin",
+        "nahida", "cyno", "tighnari", "collei", "dori", "layla", "faruzan",
+        "wanderer", "scaramouche", "alhaitham", "dehya", "mika", "baizhu",
+        "kaveh", "nilou", "candace",
+        "neuvillette", "furina", "wriothesley", "navia", "charlotte",
+        "freminet", "lyney", "lynette", "arlecchino", "clorinde",
+        "sigewinne", "emilie", "chevreuse",
+        "mualani", "kinich", "kachina", "xilonen", "chasca", "ororon",
+        "mavuika", "citlali",
+        "lumine", "aether", "paimon",
+        "keqing", "diluc", "jean", "qiqi", "mona", "klee", "childe",
+        "tartaglia", "eula", "amber", "barbara", "noelle", "razor",
+        "lisa", "traveler", "xinyan", "ningguang", "chongyun", "diona",
+        "rosaria", "yanfei", "hutao", "sayu", "shogun",
+        "yae miko", "yae", "heizou", "shinobu", "tighnari",
+        "wanderer", "alhaitham", "baizhu",
+    ]
+
+    filter_dict = {}
+
+    # Detect character name in query
+    detected_character = None
+    for char in known_characters:
+        if char in q:
+            # Normalize to title case for metadata match
+            detected_character = char.title()
+            break
+
+    # Determine tier/content_type filter based on intent keywords
+    if any(kw in q for kw in build_keywords + mechanics_keywords):
+        filter_dict = {"tier": {"$in": ["tcl", "structured"]}}
+    elif any(kw in q for kw in lore_keywords):
+        filter_dict = {"tier": "wiki"}
+    elif any(kw in q for kw in stats_keywords):
+        filter_dict = {"content_type": {"$in": ["stats", "ability"]}}
+    else:
+        filter_dict = {}  # ambiguous — search all tiers
+
+    # Add character filter on top if detected
+    if detected_character:
+        if filter_dict:
+            filter_dict["character"] = detected_character
+        else:
+            filter_dict = {"character": detected_character}
+
+    logger.info(f"Query routed — filter: {filter_dict}")
+    return filter_dict
+
+
+def _tavily_search(question: str) -> tuple[str, str]:
+    """
+    Call Tavily search API as web fallback.
+    Returns (answer_text, source_url).
+    Falls back to empty strings if API key not set or call fails.
+    """
+    if not TAVILY_API_KEY:
+        logger.warning("TAVILY_API_KEY not set — web fallback unavailable")
+        return "", ""
+    try:
+        from tavily import TavilyClient
+        client = TavilyClient(api_key=TAVILY_API_KEY)
+        # Scope search to Genshin sources for quality
+        response = client.search(
+            query=f"Genshin Impact {question}",
+            search_depth="basic",
+            max_results=3,
+            include_answer=True,
+        )
+        answer = response.get("answer", "")
+        # Get top source URL
+        results = response.get("results", [])
+        source_url = results[0]["url"] if results else "web search"
+        logger.info(f"Tavily returned answer length: {len(answer)} chars")
+        return answer, source_url
+    except Exception as e:
+        logger.warning(f"Tavily search failed: {e}")
+        return "", ""
 
 
 def _build_groq_llm():
@@ -213,6 +323,7 @@ class RAGChain:
 
     def _corpus_has_coverage(self, question: str) -> tuple[bool, list]:
         """Check if Pinecone has meaningful coverage for this query."""
+        # NOTE: not called in query() — kept for reference
         try:
             docs_with_scores = self.vectorstore.similarity_search_with_score(
                 question, k=3
@@ -228,43 +339,51 @@ class RAGChain:
             logger.warning(f"Coverage check failed: {e}")
             return True, []  # fail open — try corpus anyway
 
-    def query(self, question: str, top_k: int = 8) -> tuple[str, list[str]]:
+    def query(self, question: str, top_k: int = 8) -> tuple[str, list[str], str]:
+        """
+        Returns (answer, sources, retrieval_method)
+        retrieval_method: "rag" | "web_fallback" | "guardrail_blocked"
+        """
         if not self.ready:
             raise RuntimeError("RAG chain is not loaded.")
 
+        # Step 1: Route query — get metadata filter
+        filter_dict = route_query(question)
+
+        # Step 2: Retrieve with scores to check confidence
+        try:
+            docs_with_scores = self.vectorstore.similarity_search_with_score(
+                question, k=top_k, filter=filter_dict if filter_dict else None
+            )
+        except Exception as e:
+            logger.warning(f"Filtered retrieval failed: {e} — retrying without filter")
+            docs_with_scores = self.vectorstore.similarity_search_with_score(
+                question, k=top_k
+            )
+
+        # Step 3: Check confidence
+        max_score = docs_with_scores[0][1] if docs_with_scores else 0.0
+        logger.info(f"Top Pinecone score: {max_score:.3f} (threshold: {CORPUS_CONFIDENCE_THRESHOLD})")
+
+        if max_score < CORPUS_CONFIDENCE_THRESHOLD:
+            logger.info(f"Low confidence ({max_score:.2f}) — falling back to web search")
+            tavily_answer, tavily_source = _tavily_search(question)
+            if tavily_answer:
+                return tavily_answer, [f"web: {tavily_source}"], "web_fallback"
+            else:
+                logger.warning("Tavily fallback also failed — proceeding with RAG anyway")
+
+        # Step 4: Apply filter to the chain retriever and run RAG
         self.chain.retriever.search_kwargs["k"] = top_k
+        if filter_dict:
+            self.chain.retriever.search_kwargs["filter"] = filter_dict
+        else:
+            self.chain.retriever.search_kwargs.pop("filter", None)
 
-        # Check corpus coverage
-        has_coverage, _ = self._corpus_has_coverage(question)
-
-        if not has_coverage:
-            logger.info("Low corpus coverage — attempting web fallback")
-            subject = _extract_subject(question)
-            web_content = _fetch_wiki_page(subject)
-
-            if web_content:
-                # Answer from web data using the LLM directly
-                web_prompt = PromptTemplate(
-                    template=WEB_PROMPT_TEMPLATE,
-                    input_variables=["context", "question"],
-                )
-                from langchain_core.output_parsers import StrOutputParser
-                web_chain = web_prompt | self.llm | StrOutputParser()
-                try:
-                    answer = web_chain.invoke({
-                        "context": web_content,
-                        "question": question,
-                    })
-                    answer = answer.strip().replace("</s>", "").strip()
-                    return answer, ["web: wiki.gg/game8.co (live)"]
-                except Exception as e:
-                    logger.warning(f"Web chain failed: {e}")
-
-        # Default: corpus RAG
         result = self.chain.invoke({"query": question})
         answer = result["result"].strip().replace("</s>", "").strip()
         sources = [
             doc.metadata.get("source", "unknown")
             for doc in result.get("source_documents", [])
         ]
-        return answer, list(dict.fromkeys(sources))
+        return answer, list(dict.fromkeys(sources)), "rag"
