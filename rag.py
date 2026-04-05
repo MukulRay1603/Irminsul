@@ -142,10 +142,10 @@ def route_query(question: str) -> dict:
     # This list covers the major characters — not exhaustive
     known_characters = [
         "hu tao", "zhongli", "venti", "kazuha", "raiden", "raiden shogun",
-        "bennett", "xingqiu", "yelan", "xiangling", "fischl", "beidou",
-        "sucrose", "albedo", "ganyu", "ayaka", "ayato", "itto", "gorou",
+        "bennett", "xingqiu", "yelan", "xiangling", "fischl", "beidou", "gaming",
+        "sucrose", "albedo", "ganyu", "ayaka", "ayato", "itto", "gorou", "chiori",
         "kokomi", "sara", "yoimiya", "thoma", "shenhe", "yunjin",
-        "nahida", "cyno", "tighnari", "collei", "dori", "layla", "faruzan",
+        "nahida", "cyno", "tighnari", "collei", "dori", "layla", "faruzan", "sethos",
         "wanderer", "scaramouche", "alhaitham", "dehya", "mika", "baizhu",
         "kaveh", "nilou", "candace",
         "neuvillette", "furina", "wriothesley", "navia", "charlotte",
