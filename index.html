@@ -6,6 +6,7 @@
 <title>Irminsul — Genshin Impact AI Assistant</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600&family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=JetBrains+Mono:wght@300;400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.6/marked.min.js"></script>
 <style>
   :root {
     --bg:        #060d08;
@@ -26,6 +27,7 @@
     --green:     #5dd68c;
     --red:       #e87878;
     --amber:     #d8a84a;
+    --gold:      #d4af37;
     --mono:      'JetBrains Mono', monospace;
     --serif:     'EB Garamond', serif;
     --display:   'Cinzel', serif;
@@ -356,7 +358,47 @@
     padding: 22px 24px;
     font-size: 15.5px; line-height: 1.9;
     color: var(--text); font-family: var(--serif);
-    white-space: pre-wrap; word-break: break-word;
+    white-space: normal; word-break: break-word;
+  }
+  .response-body > *:first-child { margin-top: 0; }
+
+  /* ── Markdown answer styling ─────────────────────────── */
+  .response-body h1,
+  .response-body h2 {
+    font-family: var(--display);
+    color: var(--gold);
+    letter-spacing: 0.04em;
+    margin: 1.4em 0 0.4em;
+    font-weight: 500;
+  }
+  .response-body h2 { font-size: 1.15em; border-bottom: 1px solid rgba(212,175,55,0.25); padding-bottom: 0.3em; }
+  .response-body h3 { font-family: var(--serif); color: var(--gold); opacity: 0.85; font-size: 1em; margin: 1.1em 0 0.25em; font-style: italic; }
+  .response-body strong { color: var(--gold); font-weight: 600; }
+  .response-body em { color: var(--text); opacity: 0.8; font-style: italic; }
+  .response-body ul, .response-body ol {
+    padding-left: 1.4em;
+    margin: 0.5em 0 0.8em;
+  }
+  .response-body li {
+    margin-bottom: 0.35em;
+    line-height: 1.75;
+  }
+  .response-body li::marker { color: var(--gold); opacity: 0.7; }
+  .response-body p { margin: 0 0 0.8em; }
+  .response-body p:last-child { margin-bottom: 0; }
+  .response-body hr {
+    border: none;
+    border-top: 1px solid rgba(212,175,55,0.2);
+    margin: 1.2em 0;
+  }
+  .response-body code {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: rgba(212,175,55,0.08);
+    border: 1px solid rgba(212,175,55,0.2);
+    border-radius: 3px;
+    padding: 0.1em 0.4em;
+    color: var(--gold);
   }
 
   .thinking {
@@ -715,7 +757,7 @@ async function submitQuery() {
     }
 
     const data = await res.json();
-    respBody.textContent = data.answer;
+    respBody.innerHTML = marked.parse(data.answer);
 
     const ms = Math.round(data.latency_ms);
     latTag.textContent = ms >= 1000 ? `${(ms/1000).toFixed(1)}s` : `${ms}ms`;
