@@ -110,7 +110,7 @@ Llama 3.1 8B Instruct fine-tuned with QLoRA on the Stanford Alpaca dataset (52K 
 | Dataset | Stanford Alpaca (`tatsu-lab/alpaca`, 52K examples) |
 | Method | QLoRA via PEFT |
 | Rank / Alpha | r=16, α=32, dropout=0.05 |
-| Target modules | q_proj, v_proj, k_proj, o_proj |
+| Target modules | q_proj, v_proj |
 | Learning rate | 2e-4 (cosine schedule, warmup 3%) |
 | Batch size | 4 per device × 4 grad accumulation = effective 16 |
 | Epochs | 2 |
