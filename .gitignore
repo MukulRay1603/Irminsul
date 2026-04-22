@@ -39,6 +39,7 @@ pyvenv.cfg
 
 # Claude Code
 .claude/
+CLAUDE.md
 
 # Session artifacts
 CHANGES_APPLIED.md
