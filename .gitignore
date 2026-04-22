@@ -1,10 +1,48 @@
+# Secrets
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials*.json
+service-account*.json
+
+# Python
 venv/
-models/
 __pycache__/
 *.pyc
 *.pyo
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Models / large artifacts
+models/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Misc
+*.log
+.ipynb_checkpoints/
 README_v1.md
 pyvenv.cfg
+
+# Claude Code
 .claude/
+
+# Session artifacts
+CHANGES_APPLIED.md
+CLEANUP_DONE_*.md
+*_VERIFICATION.md
+*_RECON.md
+ROTATION_CHECKLIST.md
