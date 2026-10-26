@@ -1,6 +1,7 @@
 """The player-facing web app: static files from `web/` plus the read-only data routes it uses.
 
 - GET /                    the app (web/index.html); /static/... serves its CSS and JS
+- GET /results             public test results (web/results.html + static/results.json)
 - GET /api/characters      released characters for the gallery (the leak gate decides who)
 - GET /api/entity?id=...   one character, weapon or artifact set, with official videos and art
 - GET /art/{path}?w=N      resized WebP art, only when IRMINSUL_ART points at a local art
@@ -108,6 +109,11 @@ def add_web(
         @app.get("/", include_in_schema=False)
         def index():
             return FileResponse(web_dir / "index.html", headers={"Cache-Control": "no-cache"})
+
+        @app.get("/results", include_in_schema=False)
+        def results():
+            """Public test results (web/static/results.json, made by irminsul-report)."""
+            return FileResponse(web_dir / "results.html", headers={"Cache-Control": "no-cache"})
     else:
         log.warning("no web app at %s: serving the API only", web_dir)
 

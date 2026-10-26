@@ -15,7 +15,7 @@ from collections import OrderedDict
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 
-from irminsul.engine import guards
+from irminsul.engine import grounding, guards
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.exact import answer_exact
 from irminsul.engine.followups import follow_ups
@@ -199,10 +199,11 @@ class Engine:
             Citation(n, h.chunk.title, h.chunk.source_url, h.chunk.tier, h.chunk.doc_id)
             for n, h in enumerate(hits, 1)
         ]
-        sources = "\n\n".join(
-            f"[{c.n}] ({c.tier}) {c.title}\n" + " ".join(h.chunk.text.split()[:SOURCE_WORDS])
+        texts = {
+            c.n: f"{c.title}\n" + " ".join(h.chunk.text.split()[:SOURCE_WORDS])
             for c, h in zip(citations, hits, strict=True)
-        )
+        }
+        sources = "\n\n".join(f"[{c.n}] ({c.tier}) {texts[c.n]}" for c in citations)
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Sources:\n{sources}\n\nQuestion: {question}"},
@@ -214,7 +215,7 @@ class Engine:
         llm = self.llm if allow_llm else None
         if llm is None:
             return Answer(NO_SOURCES_REPLY, "no_llm", citations, trace)
-        return _Prepared(messages, citations, trace, llm)
+        return _Prepared(messages, citations, trace, llm, texts)
 
     @staticmethod
     def _finish_rag(prepared: "_Prepared", completion: Completion) -> Answer:
@@ -230,6 +231,8 @@ class Engine:
             },
             "cited": sorted(used),
             "uncited_answer": not cited,
+            # Each sentence checked against the source text it cites (no model call).
+            "grounding": grounding.check(completion.text, prepared.sources),
         }
         return Answer(completion.text.strip(), "rag", cited or prepared.citations, trace)
 
@@ -240,6 +243,7 @@ class _Prepared:
     citations: list[Citation]
     trace: dict
     llm: ChatModel
+    sources: dict[int, str]  # citation number -> the source text the model was given
 
 
 def answer_to_dict(answer: Answer) -> dict:

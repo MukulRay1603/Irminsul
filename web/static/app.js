@@ -327,6 +327,7 @@ async function ask(q) {
   const why = document.createElement("button"); why.type = "button"; why.className = "why"; why.textContent = "Why this answer?";
   why.onclick = () => { renderTrace(done); $("#tracePanel").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
   el.append(why); renderTrace(done);
+  window.trust?.decorate(el, done);  // source check marks and the Report button (trust.js)
   // Suggested next questions: picked from game data, free ones marked (they don't use AI answers)
   if (done.follow_ups?.length) {
     const box = document.createElement("div"); box.className = "next";

@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en" data-mode="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Irminsul · Test results</title>
+<meta name="description" content="How accurate is Irminsul? Automated test results anyone can rerun: stat accuracy, leak refusals, retrieval quality and cost per answer.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@75..125,300..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/results.css">
+</head>
+<body class="results-page">
+
+<nav class="rbar">
+  <a class="rmark" href="/">IRMINSUL</a>
+  <a class="rback" href="/">Ask a question <span aria-hidden="true">→</span></a>
+</nav>
+
+<main class="rmain">
+  <header class="rhead">
+    <p class="eyebrow">Public test results</p>
+    <h1>How accurate is Irminsul?</h1>
+    <p class="lede">Every number here comes from automated tests that run without an AI model, so they're
+      repeatable and anyone can rerun them. Nothing is hand-picked.</p>
+    <ul class="meta" id="meta" aria-label="About this run"><li>Loading results…</li></ul>
+  </header>
+
+  <section class="tiles" id="tiles" aria-label="Headline results"></section>
+
+  <section class="rgrid">
+    <article class="panel rpanel" id="retrieval" aria-labelledby="retrTitle">
+      <h2 id="retrTitle">Finding the right source</h2>
+      <p class="sub">Before an AI writes anything, search has to find the right page. How often the correct
+        source is among the top results, over the eval set's answerable questions.</p>
+      <div class="meters" id="retrMeters"></div>
+      <p class="fine" id="retrFine"></p>
+    </article>
+
+    <article class="panel rpanel" id="cost" aria-labelledby="costTitle">
+      <h2 id="costTitle">What an answer costs</h2>
+      <div id="costBody"></div>
+    </article>
+  </section>
+
+  <section class="panel rpanel" aria-labelledby="catTitle">
+    <h2 id="catTitle">By kind of question</h2>
+    <p class="sub">Questions answered from game data or refused by a guard are scored in full. Questions
+      that need an AI-written answer are counted but not scored here, since that needs a model.</p>
+    <div class="cats" id="cats"></div>
+    <div id="failures"></div>
+  </section>
+
+  <section class="panel rpanel how" aria-labelledby="howTitle">
+    <h2 id="howTitle">How it's measured</h2>
+    <ul>
+      <li><b>Golden eval set:</b> questions with checkable answers, written by hand or generated from official
+        game data. An answer passes only if it contains the expected facts, avoids forbidden ones, took the
+        right route (answered or refused) and cites the expected source.</li>
+      <li><b>Leak probes</b> ask about datamines and unreleased characters. Passing means refusing before any search.</li>
+      <li><b>Refusal probes</b> try prompt injection and off-topic requests.</li>
+      <li><b>Retrieval:</b> hit@k is the share of questions with a correct source in the top k results;
+        MRR rewards ranking it first.</li>
+      <li><b>Live check on every AI answer:</b> each sentence that cites a source is compared with that source's
+        text (every number must appear there, and most of its words). Sentences that don't match are underlined
+        in the app.</li>
+    </ul>
+    <p class="fine">Rerun it yourself:</p>
+    <pre><code>uv run irminsul-report --build data/build --index data/index</code></pre>
+    <p class="fine">Source: <a href="https://github.com/MukulRay1603/Irminsul" rel="noopener noreferrer">github.com/MukulRay1603/Irminsul</a>
+      · raw data: <a href="/static/results.json">results.json</a></p>
+  </section>
+</main>
+
+<footer>
+  <span>Unofficial fan project. Genshin Impact, its characters and art belong to HoYoverse.</span>
+  <a href="/">Back to Irminsul</a>
+</footer>
+
+<script src="/static/results.js" defer></script>
+</body>
+</html>

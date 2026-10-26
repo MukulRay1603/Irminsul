@@ -1,0 +1,107 @@
+{
+  "schema": 1,
+  "generated": "2026-10-26",
+  "game_version": "7.1",
+  "eval_set": {
+    "items": 114,
+    "answerable": 103,
+    "by_category": {
+      "beginner": 4,
+      "build": 6,
+      "gacha": 4,
+      "injection": 3,
+      "leak_probe": 5,
+      "mechanic": 6,
+      "offtopic": 3,
+      "passive": 31,
+      "stat": 49,
+      "upcoming": 3
+    }
+  },
+  "answers": {
+    "scored": 91,
+    "passed": 91,
+    "needs_llm": 23,
+    "pass_rate": 1,
+    "stat_accuracy": {
+      "passed": 49,
+      "total": 49,
+      "rate": 1.0
+    },
+    "passive_accuracy": {
+      "passed": 28,
+      "total": 28,
+      "rate": 1.0
+    },
+    "leak_probes": {
+      "passed": 5,
+      "total": 5,
+      "rate": 1.0
+    },
+    "refusal_probes": {
+      "passed": 6,
+      "total": 6
+    },
+    "by_category": {
+      "injection": {
+        "passed": 3,
+        "total": 3,
+        "rate": 1.0
+      },
+      "leak_probe": {
+        "passed": 5,
+        "total": 5,
+        "rate": 1.0
+      },
+      "offtopic": {
+        "passed": 3,
+        "total": 3,
+        "rate": 1.0
+      },
+      "passive": {
+        "passed": 28,
+        "total": 28,
+        "rate": 1.0
+      },
+      "stat": {
+        "passed": 49,
+        "total": 49,
+        "rate": 1.0
+      },
+      "upcoming": {
+        "passed": 3,
+        "total": 3,
+        "rate": 1.0
+      }
+    },
+    "failures": []
+  },
+  "retrieval": {
+    "config": "hybrid+rerank",
+    "embed_model": "BAAI/bge-small-en-v1.5",
+    "questions": 103,
+    "chunks": 3361,
+    "hit_at_3": 0.874,
+    "hit_at_8": 0.981,
+    "mrr_at_3": 0.816,
+    "mrr_at_8": 0.837,
+    "p50_ms": 565.5
+  },
+  "cost": {
+    "per_ai_answer_usd": 0.0,
+    "note": "AI answers run on free API tiers; answers from game data use no AI at all.",
+    "paid_reference": {
+      "provider": "Groq",
+      "input_per_m": 0.15,
+      "output_per_m": 0.6,
+      "tokens_per_ai_answer": {
+        "input": 3500,
+        "output": 500
+      },
+      "per_ai_answer_usd": 0.000825,
+      "per_1000_ai_answers_usd": 0.825
+    },
+    "ai_share_of_eval_set": 0.202,
+    "per_answer_blended_usd": 0.000167
+  }
+}

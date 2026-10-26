@@ -1,0 +1,46 @@
+name: Wrong answer
+description: Irminsul gave a wrong, outdated or unsupported answer
+title: "Wrong answer: "
+labels: ["wrong-answer", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for checking! The app's **Report** button fills in most of this for you.
+        Nothing was sent to Irminsul: only what you submit here is shared, publicly.
+  - type: textarea
+    id: question
+    attributes:
+      label: Question
+      description: What you asked.
+    validations:
+      required: true
+  - type: textarea
+    id: answer
+    attributes:
+      label: Answer Irminsul gave
+      description: Long answers are cut to fit the link.
+      render: markdown
+    validations:
+      required: true
+  - type: textarea
+    id: correct
+    attributes:
+      label: What's wrong, and what's right?
+      description: The correct fact, and where it comes from (in-game screen, official page, KQM...).
+    validations:
+      required: true
+  - type: input
+    id: route
+    attributes:
+      label: Answer type (route)
+      description: e.g. rag (written by AI from sources) or exact (straight from game data).
+  - type: textarea
+    id: sources
+    attributes:
+      label: Cited sources
+      description: The doc ids the answer cited.
+  - type: input
+    id: version
+    attributes:
+      label: Game version
