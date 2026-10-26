@@ -37,6 +37,20 @@ def _write_jsonl(path: Path, rows: list[BaseModel]) -> None:
             f.write(row.model_dump_json() + "\n")
 
 
+def art_names_if_released(record: BaseModel) -> BaseModel:
+    """Official image names stay on released records only: nothing announced ever gets art."""
+    if record.release.status == ReleaseStatus.RELEASED:
+        return record
+    update: dict = {"icon": None}
+    if isinstance(record, Character):
+        update["namecard"] = None
+        update["talents"] = [t.model_copy(update={"icon": None}) for t in record.talents]
+        update["constellations"] = [
+            c.model_copy(update={"icon": None}) for c in record.constellations
+        ]
+    return record.model_copy(update=update)
+
+
 def check_unique_ids(docs: list) -> None:
     """Doc ids are the upsert key downstream; a repeat would silently overwrite a doc."""
     seen: set[str] = set()
@@ -151,6 +165,7 @@ def build(
         # Only full builds with HoYoWiki may drop undated records it does not list.
         names = official.names.get(kind) if limit is None and official.names else None
         report = gate(records, now, blocklist, official_names=names)
+        report.kept = [art_names_if_released(r) for r in report.kept]
         kept[kind] = report.kept
         _write_jsonl(out / f"{kind}.jsonl", report.kept)
         for record in report.kept:

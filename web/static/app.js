@@ -458,3 +458,9 @@ document.addEventListener("keydown", e => {
     e.preventDefault(); (inView ? dock : $("#heroQ")).focus();
   } else if (e.key === "Escape" && typing && t.matches("input:not([type=checkbox]):not([type=radio]), textarea")) t.blur();
 });
+
+// Art is fetched by the server on first use; if an image turns out to be missing (404), drop it
+// so the layout falls back as it does when there is no art at all, instead of a broken icon.
+document.addEventListener("error", e => {
+  if (e.target instanceof HTMLImageElement && new URL(e.target.src).pathname.startsWith("/art/")) e.target.remove();
+}, true);

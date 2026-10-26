@@ -53,12 +53,14 @@ class Talent(BaseModel):
     name: str
     description: str
     scaling: list[ScalingRow] = Field(default_factory=list)
+    icon: str | None = None  # official asset name, e.g. "Skill_S_Furina_01" (never the image)
 
 
 class Constellation(BaseModel):
     level: int  # 1..6
     name: str
     description: str
+    icon: str | None = None
 
 
 class BaseStats(BaseModel):
@@ -83,6 +85,8 @@ class Character(BaseModel):
     base_stats: BaseStats | None = None
     talents: list[Talent] = Field(default_factory=list)
     constellations: list[Constellation] = Field(default_factory=list)
+    icon: str | None = None  # e.g. "UI_AvatarIcon_Furina"; the web app derives its art from it
+    namecard: str | None = None  # e.g. "UI_NameCardIcon_Furina"
     release: Release
     source: SourceRef
 
@@ -99,6 +103,7 @@ class Weapon(BaseModel):
     passive_name: str | None = None
     passive_by_refinement: list[str] = Field(default_factory=list)  # R1..R5
     description: str | None = None
+    icon: str | None = None  # e.g. "UI_EquipIcon_Sword_Narukami"
     release: Release
     source: SourceRef
 
@@ -109,6 +114,7 @@ class ArtifactSet(BaseModel):
     name: str
     rarities: list[int]
     bonuses: dict[int, str]  # piece count -> effect text
+    icon: str | None = None  # e.g. "UI_RelicIcon_15003_4"
     release: Release
     source: SourceRef
 
