@@ -3,8 +3,8 @@
   "generated": "2026-10-26",
   "game_version": "7.1",
   "eval_set": {
-    "items": 114,
-    "answerable": 103,
+    "items": 118,
+    "answerable": 105,
     "by_category": {
       "beginner": 4,
       "build": 6,
@@ -14,14 +14,15 @@
       "mechanic": 6,
       "offtopic": 3,
       "passive": 31,
+      "spoiler": 4,
       "stat": 49,
       "upcoming": 3
     }
   },
   "answers": {
-    "scored": 91,
-    "passed": 91,
-    "needs_llm": 23,
+    "scored": 93,
+    "passed": 93,
+    "needs_llm": 25,
     "pass_rate": 1,
     "stat_accuracy": {
       "passed": 49,
@@ -63,6 +64,11 @@
         "total": 28,
         "rate": 1.0
       },
+      "spoiler": {
+        "passed": 2,
+        "total": 2,
+        "rate": 1.0
+      },
       "stat": {
         "passed": 49,
         "total": 49,
@@ -79,13 +85,13 @@
   "retrieval": {
     "config": "hybrid+rerank",
     "embed_model": "BAAI/bge-small-en-v1.5",
-    "questions": 103,
-    "chunks": 3361,
-    "hit_at_3": 0.874,
-    "hit_at_8": 0.981,
-    "mrr_at_3": 0.816,
-    "mrr_at_8": 0.837,
-    "p50_ms": 565.5
+    "questions": 90,
+    "chunks": 5112,
+    "hit_at_3": 0.878,
+    "hit_at_8": 0.967,
+    "mrr_at_3": 0.841,
+    "mrr_at_8": 0.858,
+    "p50_ms": 503.8
   },
   "cost": {
     "per_ai_answer_usd": 0.0,
@@ -101,7 +107,7 @@
       "per_ai_answer_usd": 0.000825,
       "per_1000_ai_answers_usd": 0.825
     },
-    "ai_share_of_eval_set": 0.202,
-    "per_answer_blended_usd": 0.000167
+    "ai_share_of_eval_set": 0.212,
+    "per_answer_blended_usd": 0.000175
   }
 }

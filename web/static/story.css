@@ -41,4 +41,6 @@
   .story-pick { font-size: 13px; }
   .story-pick select { flex: 1 1 100%; }
 }
-@media (prefers-reduced-motion: reduce) { .story-anyway { transition: none; } }
+
+/* The hero picker joins the hero's intro, between the question box and the example prompts. */
+.hero .story-pick { animation: fadeUp .9s cubic-bezier(.2,.8,.2,1) 1.42s both; }
