@@ -1,13 +1,19 @@
-# Weekly corpus update: build -> diff + guards -> index + retrieval gate -> stage on HF -> PR.
+# Daily corpus check: build -> diff + guards -> (only if game data changed) index + retrieval
+# gate -> stage on HF -> publish.
 #
-# Nothing user-facing changes here. The PR (corpus/manifest.json + CHANGELOG) is the review
-# gate; merging it runs corpus-publish.yml, which promotes the staged build on Hugging Face.
-# Schedules only run from the default branch, so this is inert until merged into main.
-name: Weekly corpus update
+# - Nothing changed (most days): stop quietly. No PR, no issue, nothing to look at.
+# - Routine change (corrected text, guide updates, new official videos): publish on its own
+#   and restart the Space so the site serves it.
+# - New or removed characters, weapons or sets, or a change in who is announced: open a review
+#   PR instead. Merging it runs corpus-publish.yml. That is where a leak would show up, so a
+#   person looks first.
+# Daily (not weekly) so a patch's new characters are live within a day of release.
+# Schedules only run from the default branch.
+name: Daily corpus check
 
 on:
   schedule:
-    - cron: "17 6 * * 0" # Sundays 06:17 UTC
+    - cron: "17 9 * * *" # daily 09:17 UTC, after version-update maintenance has ended
   workflow_dispatch:
     inputs:
       reason:
@@ -23,6 +29,7 @@ concurrency:
 
 env:
   HF_DATASET: MukulRay/irminsul-corpus
+  HF_SPACE: MukulRay/Irminsul
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   IRMINSUL_MODEL_CACHE: ${{ github.workspace }}/.models
   MIN_HIT_AT_8: "0.90"
@@ -32,7 +39,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 75
     permissions:
-      contents: write # push the corpus/update-* branch
+      contents: write # push the corpus/update-* branch for reviews
       pull-requests: write # open the review PR
       issues: write # the failure issue
     steps:
@@ -44,12 +51,6 @@ jobs:
 
       - name: Install
         run: uv sync --locked --python 3.12
-
-      - name: Cache embedding models
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: .models
-          key: models-bge-small-msmarco-v1
 
       - name: Previous manifest
         run: |
@@ -64,19 +65,36 @@ jobs:
       - name: Build corpus (Yatta + HoYoWiki + KQM, leak-gated)
         run: uv run irminsul-build --out data/build
 
-      - name: Diff and guards
+      - name: Diff, guards and decision
+        id: diff
         run: |
           uv run irminsul-diff --old prev/manifest.json --new data/build/manifest.json \
-            --out data/build/CHANGELOG.md
-          cat data/build/CHANGELOG.md >> "$GITHUB_STEP_SUMMARY"
+            --out data/build/CHANGELOG.md --decision data/build/decision.json
+          echo "changed=$(jq -r .changed data/build/decision.json)" >> "$GITHUB_OUTPUT"
+          echo "review=$(jq -r .review data/build/decision.json)" >> "$GITHUB_OUTPUT"
+          if [ "$(jq -r .changed data/build/decision.json)" != "true" ]; then
+            echo "No game-data changes today. Nothing to publish." >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat data/build/CHANGELOG.md >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.reasons[] | "- needs review: " + .' data/build/decision.json >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Cache embedding models
+        if: steps.diff.outputs.changed == 'true'
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: .models
+          key: models-bge-small-msmarco-v1
 
       - name: Index and retrieval quality gate
+        if: steps.diff.outputs.changed == 'true'
         run: |
           uv run irminsul-index build --docs data/build/docs.jsonl --out data/index
           uv run irminsul-index eval --index data/index --k 8 --configs hybrid+rerank \
             --out data/build/retrieval.json --min-hit "$MIN_HIT_AT_8"
 
       - name: Keep the build as an artifact
+        if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: corpus-${{ github.run_number }}
@@ -86,12 +104,20 @@ jobs:
           retention-days: 30
 
       - name: Stage on Hugging Face (dated branch)
-        if: env.HF_TOKEN != ''
+        if: steps.diff.outputs.changed == 'true' && env.HF_TOKEN != ''
         run: |
           uv run irminsul-publish stage --repo "$HF_DATASET" --build data/build \
             --index data/index --branch "update-$(date -u +%F)"
 
-      - name: Open the review PR
+      - name: Routine change, so publish now and restart the site
+        if: steps.diff.outputs.changed == 'true' && steps.diff.outputs.review != 'true' && env.HF_TOKEN != ''
+        run: |
+          uv run irminsul-publish promote --repo "$HF_DATASET" --branch "update-$(date -u +%F)"
+          uv run irminsul-publish restart-space --space "$HF_SPACE"
+          echo "Published automatically (routine change) and restarted the Space." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: New content, so open the review PR
+        if: steps.diff.outputs.changed == 'true' && steps.diff.outputs.review == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           # Passed as env, never interpolated into the script: the reason is free text.
@@ -108,25 +134,23 @@ jobs:
           mv /tmp/changelog corpus/CHANGELOG.md
           git switch -c "$branch"
           git add corpus
-          if git diff --cached --quiet; then
-            echo "No corpus changes this week."; exit 0
-          fi
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -m "corpus: weekly update $day ($REASON)"
+              commit -m "corpus: update $day ($REASON)"
           git push origin "$branch"
-          staged="Staged on HF branch \`update-$day\`; merging publishes it."
+          staged="Staged on HF branch \`update-$day\`; merging publishes it and restarts the site."
           [ -z "$HF_TOKEN" ] && staged="HF_TOKEN not set: nothing staged; merging records the manifest only."
-          { cat data/build/CHANGELOG.md; echo; echo "$staged"; } > /tmp/body.md
+          { echo "**Why this needs a look:**"; jq -r '.reasons[] | "- " + .' data/build/decision.json; echo;
+            cat data/build/CHANGELOG.md; echo; echo "$staged"; } > /tmp/body.md
           gh pr create --base "$BASE" --head "$branch" \
-            --title "Corpus update $day" --body-file /tmp/body.md
+            --title "Corpus update $day (review: new content)" --body-file /tmp/body.md
 
       - name: Open an issue on failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue create --title "Weekly corpus update failed ($(date -u +%F))" \
+          gh issue create --title "Daily corpus check failed ($(date -u +%F))" \
             --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           A guard (record drop, unverified records, retrieval quality) or a source fetch failed.
           Nothing was published."

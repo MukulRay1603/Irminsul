@@ -110,6 +110,11 @@ def promote(repo: str, branch: str) -> None:
         )
 
 
+def restart_space(space: str) -> None:
+    """The Space loads the dataset at boot, so a restart is what makes a new build live."""
+    _api().restart_space(space)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -124,11 +129,15 @@ def main() -> None:
     p = sub.add_parser("promote")
     p.add_argument("--repo", required=True)
     p.add_argument("--branch", required=True)
+    r = sub.add_parser("restart-space")
+    r.add_argument("--space", required=True)
     args = parser.parse_args()
     if args.cmd == "fetch-manifest":
         print("found" if fetch_manifest(args.repo, args.out) else "no previous manifest")
     elif args.cmd == "stage":
         stage(args.repo, args.build, args.branch, args.index)
+    elif args.cmd == "restart-space":
+        restart_space(args.space)
     else:
         promote(args.repo, args.branch)
 
