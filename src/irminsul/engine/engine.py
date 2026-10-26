@@ -61,13 +61,13 @@ class Engine:
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
 
-    def ask(self, question: str) -> Answer:
+    def ask(self, question: str, allow_llm: bool = True) -> Answer:
         start = time.perf_counter()
-        answer = self._ask(question.strip())
+        answer = self._ask(question.strip(), allow_llm)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         return answer
 
-    def _ask(self, question: str) -> Answer:
+    def _ask(self, question: str, allow_llm: bool) -> Answer:
         if refusal := guards.check(question, self.store, self.guard_cfg):
             return refusal
         key = _normalise(question)
@@ -77,14 +77,14 @@ class Engine:
             return Answer(
                 cached.text, cached.route, cached.citations, {**cached.trace, "cache": "hit"}
             )
-        answer = answer_exact(self.store, question) or self._rag(question)
-        if answer.route not in ("busy", "no_index"):
+        answer = answer_exact(self.store, question) or self._rag(question, allow_llm)
+        if answer.route not in ("busy", "no_index", "no_llm"):
             self._cache[key] = answer
             if len(self._cache) > self.cache_size:
                 self._cache.popitem(last=False)
         return answer
 
-    def _rag(self, question: str) -> Answer:
+    def _rag(self, question: str, allow_llm: bool) -> Answer:
         if self.index is None:
             return Answer(NO_SOURCES_REPLY, "no_index")
         hits = self.index.search(question, k=self.k, mode="hybrid", rerank=True)
@@ -109,10 +109,11 @@ class Engine:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Sources:\n{sources}\n\nQuestion: {question}"},
         ]
-        if self.llm is None:
+        llm = self.llm if allow_llm else None
+        if llm is None:
             return Answer(NO_SOURCES_REPLY, "no_llm", citations, trace)
         try:
-            completion = self.llm.complete(messages)
+            completion = llm.complete(messages)
         except AllProvidersBusy:
             return Answer(BUSY_REPLY, "busy", trace=trace)
         used = {int(n) for n in re.findall(r"\[(\d+)\]", completion.text)}

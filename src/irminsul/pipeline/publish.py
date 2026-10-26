@@ -18,6 +18,7 @@ Usage:
 
 import argparse
 import os
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -73,7 +74,7 @@ def fetch_manifest(repo: str, out: Path) -> bool:
         return False
 
 
-def stage(repo: str, build: Path, branch: str) -> None:
+def stage(repo: str, build: Path, branch: str, index: Path | None = None) -> None:
     api = _api()
     api.create_branch(repo, branch=branch, repo_type="dataset", exist_ok=True)
     with tempfile.TemporaryDirectory() as tmp:
@@ -81,6 +82,9 @@ def stage(repo: str, build: Path, branch: str) -> None:
         for name in PUBLISH_FILES:
             if (build / name).exists():
                 (folder / name).write_bytes((build / name).read_bytes())
+        if index is not None and (index / "meta.json").exists():
+            # The search index ships with the data so the app never re-embeds on boot.
+            shutil.copytree(index, folder / "index")
         (folder / "README.md").write_text(CARD, encoding="utf-8")
         api.upload_folder(
             folder_path=folder,
@@ -115,6 +119,7 @@ def main() -> None:
     s.add_argument("--repo", required=True)
     s.add_argument("--build", type=Path, required=True)
     s.add_argument("--branch", required=True)
+    s.add_argument("--index", type=Path, default=None, help="also upload this index folder")
     p = sub.add_parser("promote")
     p.add_argument("--repo", required=True)
     p.add_argument("--branch", required=True)
@@ -122,7 +127,7 @@ def main() -> None:
     if args.cmd == "fetch-manifest":
         print("found" if fetch_manifest(args.repo, args.out) else "no previous manifest")
     elif args.cmd == "stage":
-        stage(args.repo, args.build, args.branch)
+        stage(args.repo, args.build, args.branch, args.index)
     else:
         promote(args.repo, args.branch)
 
