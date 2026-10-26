@@ -26,6 +26,8 @@ jobs:
         run: uv run ruff check src tests && uv run ruff format --check src tests
       - name: Test
         run: uv run pytest -q
+      - name: Public test results are current (web/static/results.json; no network, no LLM)
+        run: uv run irminsul-report --check
 
   security:
     runs-on: ubuntu-latest

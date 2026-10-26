@@ -1,6 +1,7 @@
 """The player-facing web app: static files from `web/` plus the read-only data routes it uses.
 
 - GET /                    the app (web/index.html); /static/... serves its CSS and JS
+- GET /results             public test results (web/results.html + static/results.json)
 - GET /manifest.webmanifest, /sw.js, /favicon.ico   what makes it an installable app
 - GET /api/characters      released characters for the gallery (the leak gate decides who)
 - GET /api/entity?id=...   one character, weapon or artifact set, with official videos and art
@@ -133,6 +134,11 @@ def add_web(
         @app.get("/", include_in_schema=False)
         def index():
             return HTMLResponse(page, headers=fresh)
+
+        @app.get("/results", include_in_schema=False)
+        def results():
+            """Public test results (web/static/results.json, made by irminsul-report)."""
+            return FileResponse(web_dir / "results.html", headers=fresh)
 
         @app.get("/manifest.webmanifest", include_in_schema=False)
         def manifest():
