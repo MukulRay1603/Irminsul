@@ -8,12 +8,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@75..125,300..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/planner.css">
 </head>
 <body>
 
 <div class="bar" id="bar">
   <a class="mark" href="#top">IRMINSUL</a>
   <span class="spacer"></span>
+  <a class="nav-link" href="#planner">Planner</a>
   <span class="chip" id="dataChip">Connecting…</span>
   <button class="icon-btn" id="soundBtn" type="button" aria-pressed="false" aria-label="Ambient sound" title="Ambient sound">
     <svg viewBox="0 0 24 24"><path d="M4 10v4h3l4 4V6L7 10H4z"/><path class="wave" d="M15 9.5a4 4 0 0 1 0 5M17.5 7a7.5 7.5 0 0 1 0 10"/></svg>
@@ -100,11 +102,20 @@
   </div>
 </section>
 
+<section class="block" id="planner" aria-labelledby="plannerTitle">
+  <div class="block-head">
+    <h2 id="plannerTitle">Daily planner</h2>
+    <p>Which domains are open today for the characters you're building.</p>
+  </div>
+  <div id="plannerApp"><noscript><p class="placeholder">The planner needs JavaScript.</p></noscript></div>
+</section>
+
 <footer>
   <span>Unofficial fan project. Genshin Impact, its characters and art belong to HoYoverse.</span>
   <span>Sources: in-game data (Yatta), HoYoWiki, KQM TCL (CC BY-NC-SA 4.0)</span>
 </footer>
 
 <script src="/static/app.js" defer></script>
+<script src="/static/planner.js" type="module"></script>
 </body>
 </html>
