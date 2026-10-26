@@ -8,6 +8,8 @@ Metrics (doc level: any chunk of a gold doc counts as finding it):
 - hit@k: share of questions with at least one gold doc in the top k
 - recall@k: share of each question's gold docs found in the top k, averaged
 - MRR: mean of 1 / rank of the first gold doc (0 if not in the top k)
+- spoiler leaks: questions asked in story-safe mode that retrieved any passage revealed after
+  the question's story point. Must be zero: `eval` fails otherwise.
 """
 
 import argparse
@@ -21,6 +23,7 @@ from irminsul.evals import Expect, load
 from irminsul.retrieval.chunking import chunk_docs
 from irminsul.retrieval.index import EMBED_MODEL, HybridIndex, timed_search
 from irminsul.schema import Doc
+from irminsul.story import BY_KEY, later
 
 CONFIGS = {
     "bm25": {"mode": "bm25"},
@@ -58,7 +61,7 @@ def score(index: HybridIndex, k: int = 8, configs: dict | None = None) -> dict:
         hits_at, recalls, rrs, latencies = [], [], [], []
         by_cat: dict[str, list[int]] = defaultdict(list)
         for item in items:
-            hits, ms = timed_search(index, item.question, k=k, **cfg)
+            hits, ms = timed_search(index, item.question, k=k, **cfg, **_story(item))
             latencies.append(ms)
             ranked_docs = list(dict.fromkeys(h.chunk.doc_id for h in hits))
             gold = set(item.gold_doc_ids) & indexed  # gold docs this index can find
@@ -77,7 +80,24 @@ def score(index: HybridIndex, k: int = 8, configs: dict | None = None) -> dict:
             "p95_ms": round(latencies[int(len(latencies) * 0.95) - 1], 1),
             "hit_by_category": {c: round(statistics.mean(v), 3) for c, v in sorted(by_cat.items())},
         }
+    report["spoiler_leaks"] = spoiler_leaks(index, k)
     return report
+
+
+def _story(item) -> dict:
+    return {"max_revealed": BY_KEY[item.story_until].until} if item.story_until else {}
+
+
+def spoiler_leaks(index: HybridIndex, k: int = 8) -> list[str]:
+    """Story-safe items whose top k (with re-ranking, as the app runs) holds a passage
+    revealed after the item's story point. Refusal items count too: they are the point."""
+    leaks = []
+    for item in (i for i in load() if i.story_until):
+        until = BY_KEY[item.story_until].until
+        hits = index.search(item.question, k=k, mode="hybrid", rerank=True, **_story(item))
+        if any(later(h.chunk.revealed_in, until) for h in hits):
+            leaks.append(item.id)
+    return leaks
 
 
 def main() -> None:
@@ -113,6 +133,8 @@ def main() -> None:
         if args.out:
             args.out.write_text(text, encoding="utf-8")
         print(text)
+        if report.get("spoiler_leaks"):
+            sys.exit(f"story-safe mode leaked past the story point: {report['spoiler_leaks']}")
         if args.min_hit is not None:
             low = {
                 n: c[f"hit@{args.k}"]

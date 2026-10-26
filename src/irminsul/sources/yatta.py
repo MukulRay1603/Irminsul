@@ -322,3 +322,40 @@ class YattaSource:
     def artifact_sets(self, fetched_at: datetime, version: str) -> Iterator[ArtifactSet]:
         for item in self._get(f"{self.lang}/reliquary")["items"].values():
             yield parse_artifact_set(item, fetched_at, version)
+
+    # ---- lore (story-safe mode) --------------------------------------------------------
+    def changelog(self) -> dict[str, Any]:
+        """Which version added each item: the source of every doc's `revealed_in`."""
+        return self._get("static/changelog")
+
+    def character_stories(self, game_id: str) -> list[tuple[str, str]]:
+        return parse_stories(self._get(f"{self.lang}/avatarFetter/{game_id}"))
+
+    def books(self) -> Iterator[tuple[dict[str, Any], list[tuple[dict[str, Any], str]]]]:
+        """Each in-game book with its volumes' full text. One request per volume."""
+        for book_id in self._get(f"{self.lang}/book")["items"]:
+            try:
+                data = self._get(f"{self.lang}/book/{book_id}")
+                volumes = [
+                    (v, clean(self._get(f"{self.lang}/readable/Book{v['storyId']}")))
+                    for v in data.get("volume") or []
+                    if v.get("storyId")
+                ]
+            except Exception:
+                log.exception("failed to fetch book %s", book_id)
+                continue
+            yield data, volumes
+
+
+def parse_stories(data: dict[str, Any]) -> list[tuple[str, str]]:
+    """Official profile stories: "Character Details", "Character Story 1".."5", and so on.
+
+    Some entries carry a second version of the text (`title2`/`text2`), kept as its own story.
+    """
+    out: list[tuple[str, str]] = []
+    for _, s in sorted((data.get("story") or {}).items(), key=lambda kv: int(kv[0])):
+        title = clean(s.get("title"))
+        for t, text in ((title, s.get("text")), (clean(s.get("title2")) or title, s.get("text2"))):
+            if t and (body := clean(text)) and (t, body) not in out:
+                out.append((t, body))
+    return out

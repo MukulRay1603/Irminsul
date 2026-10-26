@@ -85,6 +85,7 @@ class Character(BaseModel):
     constellations: list[Constellation] = Field(default_factory=list)
     release: Release
     source: SourceRef
+    revealed_in: str | None = None  # game version that made them public (story-safe mode)
 
 
 class Weapon(BaseModel):
@@ -130,11 +131,14 @@ class Doc(BaseModel):
 
     doc_id: str  # stable: "<entity id>#<section>"
     entity_id: str | None
-    kind: str  # character_overview | talent | constellations | weapon | artifact_set | ...
+    kind: str  # character_overview | talent | constellations | weapon | lore_story | ...
     title: str
     text: str
     release: Release
     source: SourceRef
+    # Game version that first made this text public; story-safe mode hides it from players
+    # whose story progress ends earlier. None: not story content, never hidden.
+    revealed_in: str | None = None
 
     @property
     def content_hash(self) -> str:

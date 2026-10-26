@@ -209,6 +209,7 @@ const BADGES = {
   no_llm: ["AI answers off", "Game-data answers still work", "busy"],
   rag_empty: ["No sources found", "Not in released data", "busy"],
   no_allowance: ["AI answers used up for now", "They refill over time", "busy"],
+  spoiler: ["Past your story point", "Spoiler filter", "story"],
 };
 
 function answerHeader(route, version, nSources) {

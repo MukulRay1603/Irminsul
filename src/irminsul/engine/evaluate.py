@@ -19,13 +19,19 @@ from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import GuardConfig, version_from_manifest
 from irminsul.evals import Expect, load, matches
 
-REFUSE_ROUTES = {"refuse_leak", "refuse_injection", "refuse_offtopic", "refuse_length"}
+REFUSE_ROUTES = {
+    "refuse_leak",
+    "refuse_injection",
+    "refuse_offtopic",
+    "refuse_length",
+    "spoiler",  # story-safe mode: "that's past your story point"
+}
 
 
 def evaluate(engine: Engine) -> dict:
     rows = []
     for item in load():
-        answer = engine.ask(item.question)
+        answer = engine.ask(item.question, story_until=item.story_until)
         if answer.route in ("no_llm", "no_index"):
             rows.append(
                 {
