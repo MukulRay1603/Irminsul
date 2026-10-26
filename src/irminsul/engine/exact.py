@@ -1,7 +1,8 @@
 """Exact answers from the entity store, plus the overview-only answer for announced characters.
 
-Only questions about a single named entity with a clear stat or passive intent are answered
-here; anything else (comparisons, "is X good", builds) goes to retrieval + LLM.
+Only questions about a single named entity with a clear stat or passive intent, or a data
+comparison of 2-3 released entities of one kind, are answered here; anything else ("is X good",
+"which is better for Raiden", builds) goes to retrieval + LLM.
 """
 
 import re
@@ -29,6 +30,27 @@ _TALENT = re.compile(
 )
 _DESCRIBE = re.compile(r"\bwhat (?:does|do|is|are)\b|\bdescribe\b|\bexplain\b|\bdetails?\b", re.I)
 _SET = re.compile(r"\b[24][- ]?(pc|piece)\b|\bset bonus\b|\bbonus\b|\bwhat does\b", re.I)
+# Comparisons: "vs" and "compare" ask for a side-by-side on their own; "or" and "better" only
+# when the question also asks for numbers. Anything that asks for advice goes to retrieval.
+_COMPARE = re.compile(
+    r"\bvs\b|\bversus\b|\bcompar(?:e|ed|ing|ison)\b|\bdifference between\b|\bdiffer\b", re.I
+)
+_COMPARE_WEAK = re.compile(r"\bor\b|\bbetter\b|\bhigher\b|\bmore\b", re.I)
+_COMPARE_DATA = {
+    "character": _STATS,
+    "weapon": re.compile(
+        r"\bbase (atk|attack|stats?)\b|\bstats?\b|\batk\b|\bsecondary\b|\bsub ?stats?\b"
+        r"|\bpassives?\b",
+        re.I,
+    ),
+    "artifact": re.compile(r"\b[24][- ]?(pc|piece)\b|\bset bonus(es)?\b|\bbonus(es)?\b", re.I),
+}
+_OPINION = re.compile(
+    r"\bshould\b|\bworth\b|\brecommend|\bbest\b|\bgood\b|\bstronger\b|\bpull\b|\bbuild\b"
+    r"|\bteams?\b|\bmeta\b|\btier\b|\bwho wins\b|\bfor (?:my|a|an|the)\b",
+    re.I,
+)
+_COMPARE_MAX = 3
 
 
 def _pct(value: float | None, stat: str | None) -> str:
@@ -156,6 +178,64 @@ def artifact_answer(m: Match, q: str) -> Answer | None:
     )
 
 
+def _compare_line(kind: str, e) -> str:
+    if kind == "character":
+        s = e.base_stats
+        if not s:
+            return f"- **{e.name}:** no base stats in the data"
+        return (
+            f"- **{e.name}:** HP {s.hp:,.0f}, ATK {s.atk:,.0f}, DEF {s.defense:,.0f}, "
+            f"{s.bonus_stat} {_pct(s.bonus_value, s.bonus_stat)}"
+        )
+    if kind == "weapon":
+        atk = "-" if e.base_atk is None else f"{e.base_atk:,.0f}"
+        sub = f", {e.secondary_stat} {_pct(e.secondary_value, e.secondary_stat)}"
+        passive = f", passive {e.passive_name}" if e.passive_name else ""
+        return f"- **{e.name}:** base ATK {atk}{sub if e.secondary_stat else ''}{passive}"
+    bonuses = "; ".join(f"{n}-piece: {t}" for n, t in sorted(e.bonuses.items()))
+    return f"- **{e.name}:** {bonuses}"
+
+
+def compare_answer(matches: list[Match], q: str) -> Answer | None:
+    """Side by side data for 2-3 released entities of one kind, when the question asks for it.
+
+    Opinions ("which is better for Raiden?") are left to retrieval: this compares numbers and
+    effect text from the game data and says so.
+    """
+    kinds = {m.kind for m in matches}
+    if not (2 <= len(matches) <= _COMPARE_MAX) or len(kinds) != 1:
+        return None
+    if not all(released(m) for m in matches):
+        return None  # the leak gate's release status decides; announced entities never compete
+    kind = kinds.pop()
+    data = _COMPARE_DATA[kind].search(q)
+    if _OPINION.search(q) or (re.search(r"\bbetter\b", q, re.I) and not data):
+        return None
+    if not (_COMPARE.search(q) or (data and _COMPARE_WEAK.search(q))):
+        return None
+    entities = [m.entity for m in matches]
+    what = {
+        "character": "Level 90 base stats",
+        "weapon": "Max-level stats",
+        "artifact": "Set bonuses",
+    }[kind]
+    lines = [f"**{' vs '.join(e.name for e in entities)}**", "", f"{what}:"]
+    lines += [_compare_line(kind, e) for e in entities]
+    refs = "".join(f"[{i}]" for i in range(1, len(entities) + 1))
+    lines += ["", f"This is a data comparison from the game files, not a recommendation. {refs}"]
+    doc = {"character": "overview", "weapon": "main", "artifact": "main"}[kind]
+    return Answer(
+        "\n".join(lines),
+        "exact",
+        [
+            Citation(i, e.name, e.source.url, e.source.tier, f"{e.id}#{doc}")
+            for i, e in enumerate(entities, start=1)
+        ],
+        {"entities": [e.id for e in entities], "intent": f"compare:{kind}"},
+        card=cards.compare_card(kind, entities),
+    )
+
+
 def answer_exact(store: EntityStore, question: str) -> Answer | None:
     matches = store.find(question)
     if not matches:
@@ -167,8 +247,10 @@ def answer_exact(store: EntityStore, question: str) -> Answer | None:
     ]
     if announced:
         return announced_answer(announced[0])
-    if len(matches) != 1 or not released(matches[0]):
-        return None  # comparisons and multi-entity questions need retrieval
+    if len(matches) > 1:
+        return compare_answer(matches, question)  # anything but a data comparison: retrieval
+    if not released(matches[0]):
+        return None
     m = matches[0]
     handler = {"character": character_answer, "weapon": weapon_answer, "artifact": artifact_answer}[
         m.kind

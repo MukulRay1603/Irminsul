@@ -11,7 +11,7 @@
 [data-mode="light"] {
   --bg: #EEF2E6; --bg-2: #E3EAD8; --surface: rgba(255, 255, 255, .9); --surface-2: rgba(246, 249, 240, .95);
   --line: rgba(63, 110, 33, .2); --line-2: rgba(142, 107, 31, .35);
-  --leaf: #3F6E21; --gold: #8E6B1F; --sap: #1F7F72;
+  --leaf: #3F6E21; --gold: #7E5E17; --sap: #1F7F72;  /* gold darkened to pass WCAG AA (4.5:1) on every light surface */
   --text: #13241A; --muted: #56695A; --danger: #A34E1A;
   --shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 14px 40px rgba(40, 60, 30, .14);
   --hero-glow: rgba(214, 178, 94, .22);
@@ -312,6 +312,59 @@ footer { width: min(1280px, 100% - 32px); margin: 40px auto 0; padding: 22px 0 3
 
 .filters .el-letter { display: grid; place-items: center; width: 100%; height: 100%; font-size: 13px; }
 
+/* ---------- launch: installable app, iPhone safe areas, gallery search, waking and offline notes ---------- */
+/* The notch, rounded corners and home bar: keep the bar, the gutters and the sticky ask box clear */
+body { padding-inline: env(safe-area-inset-left) env(safe-area-inset-right); }
+.bar {
+  padding-top: max(12px, env(safe-area-inset-top));
+  padding-left: max(clamp(16px, 3vw, 40px), env(safe-area-inset-left));
+  padding-right: max(clamp(16px, 3vw, 40px), env(safe-area-inset-right));
+}
+.dock { bottom: calc(14px + env(safe-area-inset-bottom)); }
+footer { padding-bottom: calc(34px + env(safe-area-inset-bottom)); }
+
+/* Focus you can see: the question boxes hide the input outline, so ring the whole box */
+.ask:focus-within { box-shadow: 0 0 0 3px color-mix(in srgb, var(--leaf) 40%, transparent), var(--shadow); }
+#plannerApp input:focus-visible { outline: 2px solid var(--leaf); outline-offset: 1px; }
+
+/* Gallery search, beside the element filters */
+.gallery-tools { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.gallery-tools .filters { margin-left: 0; flex-wrap: wrap; }
+.gallery-search {
+  width: 200px; height: 36px; padding: 0 16px; border-radius: 999px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--text); font: inherit; font-size: 16px; /* 16px: iOS won't zoom in */
+}
+.gallery-search::placeholder { color: var(--muted); }
+.gallery-search:focus-visible { border-color: var(--leaf); outline-offset: 2px; border-radius: 999px; }
+.gallery-empty { margin: 0 0 12px; color: var(--muted); }
+.gallery-empty:empty { display: none; }
+@media (max-width: 640px) {
+  .gallery-tools { margin-left: 0; width: 100%; }
+  .gallery-search { flex: 1 1 100%; width: auto; }
+}
+
+/* A free host waking from sleep: a calm note in the hero until /health answers */
+.waking { display: flex; justify-content: center; align-items: center; gap: 10px; margin: 22px 0 0; font-size: 14px; color: var(--muted); }
+.waking:empty { display: none; }
+.waking::before {
+  content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--leaf);
+  box-shadow: 0 0 12px var(--leaf); animation: breathe 1.6s ease-in-out infinite;
+}
+@keyframes breathe { 50% { opacity: .35; transform: scale(.75); } }
+
+/* Offline: a note under the bar, and the service worker's fallback page */
+.offline-note {
+  position: fixed; z-index: 30; left: 50%; translate: -50% 0; top: calc(66px + env(safe-area-inset-top));
+  max-width: calc(100% - 32px); padding: 8px 16px; border-radius: 999px; text-align: center;
+  background: var(--surface-2); border: 1px solid var(--line-2); color: var(--text); font-size: 14px; box-shadow: var(--shadow);
+}
+.offline-note:empty { display: none; }
+.offline-page main { min-height: 100svh; display: grid; place-content: center; justify-items: center; gap: 14px; padding: 24px; text-align: center; }
+.offline-page img { border-radius: 22px; }
+.offline-page h1 { margin: 6px 0 0; font-weight: 300; font-stretch: 125%; letter-spacing: .3em; text-indent: .3em; }
+.offline-page p { margin: 0; color: var(--muted); }
+.offline-page a { color: var(--leaf); }
+
 /* ---------- Answers: presentation (answers.js) ---------- */
 .a { border-top: 1px solid transparent; background:
   linear-gradient(var(--surface), var(--surface)) padding-box,
@@ -400,4 +453,43 @@ footer { width: min(1280px, 100% - 32px); margin: 40px auto 0; padding: 22px 0 3
   .xc-stats { grid-template-columns: repeat(2, 1fr); }
   .xc-head { flex-direction: column; } .xc-meta { text-align: left; } .xc-tags { justify-content: flex-start; }
   .xc-head h3 { font-size: 20px; }
+}
+
+/* data cards */
+.xc-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.xc-scale { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.xc-lv { display: grid; grid-template-columns: auto 34px 1fr 34px 56px; gap: 8px; align-items: center; }
+.xc-lv label { font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.xc-lv input[type="range"] { width: 100%; min-width: 0; margin: 0; accent-color: var(--gold); cursor: pointer; }
+.lv-step { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg-2); color: var(--text);
+  font-size: 17px; line-height: 1; transition: transform .15s, opacity .15s; }
+.lv-step:active { transform: scale(.92); }
+.lv-step[aria-disabled="true"] { opacity: .4; cursor: default; }
+.lv-out { font-size: 12.5px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+.lv-out b { color: var(--gold); font-size: 16px; font-weight: 600; }
+.xc-lv :focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.body .xc-scaling { margin-top: 8px; font-size: 13.5px; }
+.body .xc-scaling th { background: none; color: var(--muted); font-weight: 500; font-size: 13px; padding: 6px 8px 6px 0; border-top: 1px solid var(--line); width: 52%; }
+.body .xc-scaling td { padding: 6px 0 6px 8px; color: var(--gold); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.body .xc-scaling tr:first-child th, .body .xc-scaling tr:first-child td { border-top: 0; }
+.xc-lv-note { margin: 6px 0 0; font-size: 12px; color: var(--muted); }
+.xc-vs { font-size: .6em; color: var(--muted); font-weight: 500; vertical-align: middle; padding: 0 2px; }
+.body .xc-cmp { table-layout: fixed; }
+.body .xc-cmp thead td { width: 28%; background: var(--bg-2); }
+.body .xc-cmp thead th { color: var(--text); font-size: 14px; vertical-align: bottom; }
+.xc-cmp-name { display: block; font-weight: 600; line-height: 1.25; }
+.xc-cmp thead .stars { display: block; font-size: 11px; }
+.xc-cmp-sub { display: block; font-size: 11.5px; color: var(--muted); font-weight: 400; }
+.body .xc-cmp tbody th { background: none; padding: 9px 10px; border-top: 1px solid var(--line); }
+.body .xc-cmp td { font-size: 15px; font-variant-numeric: tabular-nums; }
+.body .xc-cmp td.best { color: var(--gold); font-weight: 600; background: color-mix(in srgb, var(--gold) 9%, transparent); }
+.body .xc-cmp tr.text td { font-size: 13px; line-height: 1.55; }
+.body .xc-cmp tr.text td p { margin: 0 0 .4em; }
+@media (max-width: 520px) {
+  .xc-lv { grid-template-columns: 34px 1fr 34px 52px; }
+  .xc-lv label { grid-column: 1 / -1; }
+  .body .xc-cmp thead td { width: 24%; }
+  .body .xc-cmp th, .body .xc-cmp td { padding: 7px 6px; }
+  .body .xc-cmp td { font-size: 14px; }
+  .body .xc-cmp tr.text td { font-size: 12.5px; }
 }

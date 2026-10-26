@@ -100,14 +100,68 @@ const CARDS = {
   set: c => `<header class="xc-head"><div><span class="xc-kicker">Artifact set</span><h3>${escHTML(c.name)}</h3></div></header>
     <ol class="xc-bonus">${c.bonuses.map(b => `<li><span class="pc">${b.pieces}-piece</span><div>${prose(b.text)}</div></li>`).join("")}</ol>`,
 
+  // Columns per entity, rows per stat; the higher number in a row is gold.
+  compare: c => `<header class="xc-head"><div><span class="xc-kicker">${escHTML(c.kicker)}</span><h3>${c.columns.map(x => escHTML(x.name)).join(' <span class="xc-vs">vs</span> ')}</h3></div></header>
+    <div class="table-wrap xc-cmp-wrap"><table class="xc-cmp xc-cmp-${c.columns.length}">
+      <thead><tr><td></td>${c.columns.map(x => `<th scope="col"><span class="xc-cmp-name">${escHTML(x.name)}</span>${stars(x.rarity)}<span class="xc-cmp-sub">${escHTML(x.sub || "")}</span></th>`).join("")}</tr></thead>
+      <tbody>${c.rows.map(r => `<tr${r.text ? ' class="text"' : ""}><th scope="row">${escHTML(r.label)}</th>${r.values.map((v, i) =>
+        r.text ? `<td>${prose(v)}</td>` : `<td${r.best.includes(i) ? ' class="best"' : ""}>${escHTML(v)}${r.best.includes(i) ? '<span class="xc-sr"> (higher)</span>' : ""}</td>`).join("")}</tr>`).join("")}</tbody>
+    </table></div>
+    <p class="xc-foot">${escHTML(c.note)}</p>`,
+
   announced: c => `${cardHead(c, "Officially announced")}
     <div class="xc-callout"><b>Not playable yet.</b> Only what HoYoverse has officially shown is listed here. Talents and constellations appear once the character is released.</div>`,
 };
 
+/* Talent scaling with a level slider. The data only has some levels (1, 6, 9, 10, 13), so the
+   slider steps through those. Every value is already in the card: moving it asks nothing. */
+let scaleIds = 0;
+const nearest = (levels, lv) => levels.reduce((best, l, i) => Math.abs(l - lv) < Math.abs(levels[best] - lv) ? i : best, 0);
+
+function scalingTable(t, card) {
+  const levels = t.levels || [];
+  if (!levels.length || !t.scaling?.length) return "";  // passives have no scaling
+  const i = nearest(levels, card._lv ?? 10), lv = levels[i], id = `lv-${++scaleIds}`;
+  return `<div class="xc-scale" data-t="${card.talents.indexOf(t)}">
+    <div class="xc-lv">
+      <label for="${id}">Talent level</label>
+      <button type="button" class="lv-step" data-step="-1" aria-label="Lower talent level" aria-controls="${id}" aria-disabled="${i === 0}">−</button>
+      <input type="range" id="${id}" min="0" max="${levels.length - 1}" step="1" value="${i}" aria-valuetext="Level ${lv}">
+      <button type="button" class="lv-step" data-step="1" aria-label="Raise talent level" aria-controls="${id}" aria-disabled="${i === levels.length - 1}">+</button>
+      <output for="${id}" class="lv-out">Lv. <b>${lv}</b></output>
+    </div>
+    <table class="xc-scaling"><tbody>${t.scaling.map(r => `<tr><th scope="row">${escHTML(r.label)}</th><td>${escHTML(r.values[i])}</td></tr>`).join("")}</tbody></table>
+    <p class="xc-lv-note"${lv > 10 ? "" : " hidden"}>Levels above 10 come from constellations.</p>
+  </div>`;
+}
+
+function setLevel(card, scale, i) {
+  const t = card.talents[Number(scale.dataset.t)], levels = t.levels;
+  i = Math.max(0, Math.min(levels.length - 1, i));
+  const lv = levels[i], input = scale.querySelector("input[type=range]");
+  input.value = i; input.setAttribute("aria-valuetext", `Level ${lv}`);
+  card._lv = lv;  // remembered across tabs
+  scale.querySelector(".lv-out b").textContent = lv;
+  scale.querySelectorAll(".xc-scaling td").forEach((td, r) => { td.textContent = t.scaling[r].values[i]; });
+  scale.querySelector(".xc-lv-note").hidden = lv <= 10;
+  scale.querySelectorAll(".lv-step").forEach(b => b.setAttribute("aria-disabled", String(i + Number(b.dataset.step) < 0 || i + Number(b.dataset.step) >= levels.length)));
+}
+
+function bindScaling(card, panel) {
+  panel.addEventListener("input", e => {
+    const scale = e.target.closest(".xc-scale");
+    if (scale && e.target.type === "range") setLevel(card, scale, Number(e.target.value));
+  });
+  panel.addEventListener("click", e => {
+    const b = e.target.closest(".lv-step"), scale = b?.closest(".xc-scale");
+    if (scale) setLevel(card, scale, Number(scale.querySelector("input[type=range]").value) + Number(b.dataset.step));
+  });
+}
+
 // What a switchable card shows for the selected button
 const PANELS = {
   talents: (c, key) => c.talents.filter(t => t.kind === key).map(t =>
-    `<article><h4 class="xc-sub">${escHTML(t.name)}</h4>${prose(t.description)}</article>`).join(""),
+    `<article><h4 class="xc-sub">${escHTML(t.name)}</h4>${prose(t.description)}${scalingTable(t, c)}</article>`).join(""),
   constellations: (c, key) => {
     const x = c.items.find(i => String(i.level) === String(key));
     return x ? `<article><h4 class="xc-sub">C${x.level} · ${escHTML(x.name)}</h4>${prose(x.description)}</article>` : "";
@@ -130,6 +184,7 @@ function renderCard(card) {
       seg?.querySelectorAll("button").forEach(b => b.setAttribute("aria-selected", b.dataset.key === String(key)));
     };
     show(card.selected);
+    if (card.type === "talents") bindScaling(card, panel);
     seg?.addEventListener("click", e => { const b = e.target.closest("button[data-key]"); if (b) show(b.dataset.key); });
     // Arrow keys move between the buttons, like real tabs
     seg?.addEventListener("keydown", e => {

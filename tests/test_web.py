@@ -62,3 +62,49 @@ def test_art_is_resized_and_cannot_escape_the_library(tmp_path):
     assert client(tmp_path).get("/art/Characters/x.png").status_code == 404  # no library: no art
     raiden = c.get("/api/entity", params={"id": "character/raiden-shogun"}).json()
     assert raiden["splash"] == "/art/Characters/Raiden%20Shogun/splash.png?w=900"
+
+
+def test_manifest_makes_an_installable_app(tmp_path):
+    c = client(tmp_path)
+    r = c.get("/manifest.webmanifest")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("application/manifest+json")
+    m = r.json()
+    assert m["name"] == "Irminsul" and m["display"] == "standalone" and m["start_url"] == "/"
+    sizes = {(i["sizes"], i.get("purpose", "any")) for i in m["icons"]}
+    assert {("192x192", "any"), ("512x512", "any"), ("512x512", "maskable")} <= sizes
+    for icon in m["icons"]:  # every icon it names is really there
+        assert c.get(icon["src"]).headers["content-type"] == "image/png"
+    page = c.get("/").text
+    assert 'rel="manifest"' in page and "/static/pwa.js" in page
+    assert 'property="og:image"' in page and 'rel="apple-touch-icon"' in page
+    assert "viewport-fit=cover" in page
+
+
+def test_service_worker_is_served_from_the_root_with_a_versioned_cache(tmp_path):
+    c = client(tmp_path)
+    r = c.get("/sw.js")
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/javascript")
+    assert r.headers["service-worker-allowed"] == "/"
+    assert r.headers["cache-control"] == "no-cache"
+    assert "__VERSION__" not in r.text and "irminsul-" in r.text
+    assert "You're offline. Answers need a connection." in r.text
+    assert c.get("/favicon.ico").headers["content-type"] == "image/png"
+
+
+def test_the_pwa_still_runs_under_the_strict_csp(tmp_path):
+    c = client(tmp_path)
+    for path in ("/", "/sw.js", "/manifest.webmanifest"):
+        csp = c.get(path).headers["content-security-policy"]
+        assert "unsafe-inline" not in csp and "unsafe-eval" not in csp
+        # manifest-src and worker-src fall back to default-src 'self', which allows our own files
+        assert "default-src 'self'" in csp and "script-src 'self'" in csp
+    js = (WEB_DIR / "static" / "pwa.js").read_text(encoding="utf-8")
+    assert ' style="' not in js and ".style" not in js and "onclick=" not in js
+
+
+def test_og_image_becomes_absolute_when_the_public_url_is_set(tmp_path, monkeypatch):
+    monkeypatch.setenv("IRMINSUL_PUBLIC_URL", "https://irminsul.example/")
+    page = client(tmp_path).get("/").text
+    assert 'content="https://irminsul.example/static/icons/og.png"' in page
