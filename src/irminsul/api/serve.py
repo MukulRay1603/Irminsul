@@ -103,6 +103,8 @@ def build_app():
         guard_cfg,
         exclude_tiers=frozenset() if kqm else frozenset({"kqm"}),
         patches=patch_notes,
+        # CPU-heavy searches allowed at once; the Space has 2 vCPUs
+        search_slots=int(os.environ.get("IRMINSUL_SEARCH_CONCURRENCY", 2)),
     )
     meta = {
         "built_at": manifest.get("built_at"),

@@ -13,6 +13,7 @@ Every answer carries a trace: route, retrieval hits and scores, provider, tokens
 """
 
 import re
+import threading
 import time
 from collections import OrderedDict
 from collections.abc import Iterator
@@ -132,6 +133,7 @@ class Engine:
         cache_size: int = 512,
         exclude_tiers: frozenset[str] = frozenset(),
         patches: dict | None = None,
+        search_slots: int = 2,
     ) -> None:
         self.store = store
         self.index = index
@@ -142,6 +144,9 @@ class Engine:
         self.patches = patches  # patch notes (engine/patches.py) for "what changed in 7.1?"
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
+        self._search_slots = threading.BoundedSemaphore(max(1, search_slots))
+        self._search_lock = threading.Lock()
+        self._search_cache: OrderedDict[tuple, tuple[list, dict]] = OrderedDict()
 
     def ask(
         self,
@@ -296,6 +301,36 @@ class Engine:
         if len(self._cache) > self.cache_size:
             self._cache.popitem(last=False)
 
+    def _search(self, question: str, point: "story.StoryPoint | None") -> tuple[list, dict]:
+        """Hybrid search + re-rank: the one CPU-heavy step (~0.3-0.5 s).
+
+        At most `search_slots` run at once, so a burst of AI questions queues here instead of
+        slowing every free answer down, and repeated questions reuse earlier results.
+        """
+        key = (_normalise(question), point.until if point else None)
+        with self._search_lock:
+            if key in self._search_cache:
+                self._search_cache.move_to_end(key)
+                hits, report = self._search_cache[key]
+                return hits, dict(report)
+        report: dict = {}
+        # Story-safe mode filters inside the search, before re-ranking and the LLM.
+        spoiler_filter = {"max_revealed": point.until, "report": report} if point else {}
+        with self._search_slots:
+            hits = self.index.search(
+                question,
+                k=self.k,
+                mode="hybrid",
+                rerank=True,
+                exclude_tiers=self.exclude_tiers,
+                **spoiler_filter,
+            )
+        with self._search_lock:
+            self._search_cache[key] = (hits, report)
+            if len(self._search_cache) > self.cache_size:
+                self._search_cache.popitem(last=False)
+        return hits, dict(report)
+
     def _prepare_rag(
         self,
         question: str,
@@ -305,17 +340,7 @@ class Engine:
     ) -> "Answer | _Prepared":
         if self.index is None:
             return Answer(NO_SOURCES_REPLY, "no_index")
-        report: dict = {}
-        # Story-safe mode filters inside the search, before re-ranking and the LLM.
-        spoiler_filter = {"max_revealed": point.until, "report": report} if point else {}
-        hits = self.index.search(
-            question,
-            k=self.k,
-            mode="hybrid",
-            rerank=True,
-            exclude_tiers=self.exclude_tiers,
-            **spoiler_filter,
-        )
+        hits, report = self._search(question, point)
         hits = [
             h
             for h in hits

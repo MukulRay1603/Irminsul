@@ -1,0 +1,66 @@
+# Uptime check: is the live site answering? Opens one issue when it's down and closes it when
+# it recovers. A free Space sleeps after a long quiet spell and wakes on the first request,
+# so a slow first response is retried before it counts as down.
+name: Uptime check
+
+on:
+  schedule:
+    - cron: "41 */6 * * *" # every 6 hours
+  workflow_dispatch:
+
+permissions:
+  issues: write # open or close the "site is down" issue
+
+concurrency:
+  group: uptime
+  cancel-in-progress: true
+
+env:
+  SITE: https://mukulray-irminsul.hf.space
+  TITLE: "Live site is down"
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check the site (waking it if it sleeps)
+        id: probe
+        run: |
+          ok=false
+          for i in 1 2 3 4 5 6; do
+            body="$(curl -s --max-time 60 "$SITE/health" || true)"
+            if [ "$(echo "$body" | jq -r '.status // empty' 2>/dev/null)" = "ok" ] \
+               && [ "$(echo "$body" | jq -r '.corpus.docs // 0' 2>/dev/null)" -gt 0 ]; then
+              ok=true; break
+            fi
+            sleep 30
+          done
+          page="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$SITE/")"
+          [ "$page" = "200" ] || ok=false
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+          echo "Health ok: $ok, page: $page" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open an issue if it is down
+        if: steps.probe.outputs.ok != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          open="$(gh issue list -R "$REPO" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number')"
+          if [ -z "$open" ]; then
+            gh issue create -R "$REPO" --title "$TITLE" \
+              --body "The uptime check couldn't get a healthy response from $SITE (run: ${{ github.server_url }}/$REPO/actions/runs/${{ github.run_id }}). Check the Space's logs on Hugging Face."
+          else
+            gh issue comment "$open" -R "$REPO" --body "Still down at $(date -u +'%F %H:%M') UTC."
+          fi
+          exit 1
+
+      - name: Close the issue once it is back
+        if: steps.probe.outputs.ok == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          open="$(gh issue list -R "$REPO" --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number')"
+          [ -z "$open" ] || gh issue close "$open" -R "$REPO" --comment "Back up at $(date -u +'%F %H:%M') UTC."

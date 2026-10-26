@@ -117,6 +117,18 @@ def character_answer(m: Match, q: str) -> Answer | None:
                 {"entity": c.id, "intent": "const"},
                 card=cards.constellations_card(c, level),
             )
+    # "What are X's constellations?": describing all six is a lookup ("best one?" is not)
+    if re.search(r"\bconstellations?\b", q, re.I) and _DESCRIBE.search(q) and c.constellations:
+        names = "\n".join(
+            f"- **C{x.level}:** {x.name}" for x in sorted(c.constellations, key=lambda x: x.level)
+        )
+        return Answer(
+            f"**{c.name}'s constellations**\n{names} [1]",
+            "exact",
+            [_cite(m, "constellations")],
+            {"entity": c.id, "intent": "const_all"},
+            card=cards.constellations_card(c, 1),
+        )
     if _STATS.search(q) and c.base_stats:
         s = c.base_stats
         text = (
