@@ -9,10 +9,13 @@ Irminsul runs on free LLM tiers, so AI-written answers are rationed fairly:
   drain it. It can bank a small burst (`pool_cap`) for busy moments.
 - per client: a short-window limit (burst) and a generous daily request cap (abuse only).
 All in memory: a single small Space instance needs nothing more, and a restart only resets
-counters (which errs on the generous side, never on the costly side for long).
+counters (which errs on the generous side, never on the costly side for long). Per-client
+entries that carry no information (an expired burst window, a full allowance) are pruned, so
+memory follows the clients active in the last day, not every client ever seen.
 """
 
 import math
+import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -27,6 +30,7 @@ class Limits:
     allowance_cap: int = 20  # AI answers a player can bank
     allowance_regen_s: int = 30 * 60  # +1 every 30 minutes
     pool_cap: int = 0  # shared-pool burst; 0 = an eighth of a day's budget
+    prune_every: int = 1000  # requests between sweeps of stale per-client entries
 
     _recent: dict[str, deque] = field(default_factory=lambda: defaultdict(deque))
     _daily: dict[str, int] = field(default_factory=lambda: defaultdict(int))
@@ -34,6 +38,9 @@ class Limits:
     _pool: tuple[float, float] | None = None  # (amount, at)
     _llm_used: int = 0  # today's count, for /health only
     _day: str = ""
+    _since_prune: int = 0
+    # FastAPI runs sync endpoints in a thread pool, so counters are updated under a lock.
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def __post_init__(self) -> None:
         if self.pool_cap <= 0:
@@ -46,18 +53,34 @@ class Limits:
 
     def allow(self, client: str, now: float | None = None) -> str | None:
         """Record a request; return a reason string if it must be rejected."""
-        self._roll_day()
         now = time.monotonic() if now is None else now
-        window = self._recent[client]
-        while window and now - window[0] > 60:
-            window.popleft()
-        if len(window) >= self.per_minute:
-            return "Too many questions in a short time. Please wait a minute."
-        if self._daily[client] >= self.per_day:
-            return "You've reached today's question limit. Please come back tomorrow!"
-        window.append(now)
-        self._daily[client] += 1
-        return None
+        with self._lock:
+            self._roll_day()
+            self._since_prune += 1
+            if self._since_prune >= self.prune_every:
+                self._prune(now, time.time())
+            window = self._recent[client]
+            while window and now - window[0] > 60:
+                window.popleft()
+            if len(window) >= self.per_minute:
+                return "Too many questions in a short time. Please wait a minute."
+            if self._daily[client] >= self.per_day:
+                return "You've reached today's question limit. Please come back tomorrow!"
+            window.append(now)
+            self._daily[client] += 1
+            return None
+
+    def _prune(self, now: float, wall: float) -> None:
+        """Drop entries that no longer change any decision. `_daily` resets with the day."""
+        self._since_prune = 0
+        for client, window in list(self._recent.items()):
+            if not window or now - window[-1] > 60:
+                del self._recent[client]
+        for client, state in list(self._allowance.items()):
+            if self._level(state, self.allowance_cap, self.allowance_regen_s, wall) >= (
+                self.allowance_cap
+            ):
+                del self._allowance[client]  # a full bar is the same as never having asked
 
     # Refilling buckets
 
@@ -86,9 +109,10 @@ class Limits:
 
     def spend_allowance(self, client: str, now: float | None = None) -> None:
         now = time.time() if now is None else now
-        state = self._allowance.get(client)
-        level = self._level(state, self.allowance_cap, self.allowance_regen_s, now)
-        self._allowance[client] = (max(0.0, level - 1), now)
+        with self._lock:
+            state = self._allowance.get(client)
+            level = self._level(state, self.allowance_cap, self.allowance_regen_s, now)
+            self._allowance[client] = (max(0.0, level - 1), now)
 
     def allowance(self, client: str, now: float | None = None) -> dict:
         """What the player's counter shows: current/cap, next point and full refill, seconds."""
@@ -108,11 +132,12 @@ class Limits:
         return self._level(self._pool, self.pool_cap, self._pool_regen_s, now) >= 1
 
     def spend_llm(self, now: float | None = None) -> None:
-        self._roll_day()
         now = time.time() if now is None else now
-        level = self._level(self._pool, self.pool_cap, self._pool_regen_s, now)
-        self._pool = (max(0.0, level - 1), now)
-        self._llm_used += 1
+        with self._lock:
+            self._roll_day()
+            level = self._level(self._pool, self.pool_cap, self._pool_regen_s, now)
+            self._pool = (max(0.0, level - 1), now)
+            self._llm_used += 1
 
     def pool(self, now: float | None = None) -> dict:
         now = time.time() if now is None else now

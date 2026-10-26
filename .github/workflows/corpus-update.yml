@@ -15,10 +15,7 @@ on:
         required: false
         default: "manual run"
 
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
+permissions: {} # granted per job below
 
 concurrency:
   group: corpus-update
@@ -34,10 +31,14 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 75
+    permissions:
+      contents: write # push the corpus/update-* branch
+      pull-requests: write # open the review PR
+      issues: write # the failure issue
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
         with:
           enable-cache: true
 
@@ -45,7 +46,7 @@ jobs:
         run: uv sync --locked --python 3.12
 
       - name: Cache embedding models
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: .models
           key: models-bge-small-msmarco-v1
@@ -76,7 +77,7 @@ jobs:
             --out data/build/retrieval.json --min-hit "$MIN_HIT_AT_8"
 
       - name: Keep the build as an artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: corpus-${{ github.run_number }}
           path: |
@@ -93,6 +94,9 @@ jobs:
       - name: Open the review PR
         env:
           GH_TOKEN: ${{ github.token }}
+          # Passed as env, never interpolated into the script: the reason is free text.
+          REASON: ${{ inputs.reason || 'scheduled' }}
+          BASE: ${{ github.event.repository.default_branch }}
         run: |
           day="$(date -u +%F)"
           branch="corpus/update-$day"
@@ -109,12 +113,12 @@ jobs:
           fi
           git -c user.name="github-actions[bot]" \
               -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
-              commit -m "corpus: weekly update $day (${{ inputs.reason || 'scheduled' }})"
+              commit -m "corpus: weekly update $day ($REASON)"
           git push origin "$branch"
           staged="Staged on HF branch \`update-$day\`; merging publishes it."
           [ -z "$HF_TOKEN" ] && staged="HF_TOKEN not set: nothing staged; merging records the manifest only."
           { cat data/build/CHANGELOG.md; echo; echo "$staged"; } > /tmp/body.md
-          gh pr create --base "${{ github.event.repository.default_branch }}" --head "$branch" \
+          gh pr create --base "$BASE" --head "$branch" \
             --title "Corpus update $day" --body-file /tmp/body.md
 
       - name: Open an issue on failure

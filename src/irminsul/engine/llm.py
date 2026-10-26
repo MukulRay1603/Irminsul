@@ -6,6 +6,8 @@ client covers them all. The router:
 - enforces our own daily request cap per provider (kept below each free tier),
 - on a rate limit (429) or server error, cools that provider down and tries the next one,
 - reports which provider answered and the token usage, for tracing and cost tracking.
+Provider error bodies are never read, logged or returned: an attempt records only the HTTP
+status or the exception type, so nothing a provider echoes back (keys included) can leak.
 If every provider is unavailable, it raises `AllProvidersBusy`; the engine then returns a
 polite "busy" answer instead of an error.
 """
@@ -27,6 +29,10 @@ CONFIG = Path(__file__).resolve().parents[3] / "config" / "llm_providers.toml"
 
 class AllProvidersBusy(RuntimeError):
     pass
+
+
+# What a malformed provider response can raise while we read it.
+_BAD_RESPONSE = (ValueError, KeyError, IndexError, TypeError, AttributeError)
 
 
 @dataclass
@@ -77,6 +83,7 @@ class Router:
     providers: list[Provider]
     timeout_s: float = 30.0
     cooldown_s: float = 60.0
+    auth_cooldown_s: float = 3600.0  # 401/403: a bad or revoked key will not fix itself soon
     temperature: float = 0.2
     attempts: list[dict] = field(default_factory=list)  # last call's attempts, for the trace
 
@@ -107,21 +114,23 @@ class Router:
                     },
                     timeout=self.timeout_s,
                 )
-            except httpx.TransportError as e:
-                p.cooldown_until = time.monotonic() + self.cooldown_s
-                self.attempts.append({"provider": p.name, "error": type(e).__name__})
+            except httpx.HTTPError as e:
+                self._fail(p, type(e).__name__)
                 continue
             p.used_today += 1
-            if resp.status_code == 429 or resp.status_code >= 500:
-                p.cooldown_until = time.monotonic() + self.cooldown_s
-                self.attempts.append({"provider": p.name, "error": resp.status_code})
+            if not 200 <= resp.status_code < 300:
+                self._fail(p, resp.status_code)
                 continue
-            resp.raise_for_status()
-            body = resp.json()
-            usage = body.get("usage") or {}
+            try:
+                body = resp.json()
+                text = body["choices"][0]["message"]["content"] or ""
+                usage = body.get("usage") or {}
+            except _BAD_RESPONSE:
+                self._fail(p, "bad_response")
+                continue
             self.attempts.append({"provider": p.name, "ok": True})
             return Completion(
-                text=body["choices"][0]["message"]["content"] or "",
+                text=text,
                 provider=p.name,
                 model=p.model,
                 prompt_tokens=int(usage.get("prompt_tokens", 0)),
@@ -161,21 +170,18 @@ class Router:
                     timeout=self.timeout_s,
                 ) as resp:
                     p.used_today += 1
-                    if resp.status_code == 429 or resp.status_code >= 500:
-                        p.cooldown_until = time.monotonic() + self.cooldown_s
-                        self.attempts.append({"provider": p.name, "error": resp.status_code})
+                    if not 200 <= resp.status_code < 300:
+                        self._fail(p, resp.status_code)
                         retry = True
                     else:
-                        resp.raise_for_status()
                         for delta, chunk_usage in _sse_deltas(resp.iter_lines()):
                             usage = chunk_usage or usage
                             if delta:
                                 parts.append(delta)
                                 yield delta
-            except httpx.TransportError as e:
+            except (httpx.HTTPError, *_BAD_RESPONSE) as e:
                 if not parts:
-                    p.cooldown_until = time.monotonic() + self.cooldown_s
-                    self.attempts.append({"provider": p.name, "error": type(e).__name__})
+                    self._fail(p, type(e).__name__)
                     continue
                 self.attempts.append({"provider": p.name, "interrupted": type(e).__name__})
                 interrupted = True
@@ -193,6 +199,12 @@ class Router:
             )
             return
         raise AllProvidersBusy("no LLM provider is available right now")
+
+    def _fail(self, p: Provider, error: int | str) -> None:
+        """Cool a provider down after a failed attempt and record only the status or type."""
+        wait = self.auth_cooldown_s if error in (401, 403) else self.cooldown_s
+        p.cooldown_until = time.monotonic() + wait
+        self.attempts.append({"provider": p.name, "error": error})
 
 
 def _sse_deltas(lines: Iterator[str]) -> Iterator[tuple[str, dict]]:

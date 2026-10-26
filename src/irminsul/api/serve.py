@@ -6,6 +6,11 @@ Data comes from local folders, or is downloaded once at boot from the public HF 
 LLM keys (GROQ_API_KEY, ...) are read from the environment; without any, the API still
 serves exact answers and refusals, and LLM questions get a "busy" reply.
 IRMINSUL_KQM=off keeps KQM-derived chunks out of every answer (see kqm_enabled).
+Security settings (docs/security.md):
+    IRMINSUL_TRUSTED_PROXY_HOPS=1    on HF Spaces, so limits key on the real client address
+    IRMINSUL_CORS_ORIGINS=https://a.example,https://b.example   (default: no CORS)
+    IRMINSUL_FRAME_ANCESTORS="https://huggingface.co"   to allow the Space page to embed it
+    IRMINSUL_MAX_CONCURRENCY=64      requests in flight before uvicorn answers 503
 """
 
 import json
@@ -15,7 +20,7 @@ from pathlib import Path
 
 import uvicorn
 
-from irminsul.api.app import create_app
+from irminsul.api.app import cors_origins, create_app, trusted_proxy_hops
 from irminsul.api.limits import Limits
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
@@ -81,7 +86,14 @@ def build_app():
         allowance_cap=int(os.environ.get("IRMINSUL_ALLOWANCE_CAP", 20)),
         allowance_regen_s=60 * int(os.environ.get("IRMINSUL_ALLOWANCE_REGEN_MIN", 30)),
     )
-    return create_app(engine, limits, meta)
+    return create_app(
+        engine,
+        limits,
+        meta,
+        trusted_hops=trusted_proxy_hops(),
+        cors=cors_origins(),
+        frame_ancestors=os.environ.get("IRMINSUL_FRAME_ANCESTORS", "'none'"),
+    )
 
 
 def main() -> None:
@@ -90,6 +102,10 @@ def main() -> None:
         build_app(),
         host=os.environ.get("HOST", "127.0.0.1"),
         port=int(os.environ.get("PORT", 7860)),
+        # X-Forwarded-For is handled by client_id (IRMINSUL_TRUSTED_PROXY_HOPS), not uvicorn.
+        proxy_headers=False,
+        server_header=False,
+        limit_concurrency=int(os.environ.get("IRMINSUL_MAX_CONCURRENCY", 64)),
     )
 
 
