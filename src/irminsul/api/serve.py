@@ -83,8 +83,8 @@ def build_app():
         per_minute=int(os.environ.get("IRMINSUL_PER_MINUTE", 6)),
         per_day=int(os.environ.get("IRMINSUL_PER_DAY", 200)),
         llm_per_day=int(os.environ.get("IRMINSUL_LLM_PER_DAY", 500)),
-        resin_cap=int(os.environ.get("IRMINSUL_RESIN_CAP", 30)),
-        resin_regen_s=60 * int(os.environ.get("IRMINSUL_RESIN_REGEN_MIN", 24)),
+        allowance_cap=int(os.environ.get("IRMINSUL_ALLOWANCE_CAP", 20)),
+        allowance_regen_s=60 * int(os.environ.get("IRMINSUL_ALLOWANCE_REGEN_MIN", 30)),
     )
     return create_app(
         engine,

@@ -40,9 +40,9 @@ BUSY_REPLY = (
     "moment. Please try again in a little while."
 )
 NO_SOURCES_REPLY = "I don't have verified information on that yet."
-RESIN_REPLY = (
-    "You're out of Resin for AI-written answers. It refills over time (see the counter), "
-    "and answers straight from game data, like stats and passives, stay free."
+ALLOWANCE_REPLY = (
+    "You've used your AI answers for now. They refill over time (see the counter below), "
+    "and answers straight from game data, like stats and passives, are always free."
 )
 SOURCE_WORDS = 180
 
@@ -71,16 +71,16 @@ class Engine:
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
 
-    def ask(self, question: str, allow_llm: bool = True, out_of_resin: bool = False) -> Answer:
+    def ask(self, question: str, allow_llm: bool = True, out_of_allowance: bool = False) -> Answer:
         start = time.perf_counter()
-        answer = self._ask(question.strip(), allow_llm, out_of_resin)
+        answer = self._ask(question.strip(), allow_llm, out_of_allowance)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         return answer
 
-    def _ask(self, question: str, allow_llm: bool, out_of_resin: bool) -> Answer:
+    def _ask(self, question: str, allow_llm: bool, out_of_allowance: bool) -> Answer:
         answer = self._before_llm(question)
         if answer is None:
-            prepared = self._prepare_rag(question, allow_llm, out_of_resin)
+            prepared = self._prepare_rag(question, allow_llm, out_of_allowance)
             if isinstance(prepared, Answer):
                 answer = prepared
             else:
@@ -93,7 +93,7 @@ class Engine:
         return answer
 
     def ask_stream(
-        self, question: str, allow_llm: bool = True, out_of_resin: bool = False
+        self, question: str, allow_llm: bool = True, out_of_allowance: bool = False
     ) -> Iterator[tuple[str, dict]]:
         """Yield ("meta" | "delta" | "done", payload) events for server-sent streaming.
 
@@ -103,7 +103,7 @@ class Engine:
         start = time.perf_counter()
         question = question.strip()
         answer = self._before_llm(question)
-        prepared = None if answer else self._prepare_rag(question, allow_llm, out_of_resin)
+        prepared = None if answer else self._prepare_rag(question, allow_llm, out_of_allowance)
         if isinstance(prepared, Answer):
             answer = prepared
         if answer is None:
@@ -153,7 +153,7 @@ class Engine:
 
     def _remember(self, question: str, answer: Answer) -> None:
         if (
-            answer.route in ("busy", "no_index", "no_llm", "no_resin")
+            answer.route in ("busy", "no_index", "no_llm", "no_allowance")
             or answer.trace.get("cache") == "hit"
         ):
             return
@@ -162,7 +162,7 @@ class Engine:
             self._cache.popitem(last=False)
 
     def _prepare_rag(
-        self, question: str, allow_llm: bool, out_of_resin: bool = False
+        self, question: str, allow_llm: bool, out_of_allowance: bool = False
     ) -> "Answer | _Prepared":
         if self.index is None:
             return Answer(NO_SOURCES_REPLY, "no_index")
@@ -194,8 +194,8 @@ class Engine:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Sources:\n{sources}\n\nQuestion: {question}"},
         ]
-        if self.llm is not None and out_of_resin:  # this player's allowance is used up
-            return Answer(RESIN_REPLY, "no_resin", trace=trace)
+        if self.llm is not None and out_of_allowance:  # this player's AI answers are used up
+            return Answer(ALLOWANCE_REPLY, "no_allowance", trace=trace)
         if self.llm is not None and not allow_llm:  # the API's daily LLM budget is spent
             return Answer(BUSY_REPLY, "busy", trace=trace)
         llm = self.llm if allow_llm else None

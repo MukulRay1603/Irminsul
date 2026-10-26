@@ -53,29 +53,29 @@ def test_client_id_groups_ipv6_by_64():
     assert client_id(request("::ffff:198.51.100.7")) == "198.51.100.7"
 
 
-def test_forged_forwarded_for_cannot_refill_resin():
-    c = client(limits=Limits(resin_cap=1), trusted_hops=1)
+def test_forged_forwarded_for_cannot_refill_allowance():
+    c = client(limits=Limits(allowance_cap=1), trusted_hops=1)
     rag = {"question": "How much ER does Raiden need?"}
     real = "198.51.100.7"
     assert c.post("/ask", json=rag, headers={"x-forwarded-for": real}).json()["route"] == "rag"
     forged = {"x-forwarded-for": f"203.0.113.9, {real}"}
     other = {"question": "Is Raiden good in Hyperbloom?"}  # not a free cache hit
-    assert c.post("/ask", json=other, headers=forged).json()["route"] == "no_resin"
+    assert c.post("/ask", json=other, headers=forged).json()["route"] == "no_allowance"
 
 
 # 2. Limits memory stays bounded
 
 
-def test_prune_drops_stale_windows_and_full_resin():
-    limits = Limits(resin_cap=2, resin_regen_s=100, prune_every=10**9)
+def test_prune_drops_stale_windows_and_full_allowance():
+    limits = Limits(allowance_cap=2, allowance_regen_s=100, prune_every=10**9)
     limits.allow("old", now=0)
     limits.allow("fresh", now=100)
-    limits.spend_resin("refilled", now=0)
-    limits.spend_resin("spent", now=1000)
+    limits.spend_allowance("refilled", now=0)
+    limits.spend_allowance("spent", now=1000)
     limits._prune(now=120, wall=1050)
     assert set(limits._recent) == {"fresh"}
-    assert set(limits._resin) == {"spent"}  # "refilled" is full again, same as never seen
-    assert limits.resin("refilled", now=1050)["current"] == 2
+    assert set(limits._allowance) == {"spent"}  # "refilled" is full again, same as never seen
+    assert limits.allowance("refilled", now=1050)["current"] == 2
 
 
 def test_prune_runs_every_n_requests():
@@ -232,25 +232,27 @@ def test_router_treats_other_client_errors_as_failover(monkeypatch):
 # Streaming: hanging up early does not make an AI answer free
 
 
-def test_stream_disconnect_after_answer_still_spends_resin():
-    limits = Limits(resin_cap=3)
+def test_stream_disconnect_after_answer_still_spends_allowance():
+    limits = Limits(allowance_cap=3)
     engine = Engine(store(), FakeIndex(), FakeStreamLLM())
     events = sse_events(
-        engine, limits, "p", "How much ER does Raiden need?", allow_llm=True, out_of_resin=False
+        engine, limits, "p", "How much ER does Raiden need?", allow_llm=True, out_of_allowance=False
     )
     assert next(events).startswith("event: meta")
     assert next(events).startswith("event: delta")
     events.close()  # the client went away before the `done` event
-    assert limits.resin("p")["current"] == 2 and limits.snapshot()["llm_used_today"] == 1
+    assert limits.allowance("p")["current"] == 2 and limits.snapshot()["llm_used_today"] == 1
 
 
 def test_stream_disconnect_on_free_route_costs_nothing():
-    limits = Limits(resin_cap=3)
+    limits = Limits(allowance_cap=3)
     engine = Engine(store(), FakeIndex(), FakeStreamLLM())
-    events = sse_events(engine, limits, "p", ASK["question"], allow_llm=True, out_of_resin=False)
+    events = sse_events(
+        engine, limits, "p", ASK["question"], allow_llm=True, out_of_allowance=False
+    )
     next(events)
     events.close()
-    assert limits.resin("p")["current"] == 3 and limits.snapshot()["llm_used_today"] == 0
+    assert limits.allowance("p")["current"] == 3 and limits.snapshot()["llm_used_today"] == 0
 
 
 # 9. Prompt injection inside a retrieved source

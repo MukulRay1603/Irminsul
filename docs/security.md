@@ -32,15 +32,15 @@ so one set of limits. That fails safe (cost stays capped) but is unfair, so set 
 | 7 | CI: no dependency audit or secret scan; unpinned actions; broad tokens; script injection | Medium | Fixed |
 | 8 | Docker image: user, secrets, build context | Low | Verified, `.dockerignore` widened |
 | 9 | Prompt injection through retrieved sources | Medium | Mitigated, test added |
-| 10 | Streaming: hanging up before `done` skipped the Resin charge | High | Fixed |
+| 10 | Streaming: hanging up before `done` skipped the allowance charge | High | Fixed |
 | 11 | Counters raced across worker threads | Low | Fixed |
 | 12 | Rendering answers in a browser UI | Info | Guidance for the UI |
 | 13 | Base images pinned by tag, not digest | Low | Accepted |
 
 ### 1. Spoofable client id (High, fixed)
 `client_id()` used the first `X-Forwarded-For` entry, which the client writes itself. Any
-caller could send a new value per request and bypass the burst limit, the daily cap and Resin,
-i.e. unlimited AI answers until the global budget ran out for everyone.
+caller could send a new value per request and bypass the burst limit, the daily cap and the AI-answer
+allowance, i.e. unlimited AI answers until the shared pool ran out for everyone.
 
 Fix: `X-Forwarded-For` is ignored unless `IRMINSUL_TRUSTED_PROXY_HOPS` is set. With N trusted
 proxies the client is the N-th entry from the right (the one our own proxy appended);
@@ -49,11 +49,11 @@ peer is used. IPv6 clients are grouped by /64 so one subscriber can't rotate thr
 block. uvicorn's own proxy-header handling is switched off so there is one source of truth.
 
 ### 2. Unbounded limits memory (Medium, fixed)
-`_recent`, `_daily` and `_resin` gained an entry per client id and never shrank (apart from
+`_recent`, `_daily` and `_allowance` gained an entry per client id and never shrank (apart from
 `_daily` at midnight). With finding 1 that was unbounded.
 
-Fix: every `prune_every` requests (1000) a sweep drops expired burst windows and Resin entries
-that have refilled to the cap (identical to a new player). `_daily` still resets each day; it
+Fix: every `prune_every` requests (1000) a sweep drops expired burst windows and allowance
+entries that have refilled to the cap (identical to a new player). `_daily` still resets each day; it
 holds one integer per client seen today, which the per-day request cap and /64 grouping keep
 small.
 
@@ -125,15 +125,15 @@ from official data, the leak-gated KQM library and reviewed team notes, so the a
 need to land text there first, and answers are always shown with their citations.
 
 ### 10. Free answers by hanging up early (High, fixed)
-`/ask/stream` charged Resin and the global budget when it emitted the final `done` event. A
+`/ask/stream` charged the player's allowance and the shared pool when it emitted the final `done` event. A
 client that read the answer and disconnected before `done` got it for free. The charge now
 also happens in the stream's `finally` once a RAG answer has started.
 
 ### 11. Thread safety (Low, fixed)
 FastAPI runs the sync endpoints in a thread pool. Counter updates in `Limits` now take a lock,
 so concurrent requests can't lose increments. The budget check and the spend are still
-separate steps, so up to `IRMINSUL_MAX_CONCURRENCY` in-flight answers can overshoot the daily
-budget by that many; that stays well under the providers' free tiers.
+separate steps, so up to `IRMINSUL_MAX_CONCURRENCY` in-flight answers can overshoot the shared
+pool by that many; that stays well under the providers' free tiers.
 
 ### 12. UI rendering (Info)
 Answers are model-written Markdown that quotes sources. A UI must render them without raw

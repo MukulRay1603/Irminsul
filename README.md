@@ -77,7 +77,7 @@ curl -X POST localhost:7860/ask -H 'content-type: application/json' \
 LLM providers (Groq, Cerebras, Gemini, OpenRouter) are enabled by setting their API keys as
 environment variables. Without keys, exact answers and refusals still work.
 
-On a Hugging Face Space, set `IRMINSUL_TRUSTED_PROXY_HOPS=1` so the per-player limits and Resin
+On a Hugging Face Space, set `IRMINSUL_TRUSTED_PROXY_HOPS=1` so the per-player limits and AI-answer allowance
 key on the real client address behind the Space proxy (the default, 0, ignores
 `X-Forwarded-For`). Other security settings and the threat model are in
 [`docs/security.md`](docs/security.md); to report a problem, see [`SECURITY.md`](SECURITY.md).

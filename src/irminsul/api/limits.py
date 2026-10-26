@@ -1,14 +1,16 @@
 """Abuse and cost limits for a free public endpoint.
 
-- per client: a short-window limit (burst) and a daily request cap (abuse only; generous)
-- per client: Resin, modelled on Genshin's Original Resin. Each AI-written answer costs 1,
-  it refills 1 point at a time up to a cap, and anything answered without the LLM (exact
-  game data, cache hits, refusals) is free. Players see the counter and the refill timer.
-- global: a daily budget of LLM-backed answers (the "ley line" budget); once spent, only free
-  routes keep working and LLM questions get a polite "busy" reply. Resets at 00:00 UTC.
+Irminsul runs on free LLM tiers, so AI-written answers are rationed fairly:
+- personal allowance: each player banks up to `allowance_cap` AI answers, refilling one at a
+  time (a game-style stamina bar). Only fresh AI-written answers use it; exact game-data
+  answers, cache hits and refusals are free, so nobody is ever fully locked out.
+- shared pool: the daily AI budget (`llm_per_day`) refills steadily through the day instead
+  of resetting at midnight, so players in every time zone get a share and early risers can't
+  drain it. It can bank a small burst (`pool_cap`) for busy moments.
+- per client: a short-window limit (burst) and a generous daily request cap (abuse only).
 All in memory: a single small Space instance needs nothing more, and a restart only resets
 counters (which errs on the generous side, never on the costly side for long). Per-client
-entries that carry no information (an expired burst window, a full Resin bar) are pruned, so
+entries that carry no information (an expired burst window, a full allowance) are pruned, so
 memory follows the clients active in the last day, not every client ever seen.
 """
 
@@ -17,26 +19,32 @@ import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 
 @dataclass
 class Limits:
     per_minute: int = 6
     per_day: int = 200  # all requests, free ones included; stops scripted abuse
-    llm_per_day: int = 500  # all users combined; keep below the providers' free tiers
-    resin_cap: int = 30  # AI-written answers a player can bank
-    resin_regen_s: int = 24 * 60  # +1 Resin every 24 minutes, so a full refill takes 12 hours
+    llm_per_day: int = 500  # all players combined; keep below the providers' free tiers
+    allowance_cap: int = 20  # AI answers a player can bank
+    allowance_regen_s: int = 30 * 60  # +1 every 30 minutes
+    pool_cap: int = 0  # shared-pool burst; 0 = an eighth of a day's budget
     prune_every: int = 1000  # requests between sweeps of stale per-client entries
 
     _recent: dict[str, deque] = field(default_factory=lambda: defaultdict(deque))
     _daily: dict[str, int] = field(default_factory=lambda: defaultdict(int))
-    _resin: dict[str, tuple[float, float]] = field(default_factory=dict)  # (amount, at)
-    _llm_used: int = 0
+    _allowance: dict[str, tuple[float, float]] = field(default_factory=dict)  # (amount, at)
+    _pool: tuple[float, float] | None = None  # (amount, at)
+    _llm_used: int = 0  # today's count, for /health only
     _day: str = ""
     _since_prune: int = 0
     # FastAPI runs sync endpoints in a thread pool, so counters are updated under a lock.
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def __post_init__(self) -> None:
+        if self.pool_cap <= 0:
+            self.pool_cap = max(1, self.llm_per_day // 8)
 
     def _roll_day(self) -> None:
         today = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -68,62 +76,81 @@ class Limits:
         for client, window in list(self._recent.items()):
             if not window or now - window[-1] > 60:
                 del self._recent[client]
-        for client in list(self._resin):
-            if self._resin_now(client, wall) >= self.resin_cap:
-                del self._resin[client]  # a full bar is the same as never having asked
+        for client, state in list(self._allowance.items()):
+            if self._level(state, self.allowance_cap, self.allowance_regen_s, wall) >= (
+                self.allowance_cap
+            ):
+                del self._allowance[client]  # a full bar is the same as never having asked
 
-    # Resin: a regenerating allowance per player
+    # Refilling buckets
 
-    def _resin_now(self, client: str, now: float) -> float:
-        amount, at = self._resin.get(client, (float(self.resin_cap), now))
-        return min(float(self.resin_cap), amount + (now - at) / self.resin_regen_s)
+    @staticmethod
+    def _level(state: tuple[float, float] | None, cap: int, regen_s: float, now: float) -> float:
+        amount, at = state if state is not None else (float(cap), now)
+        return min(float(cap), amount + (now - at) / regen_s)
 
-    def has_resin(self, client: str, now: float | None = None) -> bool:
-        now = time.time() if now is None else now
-        return self._resin_now(client, now) >= 1
-
-    def spend_resin(self, client: str, now: float | None = None) -> None:
-        now = time.time() if now is None else now
-        with self._lock:
-            self._resin[client] = (max(0.0, self._resin_now(client, now) - 1), now)
-
-    def resin(self, client: str, now: float | None = None) -> dict:
-        """What the player's counter shows: current/cap, next point and full refill in seconds."""
-        now = time.time() if now is None else now
-        amount = self._resin_now(client, now)
-        full = amount >= self.resin_cap
-        next_in = 0 if full else math.ceil((1 - amount % 1) * self.resin_regen_s)
+    @staticmethod
+    def _view(amount: float, cap: int, regen_s: float) -> dict:
+        full = amount >= cap
         return {
             "current": math.floor(amount),
-            "cap": self.resin_cap,
-            "regen_s": self.resin_regen_s,
-            "next_in_s": next_in,
-            "full_in_s": 0 if full else math.ceil((self.resin_cap - amount) * self.resin_regen_s),
+            "cap": cap,
+            "regen_s": round(regen_s, 1),
+            "next_in_s": 0 if full else math.ceil((1 - amount % 1) * regen_s),
+            "full_in_s": 0 if full else math.ceil((cap - amount) * regen_s),
         }
 
-    # Global daily budget
+    # Personal allowance
 
-    def llm_budget_left(self) -> bool:
-        self._roll_day()
-        return self._llm_used < self.llm_per_day
+    def has_allowance(self, client: str, now: float | None = None) -> bool:
+        now = time.time() if now is None else now
+        state = self._allowance.get(client)
+        return self._level(state, self.allowance_cap, self.allowance_regen_s, now) >= 1
 
-    def spend_llm(self) -> None:
+    def spend_allowance(self, client: str, now: float | None = None) -> None:
+        now = time.time() if now is None else now
+        with self._lock:
+            state = self._allowance.get(client)
+            level = self._level(state, self.allowance_cap, self.allowance_regen_s, now)
+            self._allowance[client] = (max(0.0, level - 1), now)
+
+    def allowance(self, client: str, now: float | None = None) -> dict:
+        """What the player's counter shows: current/cap, next point and full refill, seconds."""
+        now = time.time() if now is None else now
+        state = self._allowance.get(client)
+        level = self._level(state, self.allowance_cap, self.allowance_regen_s, now)
+        return self._view(level, self.allowance_cap, self.allowance_regen_s)
+
+    # Shared pool
+
+    @property
+    def _pool_regen_s(self) -> float:
+        return 86400 / self.llm_per_day
+
+    def llm_budget_left(self, now: float | None = None) -> bool:
+        now = time.time() if now is None else now
+        return self._level(self._pool, self.pool_cap, self._pool_regen_s, now) >= 1
+
+    def spend_llm(self, now: float | None = None) -> None:
+        now = time.time() if now is None else now
         with self._lock:
             self._roll_day()
+            level = self._level(self._pool, self.pool_cap, self._pool_regen_s, now)
+            self._pool = (max(0.0, level - 1), now)
             self._llm_used += 1
 
-    def resets_in_s(self) -> int:
-        now = datetime.now(UTC)
-        midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-        return math.ceil((midnight - now).total_seconds())
+    def pool(self, now: float | None = None) -> dict:
+        now = time.time() if now is None else now
+        level = self._level(self._pool, self.pool_cap, self._pool_regen_s, now)
+        return {**self._view(level, self.pool_cap, self._pool_regen_s), "per_day": self.llm_per_day}
 
     def snapshot(self) -> dict:
         self._roll_day()
         return {
             "llm_used_today": self._llm_used,
             "llm_per_day": self.llm_per_day,
-            "llm_resets_in_s": self.resets_in_s(),
             "clients_today": len(self._daily),
-            "resin_cap": self.resin_cap,
-            "resin_regen_s": self.resin_regen_s,
+            "allowance_cap": self.allowance_cap,
+            "allowance_regen_s": self.allowance_regen_s,
+            "pool_cap": self.pool_cap,
         }

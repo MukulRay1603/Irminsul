@@ -37,7 +37,7 @@ Out of scope:
 
 | Asset | Threat | Main control |
 |---|---|---|
-| $0 cost | scripted use of the LLM | per-player Resin, a global daily LLM budget, per-provider caps below free tiers |
+| $0 cost | scripted use of the LLM | a per-player AI-answer allowance, a shared refilling pool, per-provider caps below free tiers |
 | availability | one client starving others | burst + daily limits per client, raw body cap, concurrency cap |
 | fair limits | forging `X-Forwarded-For` | header trusted only for configured proxy hops |
 | leak policy | prompt injection (question or retrieved source) | deterministic guards before any LLM call, sources treated as data |

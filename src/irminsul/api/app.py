@@ -81,7 +81,7 @@ class AskResponse(BaseModel):
 
 
 def client_id(request: Request, trusted_hops: int = 0) -> str:
-    """The address every per-client limit (burst, daily cap, Resin) is keyed on.
+    """The address every per-client limit (burst, daily cap, AI-answer allowance) is keyed on.
 
     X-Forwarded-For is written by the client first and each proxy appends the address it saw,
     so only the right-most `trusted_hops` entries are ours: with one proxy in front (HF
@@ -206,14 +206,19 @@ class SecurityHeaders:
 
 
 def sse_events(
-    engine: Engine, limits: Limits, cid: str, question: str, allow_llm: bool, out_of_resin: bool
+    engine: Engine,
+    limits: Limits,
+    cid: str,
+    question: str,
+    allow_llm: bool,
+    out_of_allowance: bool,
 ) -> Iterator[str]:
     """The /ask/stream body. A fresh RAG answer is paid for even if the client hangs up
     before the `done` event: the LLM call already happened, so leaving early is not free."""
     pending = False
     try:
         for kind, payload in engine.ask_stream(
-            question, allow_llm=allow_llm, out_of_resin=out_of_resin
+            question, allow_llm=allow_llm, out_of_allowance=out_of_allowance
         ):
             if kind == "meta":
                 pending = payload["route"] == "rag"
@@ -236,19 +241,11 @@ def _spend(limits: Limits, cid: str, route: str, trace: dict) -> None:
     # are free for the player and for the budget.
     if route == "rag" and trace.get("cache") != "hit":
         limits.spend_llm()
-        limits.spend_resin(cid)
+        limits.spend_allowance(cid)
 
 
 def _quota(limits: Limits, cid: str) -> dict:
-    snap = limits.snapshot()
-    return {
-        "resin": limits.resin(cid),
-        "world": {
-            "left": max(0, snap["llm_per_day"] - snap["llm_used_today"]),
-            "per_day": snap["llm_per_day"],
-            "resets_in_s": snap["llm_resets_in_s"],
-        },
-    }
+    return {"personal": limits.allowance(cid), "pool": limits.pool()}
 
 
 def create_app(
@@ -303,7 +300,7 @@ def create_app(
 
     @app.get("/quota")
     def quota(request: Request) -> dict:
-        """The caller's Resin (AI answers they can still ask for) and the shared daily budget."""
+        """The caller's AI-answer allowance and the shared pool, both refilling over time."""
         return _quota(limits, cid_of(request))
 
     @app.post("/ask/stream")
@@ -320,7 +317,7 @@ def create_app(
                 cid,
                 body.question,
                 allow_llm=limits.llm_budget_left(),
-                out_of_resin=not limits.has_resin(cid),
+                out_of_allowance=not limits.has_allowance(cid),
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -331,11 +328,11 @@ def create_app(
         cid = cid_of(request)
         if reason := limits.allow(cid):
             return JSONResponse(status_code=429, content={"detail": reason})
-        # Once the daily LLM budget or the player's Resin is spent, free routes still work
+        # Once the shared pool or the player's allowance is spent, free routes still work
         # and LLM questions get a polite reply instead.
         allow_llm = limits.llm_budget_left()
         answer = engine.ask(
-            body.question, allow_llm=allow_llm, out_of_resin=not limits.has_resin(cid)
+            body.question, allow_llm=allow_llm, out_of_allowance=not limits.has_allowance(cid)
         )
         _spend(limits, cid, answer.route, answer.trace)
         return AskResponse(
