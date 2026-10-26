@@ -65,19 +65,11 @@ def create_app(engine: Engine, limits: Limits | None = None, meta: dict | None =
         }
 
     def quota_for(cid: str) -> dict:
-        snap = limits.snapshot()
-        return {
-            "resin": limits.resin(cid),
-            "world": {
-                "left": max(0, snap["llm_per_day"] - snap["llm_used_today"]),
-                "per_day": snap["llm_per_day"],
-                "resets_in_s": snap["llm_resets_in_s"],
-            },
-        }
+        return {"personal": limits.allowance(cid), "pool": limits.pool()}
 
     @app.get("/quota")
     def quota(request: Request) -> dict:
-        """The caller's Resin (AI answers they can still ask for) and the shared daily budget."""
+        """The caller's AI-answer allowance and the shared pool, both refilling over time."""
         return quota_for(client_id(request))
 
     def spend(cid: str, route: str, trace: dict) -> None:
@@ -85,7 +77,7 @@ def create_app(engine: Engine, limits: Limits | None = None, meta: dict | None =
         # are free for the player and for the budget.
         if route == "rag" and trace.get("cache") != "hit":
             limits.spend_llm()
-            limits.spend_resin(cid)
+            limits.spend_allowance(cid)
 
     @app.post("/ask/stream")
     def ask_stream(body: AskRequest, request: Request):
@@ -95,11 +87,11 @@ def create_app(engine: Engine, limits: Limits | None = None, meta: dict | None =
         if reason := limits.allow(cid):
             return JSONResponse(status_code=429, content={"detail": reason})
         allow_llm = limits.llm_budget_left()
-        out_of_resin = not limits.has_resin(cid)
+        out_of_allowance = not limits.has_allowance(cid)
 
         def events():
             for kind, payload in engine.ask_stream(
-                body.question, allow_llm=allow_llm, out_of_resin=out_of_resin
+                body.question, allow_llm=allow_llm, out_of_allowance=out_of_allowance
             ):
                 if kind == "done":
                     spend(cid, payload["route"], payload["trace"])
@@ -117,11 +109,11 @@ def create_app(engine: Engine, limits: Limits | None = None, meta: dict | None =
         cid = client_id(request)
         if reason := limits.allow(cid):
             return JSONResponse(status_code=429, content={"detail": reason})
-        # Once the daily LLM budget or the player's Resin is spent, free routes still work
+        # Once the shared pool or the player's allowance is spent, free routes still work
         # and LLM questions get a polite reply instead.
         allow_llm = limits.llm_budget_left()
         answer = engine.ask(
-            body.question, allow_llm=allow_llm, out_of_resin=not limits.has_resin(cid)
+            body.question, allow_llm=allow_llm, out_of_allowance=not limits.has_allowance(cid)
         )
         spend(cid, answer.route, answer.trace)
         return AskResponse(
