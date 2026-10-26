@@ -3,7 +3,7 @@
 # $0 policy (until a sponsor or partner pays): free tiers only, no paid provider in this list.
 # - Groq: keep the org on the Free plan (no card), or at least set a spend limit in Billing.
 # - Gemini: the key's Google Cloud project must have no billing account linked.
-# - The app's own caps (Resin per player, the daily world budget) stay below these totals.
+# - The app's own caps (the per-player AI-answer allowance, the shared pool) stay below these totals.
 #
 # - A provider without its API key in the environment is skipped, so nothing runs (or
 #   costs anything) until keys are added as secrets. `enabled = false` also skips it.
