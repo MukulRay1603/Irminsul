@@ -254,3 +254,25 @@ def test_kqm_switch_reads_the_environment(monkeypatch):
         assert not kqm_enabled()
     monkeypatch.setenv("IRMINSUL_KQM", "on")
     assert kqm_enabled()
+
+
+def test_follow_ups_come_from_game_data_and_mark_free_ones():
+    from irminsul.engine.followups import STARTERS
+
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    answer = engine.ask("What are Raiden Shogun's base stats?")
+    ups = answer.follow_ups
+    assert 1 <= len(ups) <= 3 and all("Raiden Shogun" in f["question"] for f in ups)
+    assert not any("base stats" in f["question"] for f in ups)  # already asked
+    assert any(f["free"] for f in ups) and ups[0]["free"]  # free (game-data) questions first
+    leak = engine.ask("Who are the leaked 7.3 characters?")
+    assert {f["question"] for f in leak.follow_ups} == set(STARTERS)
+    assert all("Mitya" not in f["question"] for f in engine.ask("Is Mitya playable?").follow_ups)
+
+
+def test_talent_descriptions_are_exact_but_opinions_are_not():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    burst = engine.ask("What does Raiden Shogun's Elemental Burst do?")
+    assert burst.route == "exact" and burst.trace["intent"] == "talent:burst"
+    assert burst.citations[0].doc_id.startswith("character/raiden-shogun#talent-burst-")
+    assert engine.ask("Is Raiden Shogun's burst good?").route == "rag"

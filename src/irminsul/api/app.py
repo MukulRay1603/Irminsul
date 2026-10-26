@@ -73,11 +73,17 @@ class CitationOut(BaseModel):
     doc_id: str | None = None
 
 
+class FollowUp(BaseModel):
+    question: str
+    free: bool  # answered from game data: instant and never uses the AI-answer allowance
+
+
 class AskResponse(BaseModel):
     answer: str
     route: str
     citations: list[CitationOut]
     trace: dict
+    follow_ups: list[FollowUp] = []
 
 
 def client_id(request: Request, trusted_hops: int = 0) -> str:
@@ -340,6 +346,7 @@ def create_app(
             route=answer.route,
             citations=[CitationOut(**asdict(c)) for c in answer.citations],
             trace=answer.trace,
+            follow_ups=[FollowUp(**f) for f in answer.follow_ups],
         )
 
     return app

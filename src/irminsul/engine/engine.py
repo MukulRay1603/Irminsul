@@ -18,6 +18,7 @@ from dataclasses import asdict, dataclass
 from irminsul.engine import guards
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.exact import answer_exact
+from irminsul.engine.followups import follow_ups
 from irminsul.engine.llm import AllProvidersBusy, ChatModel, Completion
 from irminsul.engine.types import Answer, Citation
 
@@ -74,6 +75,7 @@ class Engine:
     def ask(self, question: str, allow_llm: bool = True, out_of_allowance: bool = False) -> Answer:
         start = time.perf_counter()
         answer = self._ask(question.strip(), allow_llm, out_of_allowance)
+        answer.follow_ups = follow_ups(self.store, question.strip(), answer)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         return answer
 
@@ -135,6 +137,7 @@ class Engine:
                 "route": answer.route,
                 "citations": [asdict(c) for c in answer.citations],
                 "trace": answer.trace,
+                "follow_ups": follow_ups(self.store, question, answer),
             },
         )
 

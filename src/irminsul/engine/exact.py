@@ -8,7 +8,7 @@ import re
 
 from irminsul.engine.entities import EntityStore, Match, released
 from irminsul.engine.types import Answer, Citation
-from irminsul.schema import ReleaseStatus
+from irminsul.schema import ReleaseStatus, slugify
 
 _STATS = re.compile(
     r"\bbase (atk|attack|hp|def|defen[cs]e|stats?)\b|\blevel 90\b|\blv\.? ?90\b|\bascension\b"
@@ -20,6 +20,13 @@ _CONST = re.compile(r"\bc([1-6])\b|\bconstellation ([1-6])\b", re.I)
 _PASSIVE = re.compile(
     r"\bpassive\b|\brefinement\b|\br[1-5]\b|\bwhat does\b|\beffect\b|\bwho gets\b", re.I
 )
+# "What does X's Burst do?": describing a talent is a lookup; judging one ("is it good") is not.
+_TALENT = re.compile(
+    r"\b(?P<burst>(?:elemental )?burst|ultimate)\b|\b(?P<skill>(?:elemental )?skill)\b"
+    r"|\b(?P<normal_attack>normal attacks?|auto attacks?)\b|\b(?P<passive>passives?)\b",
+    re.I,
+)
+_DESCRIBE = re.compile(r"\bwhat (?:does|do|is|are)\b|\bdescribe\b|\bexplain\b|\bdetails?\b", re.I)
 _SET = re.compile(r"\b[24][- ]?(pc|piece)\b|\bset bonus\b|\bbonus\b|\bwhat does\b", re.I)
 
 
@@ -48,6 +55,14 @@ def announced_answer(m: Match) -> Answer:
     )
 
 
+_TALENT_LABEL = {
+    "burst": "Elemental Burst",
+    "skill": "Elemental Skill",
+    "normal_attack": "Normal Attack",
+    "passive": "passive talents",
+}
+
+
 def character_answer(m: Match, q: str) -> Answer | None:
     c = m.entity
     if (con := _CONST.search(q)) and c.constellations:
@@ -68,6 +83,17 @@ def character_answer(m: Match, q: str) -> Answer | None:
             f"Ascension stat: {s.bonus_stat} {_pct(s.bonus_value, s.bonus_stat)}. [1]"
         )
         return Answer(text, "exact", [_cite(m, "overview")], {"entity": c.id, "intent": "stats"})
+    if (talent := _TALENT.search(q)) and _DESCRIBE.search(q) and c.talents:
+        kind = talent.lastgroup
+        chosen = [t for t in c.talents if t.kind == kind]
+        if chosen:
+            parts = [f"**{t.name}**\n{t.description}" for t in chosen]
+            return Answer(
+                f"{c.name}'s {_TALENT_LABEL[kind]}:\n\n" + "\n\n".join(parts) + " [1]",
+                "exact",
+                [_cite(m, f"talent-{kind}-{slugify(chosen[0].name)}")],
+                {"entity": c.id, "intent": f"talent:{kind}"},
+            )
     if _KIND.search(q):
         text = (
             f"**{c.name}** is a {c.rarity}★ {c.element} character who uses a {c.weapon_type}. [1]"
