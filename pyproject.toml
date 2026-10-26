@@ -21,6 +21,7 @@ dependencies = [
 irminsul-build = "irminsul.pipeline.build:main"
 irminsul-notes = "irminsul.pipeline.notes:main"
 irminsul-diff = "irminsul.pipeline.diff:main"
+irminsul-safety = "irminsul.pipeline.safety:main"
 irminsul-publish = "irminsul.pipeline.publish:main"
 irminsul-evalgen = "irminsul.evalgen:main"
 irminsul-index = "irminsul.retrieval.evaluate:main"

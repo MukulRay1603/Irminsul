@@ -2,11 +2,10 @@
 # gate -> stage on HF -> publish.
 #
 # - Nothing changed (most days): stop quietly. No PR, no issue, nothing to look at.
-# - Routine change (corrected text, guide updates, new official videos): publish on its own
-#   and restart the Space so the site serves it.
-# - New or removed characters, weapons or sets, or a change in who is announced: open a review
-#   PR instead. Merging it runs corpus-publish.yml. That is where a leak would show up, so a
-#   person looks first.
+# - Changed: the publish gate (irminsul-safety) checks release dates, leak language in new or
+#   changed docs, the offline leak/privacy/safety/spoiler probes and the size of the change.
+#   All clean (new characters included): publish on its own and restart the Space.
+# - Gate held it: open a review PR that says why. Merging it runs corpus-publish.yml.
 # Daily (not weekly) so a patch's new characters are live within a day of release.
 # Schedules only run from the default branch.
 name: Daily corpus check
@@ -94,6 +93,20 @@ jobs:
           uv run irminsul-index eval --index data/index --k 8 --configs hybrid+rerank \
             --out data/build/retrieval.json --min-hit "$MIN_HIT_AT_8"
 
+      - name: Publish gate (dates, leak language, probes, size)
+        id: gate
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          uv run irminsul-safety --old prev/manifest.json --build data/build \
+            --index data/index --out data/build/safety.json
+          echo "auto=$(jq -r .auto_publish data/build/safety.json)" >> "$GITHUB_OUTPUT"
+          if [ "$(jq -r .auto_publish data/build/safety.json)" = "true" ]; then
+            echo "Publish gate passed: dates, leak language, probes and size are all clean." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "**Publish gate held this build:**" >> "$GITHUB_STEP_SUMMARY"
+            jq -r '.problems[] | "- " + .' data/build/safety.json >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Keep the build as an artifact
         if: steps.diff.outputs.changed == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -110,15 +123,15 @@ jobs:
           uv run irminsul-publish stage --repo "$HF_DATASET" --build data/build \
             --index data/index --branch "update-$(date -u +%F)"
 
-      - name: Routine change, so publish now and restart the site
-        if: steps.diff.outputs.changed == 'true' && steps.diff.outputs.review != 'true' && env.HF_TOKEN != ''
+      - name: Gate passed, so publish now and restart the site
+        if: steps.diff.outputs.changed == 'true' && steps.gate.outputs.auto == 'true' && env.HF_TOKEN != ''
         run: |
           uv run irminsul-publish promote --repo "$HF_DATASET" --branch "update-$(date -u +%F)"
           uv run irminsul-publish restart-space --space "$HF_SPACE"
-          echo "Published automatically (routine change) and restarted the Space." >> "$GITHUB_STEP_SUMMARY"
+          echo "Published automatically and restarted the Space." >> "$GITHUB_STEP_SUMMARY"
 
-      - name: New content, so open the review PR
-        if: steps.diff.outputs.changed == 'true' && steps.diff.outputs.review == 'true'
+      - name: Gate held it, so open a review PR
+        if: steps.diff.outputs.changed == 'true' && steps.gate.outputs.auto != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           # Passed as env, never interpolated into the script: the reason is free text.
@@ -141,10 +154,10 @@ jobs:
           git push origin "$branch"
           staged="Staged on HF branch \`update-$day\`; merging publishes it and restarts the site."
           [ -z "$HF_TOKEN" ] && staged="HF_TOKEN not set: nothing staged; merging records the manifest only."
-          { echo "**Why this needs a look:**"; jq -r '.reasons[] | "- " + .' data/build/decision.json; echo;
+          { echo "**The publish gate held this build because:**"; jq -r '.problems[] | "- " + .' data/build/safety.json; echo;
             cat data/build/CHANGELOG.md; echo; echo "$staged"; } > /tmp/body.md
           gh pr create --base "$BASE" --head "$branch" \
-            --title "Corpus update $day (review: new content)" --body-file /tmp/body.md
+            --title "Corpus update $day (held by the publish gate)" --body-file /tmp/body.md
 
       - name: Open an issue on failure
         if: failure()
