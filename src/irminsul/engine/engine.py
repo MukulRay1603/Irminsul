@@ -123,6 +123,7 @@ class Engine:
         k: int = 6,
         cache_size: int = 512,
         exclude_tiers: frozenset[str] = frozenset(),
+        patches: dict | None = None,
     ) -> None:
         self.store = store
         self.index = index
@@ -130,6 +131,7 @@ class Engine:
         self.guard_cfg = guard_cfg or guards.GuardConfig()
         self.k = k
         self.exclude_tiers = exclude_tiers  # e.g. {"kqm"} when KQM content is switched off
+        self.patches = patches  # patch notes (engine/patches.py) for "what changed in 7.1?"
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
 
@@ -224,7 +226,7 @@ class Engine:
                 {**cached.trace, "cache": "hit"},
                 card=cached.card,
             )
-        return answer_exact(self.store, question)
+        return answer_exact(self.store, question, self.patches)
 
     def _remember(self, question: str, answer: Answer) -> None:
         if (

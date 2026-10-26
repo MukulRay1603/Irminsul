@@ -170,7 +170,22 @@ const CARDS = {
 
   announced: c => `${cardHead(c, "Officially announced")}
     <div class="xc-callout"><b>Not playable yet.</b> Only what HoYoverse has officially shown is listed here. Talents and constellations appear once the character is released.</div>`,
+
+  // Patch notes for one version. Each name opens its dossier; the link opens the full section.
+  patch: c => c.upcoming ? `<header class="xc-head"><div><span class="xc-kicker">Patch notes</span><h3>Version ${escHTML(c.version)}</h3></div></header>
+    <div class="xc-callout"><b>Not released yet.</b> The live version is ${escHTML(c.live)}.${c.announced.length ? ` Officially announced, not playable yet: ${c.announced.map(a => escHTML(a.name)).join(", ")}.` : ""}</div>`
+    : `<header class="xc-head"><div><span class="xc-kicker">Patch notes${c.is_live ? " · live now" : ""}</span><h3>Version ${escHTML(c.version)}</h3>
+      <div class="xc-title">Released ${escHTML(patchDate(c.date))}</div></div></header>
+    ${c.groups.map(g => `<h4 class="xc-sub">${escHTML(g.label)} <span class="pn-count">${g.items.length}</span></h4>
+      <div class="pn-chips">${g.items.map(patchChip).join("")}</div>`).join("")}
+    ${c.changes.length ? `<h4 class="xc-sub">Changed <span class="pn-count">${c.changes.length}</span></h4>
+      <ul class="pn-changed">${c.changes.map(x => `<li>${patchChip(x)}<span>${escHTML(x.fields.slice(0, 4).join(", ") || "Text updated")}${x.fields.length > 4 ? ` and ${x.fields.length - 4} more` : ""}</span></li>`).join("")}</ul>` : ""}
+    ${!c.groups.length && !c.changes.length ? `<p class="xc-foot">Nothing new in the released data for this version.</p>` : ""}
+    <p class="xc-foot">${c.videos ? `${c.videos} new official video${c.videos === 1 ? "" : "s"}. ` : ""}${!c.tracked && c.tracking_since ? `Weapons, sets and balance changes are tracked from ${escHTML(patchDate(c.tracking_since))}. ` : ""}<a href="#patches" data-patch="${escHTML(c.version)}">Open the full patch notes</a></p>`,
 };
+
+const patchDate = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const patchChip = x => `<button type="button" class="pn-chip" data-entity="${escHTML(x.id)}" data-kind="${escHTML(x.kind)}" data-el="${escHTML(x.element || "")}"><i></i>${escHTML(x.name)}${x.rarity ? `<span class="pn-r">${x.rarity}★</span>` : ""}</button>`;
 
 /* Talent scaling with a level slider. The data only has some levels (1, 6, 9, 10, 13), so the
    slider steps through those. Every value is already in the card: moving it asks nothing. */
@@ -235,6 +250,10 @@ function renderCard(card) {
   el.className = `xcard card-${card.type}`;
   el.dataset.el = card.element || "";
   el.innerHTML = make(card);
+  if (card.type === "patch") el.addEventListener("click", e => {
+    const b = e.target.closest("[data-entity]");
+    if (b && typeof showEntity === "function") showEntity(b.dataset.entity);  // app.js dossier
+  });
   const panel = el.querySelector("[data-panel]"), seg = el.querySelector(".seg");
   if (panel && PANELS[card.type]) {
     const show = key => {

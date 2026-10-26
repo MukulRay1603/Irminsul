@@ -31,12 +31,14 @@
 <link href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@75..125,300..700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/planner.css">
+<link rel="stylesheet" href="/static/patches.css">
 </head>
 <body>
 
 <div class="bar" id="bar">
   <a class="mark" href="#top">IRMINSUL</a>
   <span class="spacer"></span>
+  <a class="nav-link" href="#patches">Patches</a>
   <a class="nav-link" href="#planner">Planner</a>
   <span class="chip" id="dataChip">Connecting…</span>
   <button class="icon-btn" id="soundBtn" type="button" aria-pressed="false" aria-label="Ambient sound" title="Ambient sound">
@@ -130,6 +132,14 @@
   </div>
 </section>
 
+<section class="block" id="patches" aria-labelledby="patchesTitle">
+  <div class="block-head">
+    <h2 id="patchesTitle">Patch notes</h2>
+    <p>What each version added or changed, from official game data. Released content only.</p>
+  </div>
+  <div id="patchesApp"><noscript><p class="placeholder">Patch notes need JavaScript.</p></noscript></div>
+</section>
+
 <section class="block" id="planner" aria-labelledby="plannerTitle">
   <div class="block-head">
     <h2 id="plannerTitle">Daily planner</h2>
@@ -148,6 +158,7 @@
 <script src="/static/trust.js" defer></script>
 <script src="/static/app.js" defer></script>
 <script src="/static/planner.js" type="module"></script>
+<script src="/static/patches.js" defer></script>
 <script src="/static/pwa.js" defer></script>
 </body>
 </html>

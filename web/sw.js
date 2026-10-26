@@ -13,8 +13,8 @@ const CACHE = `irminsul-${VERSION}`;
 const OFFLINE = "You're offline. Answers need a connection.";
 const SHELL = [
   "/", "/manifest.webmanifest",
-  "/static/app.css", "/static/planner.css",
-  "/static/answers.js", "/static/app.js", "/static/planner.js", "/static/pwa.js",
+  "/static/app.css", "/static/planner.css", "/static/patches.css",
+  "/static/answers.js", "/static/app.js", "/static/planner.js", "/static/patches.js", "/static/pwa.js",
   "/static/icons/icon-192.png", "/static/icons/favicon-32.png",
 ];
 const NETWORK_ONLY = /^\/(ask|quota|health|api\/)/;

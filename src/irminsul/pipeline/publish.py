@@ -1,7 +1,8 @@
 """Publish corpus builds to a versioned Hugging Face Dataset.
 
 Flow (driven by the GitHub workflows):
-1. `fetch-manifest`: download the live `manifest.json` (from the dataset's `main`) to diff against.
+1. `fetch-manifest`: download the live `manifest.json` (from the dataset's `main`) to diff against,
+   with the live `history.json` and records the change history needs.
 2. `stage`: upload a new build to a dated branch, e.g. `update-2026-11-01`. Nothing user-facing
    changes yet.
 3. `promote`: after the weekly PR is merged, copy that branch's files onto `main`.
@@ -17,6 +18,7 @@ Usage:
 """
 
 import argparse
+import contextlib
 import os
 import shutil
 import sys
@@ -31,7 +33,17 @@ PUBLISH_FILES = (
     "artifact_sets.jsonl",
     "videos.jsonl",
     "planner.json",
+    "history.json",
     "CHANGELOG.md",
+)
+# Downloaded with the live manifest: the history to append to, and the records and videos
+# the change history compares field by field (see history.py). All optional.
+PREVIOUS_FILES = (
+    "history.json",
+    "characters.jsonl",
+    "weapons.jsonl",
+    "artifact_sets.jsonl",
+    "videos.jsonl",
 )
 CARD = """---
 license: other
@@ -70,9 +82,13 @@ def fetch_manifest(repo: str, out: Path) -> bool:
     out.mkdir(parents=True, exist_ok=True)
     try:
         api.hf_hub_download(repo, "manifest.json", repo_type="dataset", local_dir=out)
-        return True
     except (EntryNotFoundError, RepositoryNotFoundError):
         return False
+    for name in PREVIOUS_FILES:
+        # Missing is fine, e.g. no history.json before the first build that writes one
+        with contextlib.suppress(EntryNotFoundError):
+            api.hf_hub_download(repo, name, repo_type="dataset", local_dir=out)
+    return True
 
 
 def stage(repo: str, build: Path, branch: str, index: Path | None = None) -> None:

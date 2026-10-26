@@ -18,6 +18,7 @@ import re
 from dataclasses import dataclass
 
 from irminsul.engine.entities import EntityStore
+from irminsul.engine.exact import is_patch_question
 from irminsul.engine.types import Answer
 
 MAX_CHARS = 600
@@ -209,7 +210,8 @@ def check(question: str, store: EntityStore | None, cfg: GuardConfig) -> Answer 
         return _refuse(
             LEAK_REPLY, "refuse_leak", "future_version", versions=[".".join(v) for v in future]
         )
-    if not on_topic(question, bool(named)):
+    # "What changed in 7.1?" names no character but is plainly about the game
+    if not (on_topic(question, bool(named)) or is_patch_question(question)):
         return _refuse(OFFTOPIC_REPLY, "refuse_offtopic", "offtopic")
     return None
 
