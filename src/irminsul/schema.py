@@ -35,6 +35,7 @@ class SourceRef(BaseModel):
     tier: Tier
     fetched_at: datetime
     game_version: str | None = None  # data version reported by the source
+    refs: list[str] = Field(default_factory=list)  # underlying URLs cited by the source
 
 
 class Release(BaseModel):
