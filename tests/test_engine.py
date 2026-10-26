@@ -41,7 +41,7 @@ def store() -> EntityStore:
 
 
 class FakeIndex:
-    def search(self, question, k=6, mode="hybrid", rerank=False):
+    def search(self, question, k=6, mode="hybrid", rerank=False, exclude_tiers=frozenset()):
         chunk = Chunk(
             chunk_id="rayy/x#1::0",
             doc_id="rayy/x#1",
@@ -219,3 +219,38 @@ def test_provider_config_loads():
     assert all(
         p.daily_requests > 0 and p.api_key_env.endswith("_API_KEY") for p in router.providers
     )
+
+
+def test_kqm_switch_drops_kqm_chunks_before_the_llm():
+    class KqmIndex:
+        def search(self, question, k=6, mode="hybrid", rerank=False, exclude_tiers=frozenset()):
+            chunk = Chunk(
+                chunk_id="kqm/x#1::0",
+                doc_id="kqm/x#1",
+                entity_id=None,
+                title="KQM guide",
+                text="Some KQM theorycraft.",
+                tier="kqm",
+                release_status="released",
+                source_url="https://library.keqingmains.com/x",
+            )
+            return [Hit(chunk, 0.9, 0)]
+
+    llm = FakeLLM()
+    on = Engine(store(), KqmIndex(), llm).ask("how does the KQM guide rate this team?")
+    assert on.route == "rag" and on.citations[0].tier == "kqm"
+    off = Engine(store(), KqmIndex(), llm, exclude_tiers=frozenset({"kqm"}))
+    answer = off.ask("how does the KQM guide rate this team?")
+    assert answer.route == "rag_empty" and llm.calls == 1
+
+
+def test_kqm_switch_reads_the_environment(monkeypatch):
+    from irminsul.api.serve import kqm_enabled
+
+    monkeypatch.delenv("IRMINSUL_KQM", raising=False)
+    assert kqm_enabled()
+    for value in ("off", "0", "False", " no "):
+        monkeypatch.setenv("IRMINSUL_KQM", value)
+        assert not kqm_enabled()
+    monkeypatch.setenv("IRMINSUL_KQM", "on")
+    assert kqm_enabled()

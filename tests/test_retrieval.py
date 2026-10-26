@@ -82,3 +82,14 @@ def test_score_skips_questions_whose_gold_docs_are_not_indexed():
     report = score(index, k=3, configs={"bm25": {"mode": "bm25"}})
     assert report["questions"] == 0 and report["configs"] == {}
     assert len(report["skipped_missing_gold"]) > 50
+
+
+def test_excluded_tiers_never_come_back():
+    kqm = doc("pity-kqm", "# Pity guide\nHard pity on the banner is 90 wishes.")
+    kqm.source.tier = Tier.KQM
+    index = HybridIndex.build(chunk_docs([*DOCS, kqm]), embedder=FakeEmbedder())
+    hits = index.search("pity banner", k=5, mode="hybrid")
+    assert "pity-kqm" in {h.chunk.doc_id for h in hits}
+    hits = index.search("pity banner", k=5, mode="hybrid", exclude_tiers=frozenset({"kqm"}))
+    assert hits and all(h.chunk.tier != "kqm" for h in hits)
+    assert hits[0].chunk.doc_id == "pity"

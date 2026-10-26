@@ -5,6 +5,7 @@ Data comes from local folders, or is downloaded once at boot from the public HF 
     IRMINSUL_HF_DATASET=MukulRay/irminsul-corpus uv run irminsul-serve   # e.g. on a Space
 LLM keys (GROQ_API_KEY, ...) are read from the environment; without any, the API still
 serves exact answers and refusals, and LLM questions get a "busy" reply.
+IRMINSUL_KQM=off keeps KQM-derived chunks out of every answer (see kqm_enabled).
 """
 
 import json
@@ -30,6 +31,14 @@ def fetch_dataset(repo: str, dest: Path) -> Path:
     return Path(snapshot_download(repo, repo_type="dataset", local_dir=dest))
 
 
+def kqm_enabled() -> bool:
+    """KQM (CC BY-NC-SA) content is on unless IRMINSUL_KQM is off/0/false/no.
+
+    The switch is a deploy setting, so a commercial build can drop KQM without a rebuild.
+    """
+    return os.environ.get("IRMINSUL_KQM", "on").strip().lower() not in {"off", "0", "false", "no"}
+
+
 def build_app():
     data = Path(os.environ.get("IRMINSUL_DATA", "data/build"))
     index_dir = Path(os.environ.get("IRMINSUL_INDEX", "data/index"))
@@ -49,11 +58,21 @@ def build_app():
     else:
         log.warning("no index at %s: only exact answers and refusals will work", index_dir)
 
-    engine = Engine(EntityStore.load(data), index, Router.from_config(), guard_cfg)
+    kqm = kqm_enabled()
+    if not kqm:
+        log.info("KQM content is switched off (IRMINSUL_KQM): answers use official + team tiers")
+    engine = Engine(
+        EntityStore.load(data),
+        index,
+        Router.from_config(),
+        guard_cfg,
+        exclude_tiers=frozenset() if kqm else frozenset({"kqm"}),
+    )
     meta = {
         "built_at": manifest.get("built_at"),
         "game_version": yatta_version,
         "docs": manifest.get("docs"),
+        "kqm": kqm,
     }
     limits = Limits(
         per_minute=int(os.environ.get("IRMINSUL_PER_MINUTE", 6)),

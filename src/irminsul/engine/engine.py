@@ -53,12 +53,14 @@ class Engine:
         guard_cfg: guards.GuardConfig | None = None,
         k: int = 6,
         cache_size: int = 512,
+        exclude_tiers: frozenset[str] = frozenset(),
     ) -> None:
         self.store = store
         self.index = index
         self.llm = llm
         self.guard_cfg = guard_cfg or guards.GuardConfig()
         self.k = k
+        self.exclude_tiers = exclude_tiers  # e.g. {"kqm"} when KQM content is switched off
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
 
@@ -150,8 +152,14 @@ class Engine:
     def _prepare_rag(self, question: str, allow_llm: bool) -> "Answer | _Prepared":
         if self.index is None:
             return Answer(NO_SOURCES_REPLY, "no_index")
-        hits = self.index.search(question, k=self.k, mode="hybrid", rerank=True)
-        hits = [h for h in hits if h.chunk.release_status == "released"]
+        hits = self.index.search(
+            question, k=self.k, mode="hybrid", rerank=True, exclude_tiers=self.exclude_tiers
+        )
+        hits = [
+            h
+            for h in hits
+            if h.chunk.release_status == "released" and h.chunk.tier not in self.exclude_tiers
+        ]
         trace = {
             "retrieval": [
                 {"doc_id": h.chunk.doc_id, "score": round(h.score, 3), "tier": h.chunk.tier}
