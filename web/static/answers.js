@@ -12,7 +12,8 @@ function inline(s) {
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, "$1<em>$2</em>")
-    .replace(/\[(\d+)\]/g, '<sup class="cite"><a href="#src-$1" aria-label="Source $1">$1</a></sup>');
+    // A citation becomes a small source button; labelCitations() names it once the answer ends.
+    .replace(/\[(\d+)\]/g, '<a class="cite src-pill" data-n="$1" href="#src-$1" aria-label="Source"><i aria-hidden="true"></i></a>');
 }
 
 /* Markdown subset the AI is asked to use: a bold lead sentence, bullets, numbered steps,
@@ -61,6 +62,61 @@ function renderMarkdown(text) {
   }
   flushPara(); closeList(); closeTable();
   return html;
+}
+
+/* ---------- Sources: small named buttons instead of numbers ---------- */
+const TIER_NAMES = { official: "Official game data", kqm: "KQM theorycrafting", rayy_verified: "Team-verified notes", community: "Community" };
+
+// "Raiden Shogun: Elemental Burst" -> "Raiden Shogun"; "Mika constellations" -> "Mika"
+function sourceLabel(c) {
+  let t = String(c.title || "").replace(/^Official profile:\s*/i, "");
+  t = t.split(/:\s|\s[—–]\s/)[0].replace(/\s+(overview|constellations)$/i, "").trim();
+  if (c.tier === "kqm") t = `KQM · ${t}`;
+  else if (c.tier === "rayy_verified") t = `Team notes · ${t}`;
+  return t.length > 26 ? `${t.slice(0, 25)}…` : t;
+}
+
+function linkSource(a, c) {
+  a.textContent = sourceLabel(c);
+  a.title = `${TIER_NAMES[c.tier] || c.tier} · ${c.title}`;
+  a.setAttribute("aria-label", `Source: ${c.title} (${TIER_NAMES[c.tier] || c.tier})`);
+  a.dataset.tier = c.tier;
+  if (/^https?:/.test(c.url)) { a.href = c.url; a.target = "_blank"; a.rel = "noopener noreferrer"; }
+  else a.removeAttribute("href");
+}
+
+// Name every citation button in an answer; repeats of the same source in a row show once.
+function labelCitations(container, citations) {
+  const byN = new Map((citations || []).map(c => [String(c.n), c]));
+  let prev = null;
+  container.querySelectorAll(".src-pill[data-n]").forEach(a => {
+    const c = byN.get(a.dataset.n);
+    if (!c) { a.remove(); return; }
+    const adjacent = prev && prev.dataset.n === a.dataset.n && (a.previousSibling === prev
+      || (a.previousSibling?.nodeType === 3 && !a.previousSibling.textContent.trim() && a.previousSibling.previousSibling === prev));
+    if (adjacent) { a.remove(); return; }
+    linkSource(a, c);
+    prev = a;
+  });
+}
+
+// The "Sources" row under an answer: one button per distinct source, no numbers.
+function sourceRow(citations) {
+  const row = document.createElement("div");
+  row.className = "sources";
+  row.innerHTML = '<span class="sources-label">Sources</span>';
+  const seen = new Set();
+  for (const c of citations || []) {
+    const key = `${c.url}|${sourceLabel(c)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const a = document.createElement("a");
+    a.className = "src-pill";
+    a.id = `src-${c.n}`;
+    linkSource(a, c);
+    row.append(a);
+  }
+  return row;
 }
 
 /* ---------- Cards for exact answers ---------- */

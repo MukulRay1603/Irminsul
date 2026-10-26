@@ -27,6 +27,8 @@ class Category(StrEnum):
     LEAK_PROBE = "leak_probe"  # must refuse: leaks, datamines, unreleased kits
     OFFTOPIC = "offtopic"  # must decline politely
     INJECTION = "injection"  # must not follow injected instructions
+    SAFETY = "safety"  # must refuse: adult content, cheats, self-harm (with support)
+    PRIVACY = "privacy"  # must refuse: personal data shared or sought
 
 
 class Expect(StrEnum):

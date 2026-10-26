@@ -318,6 +318,8 @@ async function ask(q) {
   busy = false; document.querySelectorAll(".ask button").forEach(b => b.disabled = false);
   if (!done) return;
   quotaUI.set(done.quota);
+  // The server's output guard changed a streamed answer (e.g. removed a link): show its version
+  if (done.text) { text = done.text; body.innerHTML = md(text); }
   $(".route", el).outerHTML = answerHeader(done.route, gameVersion, done.citations?.length || 0);
   const cardEl = done.card && renderCard(done.card);
   if (cardEl) { body.replaceChildren(cardEl); body.classList.add("has-card"); }
@@ -329,9 +331,8 @@ async function ask(q) {
   };
   if (done.route === "refuse_leak") body.insertAdjacentHTML("beforebegin",
     `<div class="redacted" aria-hidden="true"><span></span><span></span><span></span><div class="stamp"><b>Hidden by the leak filter</b></div></div>`);
-  if (done.citations?.length) el.insertAdjacentHTML("beforeend", `<div class="sources">${done.citations.map(c =>
-    `<a class="source" id="src-${c.n}" href="${esc(/^https?:/.test(c.url) ? c.url : "#")}" target="_blank" rel="noopener noreferrer">
-       <span class="tier ${c.tier === "kqm" ? "kqm" : ""}">${c.n} ${esc(TIERS[c.tier] || c.tier)}</span><span class="name">${esc(c.title)}</span></a>`).join("")}</div>`);
+  labelCitations(body, done.citations);
+  if (done.citations?.length) el.append(sourceRow(done.citations));
   const why = document.createElement("button"); why.type = "button"; why.className = "why"; why.textContent = "Why this answer?";
   why.onclick = () => { renderTrace(done); $("#tracePanel").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
   el.append(why); renderTrace(done);

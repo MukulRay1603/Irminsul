@@ -299,7 +299,9 @@ def test_injection_in_a_source_does_not_change_routing_or_guards():
     assert [ln for ln in lines if ln.startswith("Question:")] == [
         "Question: How much ER does Raiden need?"
     ]
-    assert sum(ln.startswith("[") for ln in lines) == 1
+    # one retrieved source plus the official profile of the named character, nothing forged
+    sources = [ln for ln in lines if ln.startswith("[")]
+    assert len(sources) == 2 and sources[1].startswith("[2] (official) Official profile:")
 
 
 def test_injection_in_the_question_is_still_refused_with_a_poisoned_index():

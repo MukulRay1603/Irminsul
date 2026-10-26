@@ -16,16 +16,25 @@ from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 
 from irminsul.engine import grounding, guards
-from irminsul.engine.entities import EntityStore
+from irminsul.engine.cards import pct
+from irminsul.engine.entities import EntityStore, Match
 from irminsul.engine.exact import answer_exact
 from irminsul.engine.followups import follow_ups
 from irminsul.engine.llm import AllProvidersBusy, ChatModel, Completion
 from irminsul.engine.types import Answer, Citation
+from irminsul.schema import ReleaseStatus
 
 SYSTEM_PROMPT = """You are Irminsul, a Genshin Impact assistant.
 Rules:
-- Answer ONLY from the numbered sources provided. If they do not contain the answer, say you
-  don't have verified information on that.
+- Answer ONLY from the numbered sources provided. The "Official profile" sources give each
+  named character's or weapon's element, weapon type and rarity: use them to connect facts.
+- If the sources contain relevant facts but no direct recommendation (for example, which of
+  two characters fits a team), explain what the sources say about each option and how it
+  relates to the question, and say plainly what the sources don't state. Say you don't have
+  verified information only when the sources are unrelated to the question.
+- Only talk about Genshin Impact. Keep it family-friendly. Never ask for or repeat personal
+  information. Never help with cheats, mods, private servers or account trading. Don't add
+  links: the app shows the sources.
 - Cite every factual sentence with its source number in plain square brackets, e.g. [2].
   Never use any other citation style.
 - Only officially released information. Never speculate about unreleased characters,
@@ -61,6 +70,41 @@ _ALT_CITATION = re.compile(r"【\s*(\d+)[^】]*】")
 
 def normalise_citations(text: str) -> str:
     return _ALT_CITATION.sub(r"[\1]", text)
+
+
+def official_profile(match: Match) -> tuple[str, str, str] | None:
+    """(title, text, doc_id) for a released entity's key facts, from the official records."""
+    e = match.entity
+    if match.kind == "character":
+        if e.release.status != ReleaseStatus.RELEASED:
+            return None
+        parts = [f"{e.name} is a {e.rarity}-star {e.element} character who uses a {e.weapon_type}"]
+        if e.region:
+            parts[0] += f", from {e.region}"
+        if e.title:
+            parts.append(f"Title: {e.title}")
+        if s := e.base_stats:
+            parts.append(
+                f"Level {s.level} base stats: HP {s.hp:.0f}, ATK {s.atk:.0f}, DEF {s.defense:.0f}; "
+                f"ascension stat {s.bonus_stat} {pct(s.bonus_value, s.bonus_stat)}"
+            )
+        talents = ", ".join(f"{t.kind.replace('_', ' ')}: {t.name}" for t in e.talents[:3])
+        if talents:
+            parts.append(f"Talents: {talents}")
+        return f"Official profile: {e.name}", ". ".join(parts) + ".", f"{e.id}#overview"
+    if match.kind == "weapon":
+        parts = [f"{e.name} is a {e.rarity}-star {e.weapon_type}"]
+        if e.base_atk is not None:
+            parts.append(f"Base ATK {e.base_atk:.0f} at max level")
+        if e.secondary_stat:
+            parts.append(
+                f"secondary stat {e.secondary_stat} {pct(e.secondary_value, e.secondary_stat)}"
+            )
+        if e.passive_name and e.passive_by_refinement:
+            parts.append(f"Passive {e.passive_name} (R1): {e.passive_by_refinement[0]}")
+        return f"Official profile: {e.name}", ". ".join(parts) + ".", f"{e.id}#main"
+    bonuses = "; ".join(f"{n}-piece: {t}" for n, t in sorted(e.bonuses.items()))
+    return f"Official profile: {e.name}", f"{e.name} is an artifact set. {bonuses}", f"{e.id}#main"
 
 
 def _normalise(question: str) -> str:
@@ -154,6 +198,8 @@ class Engine:
                 "trace": answer.trace,
                 "follow_ups": follow_ups(self.store, question, answer),
                 "card": answer.card,
+                # When the output guard changed a streamed answer, the page re-renders it
+                "text": answer.text if answer.trace.get("output_guard") else None,
             },
         )
 
@@ -181,6 +227,7 @@ class Engine:
     def _remember(self, question: str, answer: Answer) -> None:
         if (
             answer.route in ("busy", "no_index", "no_llm", "no_allowance")
+            or answer.route in guards.SENSITIVE_ROUTES  # never keep personal text in memory
             or answer.trace.get("cache") == "hit"
         ):
             return
@@ -217,6 +264,19 @@ class Engine:
             c.n: f"{c.title}\n" + " ".join(h.chunk.text.split()[:SOURCE_WORDS])
             for c, h in zip(citations, hits, strict=True)
         }
+        # The basic facts of every character, weapon or set the question names, so the model
+        # can connect them (e.g. that Skirk uses a sword) even when retrieval didn't surface
+        # their overview.
+        for match in self.store.find(question)[:3]:
+            profile = official_profile(match)
+            if profile is None:
+                continue
+            title, text, doc_id = profile
+            e = match.entity
+            n = len(citations) + 1
+            citations.append(Citation(n, title, e.source.url, e.source.tier, doc_id))
+            texts[n] = f"{title}\n{text}"
+            trace["retrieval"].append({"doc_id": doc_id, "score": None, "tier": e.source.tier})
         sources = "\n\n".join(f"[{c.n}] ({c.tier}) {texts[c.n]}" for c in citations)
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -234,6 +294,8 @@ class Engine:
     @staticmethod
     def _finish_rag(prepared: "_Prepared", completion: Completion) -> Answer:
         text = normalise_citations(completion.text)
+        # Only cited official links, no personal data, nothing explicit
+        text, output_flags = guards.check_output(text, [c.url for c in prepared.citations])
         used = {int(n) for n in re.findall(r"\[(\d+)\]", text)}
         cited = [c for c in prepared.citations if c.n in used]
         trace = {
@@ -248,6 +310,7 @@ class Engine:
             "uncited_answer": not cited,
             # Each sentence checked against the source text it cites (no model call).
             "grounding": grounding.check(text, prepared.sources),
+            "output_guard": output_flags,
         }
         return Answer(text.strip(), "rag", cited or prepared.citations, trace)
 

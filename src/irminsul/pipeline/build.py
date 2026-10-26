@@ -17,6 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from irminsul.pipeline.gate import gate, gate_linked_docs, normalise_name
+from irminsul.pipeline.guides import reaction_guides
 from irminsul.pipeline.planner import build_planner, parse_schedule
 from irminsul.pipeline.render import artifact_docs, character_docs, weapon_docs
 from irminsul.schema import SCHEMA_VERSION, Character, ReleaseStatus, Video, slugify
@@ -203,6 +204,11 @@ def build(
             "characters": len(planner["characters"]),
             "weapons": len(planner["weapons"]),
         }
+
+    # Newer reactions are defined across many kits: compile each into one guide (no model).
+    guides = reaction_guides(docs, now)
+    docs += guides
+    counts["reaction_guides"] = len(guides)
 
     check_unique_ids(docs)
     _write_jsonl(out / "docs.jsonl", docs)

@@ -19,7 +19,16 @@ from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import GuardConfig, version_from_manifest
 from irminsul.evals import Expect, load, matches
 
-REFUSE_ROUTES = {"refuse_leak", "refuse_injection", "refuse_offtopic", "refuse_length"}
+REFUSE_ROUTES = {
+    "refuse_leak",
+    "refuse_injection",
+    "refuse_offtopic",
+    "refuse_length",
+    "refuse_privacy",
+    "refuse_selfharm",
+    "refuse_adult",
+    "refuse_cheats",
+}
 
 
 def evaluate(engine: Engine) -> dict:
