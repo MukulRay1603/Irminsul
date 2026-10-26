@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en" data-mode="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Irminsul</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@75..125,300..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<div class="bar" id="bar">
+  <a class="mark" href="#top">IRMINSUL</a>
+  <span class="spacer"></span>
+  <span class="chip" id="dataChip">Connecting…</span>
+  <button class="icon-btn" id="soundBtn" type="button" aria-pressed="false" aria-label="Ambient sound" title="Ambient sound">
+    <svg viewBox="0 0 24 24"><path d="M4 10v4h3l4 4V6L7 10H4z"/><path class="wave" d="M15 9.5a4 4 0 0 1 0 5M17.5 7a7.5 7.5 0 0 1 0 10"/></svg>
+  </button>
+  <button class="icon-btn" id="modeBtn" type="button" aria-label="Switch to light mode" title="Light or dark">
+    <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>
+  </button>
+</div>
+
+<header class="hero" id="top">
+  <canvas id="tree" aria-hidden="true"></canvas>
+  <div class="hero-inner">
+    <h1 aria-label="Irminsul"><span aria-hidden="true">I</span><span aria-hidden="true">R</span><span aria-hidden="true">M</span><span aria-hidden="true">I</span><span aria-hidden="true">N</span><span aria-hidden="true">S</span><span aria-hidden="true">U</span><span aria-hidden="true">L</span></h1>
+    <p class="lede">Ask anything about Genshin Impact. Answers come from official game data, show their sources, and never include leaks.</p>
+    <form class="ask" id="heroForm">
+      <label class="sr" for="heroQ">Your question</label>
+      <input id="heroQ" autocomplete="off" maxlength="500" placeholder="What are Raiden Shogun's base stats at level 90?">
+      <button type="submit">Ask</button>
+    </form>
+    <div class="prompts" id="prompts">
+      <button type="button">What does Sacrificial Sword's passive do?</button>
+      <button type="button">Is Mitya playable yet?</button>
+      <button type="button">How much Energy Recharge does Raiden need?</button>
+      <button type="button">Who are the leaked 7.3 characters?</button>
+    </div>
+    <div class="facts" id="facts" hidden>
+      <div><b id="fVersion">-</b>live game version</div>
+      <div><b id="fDocs">-</b>official and cited sources</div>
+      <div><b id="fChars">-</b>released characters</div>
+    </div>
+  </div>
+  <a class="scroll-cue" href="#characters">Browse characters</a>
+</header>
+
+<section class="block" id="characters" aria-labelledby="charsTitle">
+  <div class="block-head">
+    <h2 id="charsTitle">Characters</h2>
+    <p>Released characters only. Pick one to open the full dossier.</p>
+    <div class="filters" id="filters" role="group" aria-label="Filter by element"></div>
+  </div>
+  <div class="gallery" id="gallery"></div>
+</section>
+
+<section class="block" id="ask" aria-label="Conversation">
+  <div class="work">
+    <div>
+      <div class="thread" id="thread" aria-live="polite">
+        <p class="hint" id="hint">Your conversation appears here. Every answer says where it came from.</p>
+      </div>
+      <form class="ask dock" id="dockForm">
+        <label class="sr" for="dockQ">Your question</label>
+        <input id="dockQ" autocomplete="off" maxlength="500" placeholder="Ask a follow-up…">
+        <button type="submit">Ask</button>
+      </form>
+      <div class="quota" id="quota" hidden>
+        <svg class="orb" viewBox="0 0 32 32" aria-hidden="true">
+          <defs><radialGradient id="og" cx="40%" cy="35%" r="70%"><stop offset="0" stop-color="#F3FFE0"/><stop offset=".45" stop-color="#A9D86E"/><stop offset="1" stop-color="#2F7A5C"/></radialGradient></defs>
+          <path d="M16 3c6 4 11 9 11 15a11 11 0 0 1-22 0C5 12 10 7 16 3z" fill="url(#og)"/>
+          <path d="M16 9v17M16 15l-4-3M16 20l4-3" stroke="#0B2A1C" stroke-opacity=".45" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+        </svg>
+        <span class="count" id="qCount" aria-live="polite">-</span>
+        <span class="timer" id="qTimer"></span>
+        <button type="button" class="info" id="qInfoBtn" popovertarget="qInfo" aria-label="Why is there a limit?">?</button>
+        <span class="pool" id="qPool"></span>
+        <span class="gauge" aria-hidden="true"><i id="qGauge"></i></span>
+      </div>
+      <div class="pop" id="qInfo" popover role="dialog" aria-labelledby="qInfoTitle">
+        <button type="button" class="close" popovertarget="qInfo" popovertargetaction="hide" aria-label="Close">×</button>
+        <h3 id="qInfoTitle">Why is there a limit?</h3>
+        <p>Irminsul is a free test build. AI-written answers run on free API tiers with no budget behind them, so they're shared fairly:</p>
+        <ul>
+          <li><strong>Your AI answers</strong> refill one at a time, like stamina, so there's always more later.</li>
+          <li><strong>The shared pool</strong> refills steadily all day instead of at midnight, so players in every time zone get a turn.</li>
+          <li><strong>Answers from game data are always free:</strong> stats, passives, constellations, set bonuses and repeat questions never count.</li>
+        </ul>
+        <p>No sign-in and no tracking. The counter only remembers your connection for a while, in memory, and nothing about you is saved.</p>
+      </div>
+    </div>
+    <aside class="side" aria-label="Details">
+      <div class="panel dossier" id="dossier"><div class="pad"><p class="placeholder">Characters you ask about or pick appear here with their full official details.</p></div></div>
+      <div class="panel" id="videoPanel" hidden></div>
+      <div class="panel trace" id="tracePanel" hidden></div>
+    </aside>
+  </div>
+</section>
+
+<footer>
+  <span>Unofficial fan project. Genshin Impact, its characters and art belong to HoYoverse.</span>
+  <span>Sources: in-game data (Yatta), HoYoWiki, KQM TCL (CC BY-NC-SA 4.0)</span>
+</footer>
+
+<script src="/static/app.js" defer></script>
+</body>
+</html>
