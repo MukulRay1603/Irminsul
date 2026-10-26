@@ -33,7 +33,7 @@ colorTo: yellow
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Genshin answers from official game data, with sources. No leaks.
+short_description: Genshin answers from official data, with sources
 ---
 
 # Irminsul
