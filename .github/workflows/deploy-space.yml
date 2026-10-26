@@ -1,7 +1,17 @@
 name: Deploy to Hugging Face Space
 
-# Manual only: Ray decides when a version goes public.
+# Deploys when app code lands on main (tests run first), or by hand.
 on:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - web/**
+      - config/**
+      - Dockerfile
+      - pyproject.toml
+      - uv.lock
+      - scripts/deploy_space.py
   workflow_dispatch:
     inputs:
       space:
@@ -33,5 +43,5 @@ jobs:
       - name: Upload to the Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          SPACE_ID: ${{ inputs.space }}
+          SPACE_ID: ${{ inputs.space || 'MukulRay/Irminsul' }}
         run: uv run python scripts/deploy_space.py
