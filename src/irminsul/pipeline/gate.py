@@ -51,7 +51,6 @@ def gate_linked_docs(
 
     Third-party guides (e.g. KQM) carry no release data of their own, so a doc linked to
     `character/<slug>` is only served if that character passed the gate from official data.
-    Traveler variants (`character/traveler-anemo`) count as released if the Traveler is.
     Returns (kept, dropped, unverified); without official data every linked doc is unverified.
     """
     kept, dropped, unverified = [], [], []
@@ -64,8 +63,7 @@ def gate_linked_docs(
             unverified.append(doc.doc_id)
             kept.append(doc)
             continue
-        base = "character/traveler" if eid.startswith("character/traveler") else eid
-        if base in released_characters:
+        if eid in released_characters:
             kept.append(doc)
         else:
             dropped.append((doc.doc_id, f"linked character {eid} is not released"))

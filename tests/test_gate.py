@@ -73,7 +73,7 @@ def test_linked_docs_need_released_character():
         LinkedDoc("kqm/characters/traveler-anemo#intro", "character/traveler-anemo"),
         LinkedDoc("kqm/general-mechanics/icd#intro", None),
     ]
-    released = {"character/raiden-shogun", "character/traveler"}
+    released = {"character/raiden-shogun", "character/traveler-anemo"}
     kept, dropped, unverified = gate_linked_docs(docs, released)
     assert [d.doc_id for d in kept] == [
         "kqm/characters/raiden-shogun#intro",

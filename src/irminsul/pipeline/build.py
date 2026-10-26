@@ -33,6 +33,14 @@ def _write_jsonl(path: Path, rows: list[BaseModel]) -> None:
             f.write(row.model_dump_json() + "\n")
 
 
+def check_unique_ids(docs: list) -> None:
+    """Doc ids are the upsert key downstream; a repeat would silently overwrite a doc."""
+    seen: set[str] = set()
+    dupes = sorted({d.doc_id for d in docs if d.doc_id in seen or seen.add(d.doc_id)})
+    if dupes:
+        raise ValueError(f"{len(dupes)} duplicate doc ids, e.g. {dupes[:5]}")
+
+
 def build(
     out: Path,
     cache: Path | None,
@@ -96,6 +104,7 @@ def build(
         unverified += linked_unverified
         counts["kqm"] = {"pages": len(pages), "docs": len(kqm_docs)}
         source_info["kqm"] = {"game_version": sha, "license": "CC BY-NC-SA 4.0"}
+    check_unique_ids(docs)
     _write_jsonl(out / "docs.jsonl", docs)
 
     manifest = {
