@@ -38,7 +38,7 @@ jobs:
         run: |
           staged="$(cat corpus/STAGED)"
           # The branch name comes from a merged PR: accept only the shape the update job writes.
-          [[ "$staged" =~ ^update-[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { echo "bad STAGED: $staged"; exit 1; }
+          [[ "$staged" =~ ^update-[0-9]{4}-[0-9]{2}-[0-9]{2}(-[0-9]+)?$ ]] || { echo "bad STAGED: $staged"; exit 1; }
           uv run irminsul-publish promote --repo "$HF_DATASET" --branch "$staged"
           # The Space loads the dataset at boot: restart it so the site serves this build.
           uv run irminsul-publish restart-space --space MukulRay/Irminsul
