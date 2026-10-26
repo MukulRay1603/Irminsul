@@ -2,8 +2,30 @@
 <html lang="en" data-mode="dark">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Irminsul</title>
+<meta name="description" content="Genshin answers from official game data, with sources. No leaks.">
+<meta name="theme-color" content="#0A1811">
+<meta name="color-scheme" content="dark light">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Irminsul">
+<meta property="og:title" content="Irminsul">
+<meta property="og:description" content="Genshin answers from official game data, with sources. No leaks.">
+<meta property="og:image" content="/static/icons/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A glowing tree beside the word IRMINSUL">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Irminsul">
+<meta name="twitter:description" content="Genshin answers from official game data, with sources. No leaks.">
+<meta name="twitter:image" content="/static/icons/og.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="/static/icons/icon-192.png">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-title" content="Irminsul">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@75..125,300..700&display=swap" rel="stylesheet">
@@ -46,6 +68,7 @@
       <div><b id="fDocs">-</b>official and cited sources</div>
       <div><b id="fChars">-</b>released characters</div>
     </div>
+    <p class="waking" id="waking" role="status"></p>
   </div>
   <a class="scroll-cue" href="#characters">Browse characters</a>
 </header>
@@ -54,9 +77,14 @@
   <div class="block-head">
     <h2 id="charsTitle">Characters</h2>
     <p>Released characters only. Pick one to open the full dossier.</p>
-    <div class="filters" id="filters" role="group" aria-label="Filter by element"></div>
+    <div class="gallery-tools">
+      <label class="sr" for="gallerySearch">Search characters</label>
+      <input class="gallery-search" id="gallerySearch" type="search" autocomplete="off" spellcheck="false" placeholder="Search characters" aria-controls="gallery">
+      <div class="filters" id="filters" role="group" aria-label="Filter by element"></div>
+    </div>
   </div>
   <div class="gallery" id="gallery"></div>
+  <p class="gallery-empty" id="galleryEmpty" role="status"></p>
 </section>
 
 <section class="block" id="ask" aria-label="Conversation">
@@ -118,5 +146,6 @@
 <script src="/static/answers.js" defer></script>
 <script src="/static/app.js" defer></script>
 <script src="/static/planner.js" type="module"></script>
+<script src="/static/pwa.js" defer></script>
 </body>
 </html>
