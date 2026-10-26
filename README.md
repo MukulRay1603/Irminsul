@@ -39,18 +39,21 @@ no account and tracks no one.
       <b>Exact answers, no AI.</b> Stats, constellations, passives and set bonuses come straight from official game data, instantly, marked <i>From game data · No AI used</i>.
     </td>
     <td width="50%" valign="top">
-      <img alt="A talent card for Xiangling's Elemental Burst with the talent level slider at level 13" src="docs/images/talent-slider.webp" width="100%"><br>
-      <b>Talents with a level slider.</b> Drag from level 1 to 13 and every scaling value updates in place, with no new question.
+      <img alt="A side-by-side comparison of Raiden Shogun and Furina's level 90 base stats" src="docs/images/compare-card.webp" width="100%"><br>
+      <b>Side-by-side comparisons.</b> Two characters, one table, the higher value in gold. Official numbers, not a tier list.
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <img alt="A side-by-side comparison of Raiden Shogun and Furina's level 90 base stats" src="docs/images/compare-card.webp" width="100%"><br>
-      <b>Side-by-side comparisons.</b> Two characters, one table, the higher value in gold. Official numbers, not a tier list.
+      <img alt="A talent card for Xiangling's Elemental Burst with the talent level slider at level 13" src="docs/images/talent-slider.webp" width="100%"><br>
+      <b>Talents with a level slider.</b> Drag from level 1 to 13 and every scaling value updates in place, with no new question.
     </td>
     <td width="50%" valign="top">
       <img alt="A weapon card for Engulfing Lightning with the R5 refinement selected" src="docs/images/weapon-refinement.webp" width="100%"><br>
       <b>Weapon refinements.</b> Switch R1 to R5 and the passive's numbers change on the spot.
+      <br><br>
+      <img alt="Suggested follow-up questions, with free ones marked" src="docs/images/follow-ups.webp" width="100%"><br>
+      <b>Follow-up chips.</b> Each answer suggests the natural next questions. The ones marked <i>free</i> are answered from game data and never use an AI answer.
     </td>
   </tr>
   <tr>
@@ -59,9 +62,6 @@ no account and tracks no one.
       <b>Never leaks.</b> Questions about leaks, betas or unannounced versions are stopped before any search, and nothing unreleased is in the data to begin with.
     </td>
     <td width="50%" valign="top">
-      <img alt="Suggested follow-up questions, with free ones marked" src="docs/images/follow-ups.webp" width="100%"><br>
-      <b>Follow-up chips.</b> Each answer suggests the natural next questions. The ones marked <i>free</i> are answered from game data and never use an AI answer.
-      <br><br>
       <img alt="The same comparison card in light mode" src="docs/images/compare-light.webp" width="100%"><br>
       <b>Light or dark.</b> Calm greens and gold either way.
     </td>
@@ -98,7 +98,7 @@ Every question takes the cheapest path that can answer it correctly. Most never 
 all.
 
 ```mermaid
-flowchart LR
+flowchart TD
     Q([Your question]) --> G{Guards}
     G -- leak, injection<br/>or off-topic --> R([Polite refusal<br/>nothing searched])
     G --> C{Asked<br/>before?}
@@ -147,7 +147,7 @@ status of the character they describe.
 AI answers run on free tiers, so they are shared fairly without accounts.
 
 ```mermaid
-flowchart LR
+flowchart TD
     Q([AI question]) --> P{Your allowance<br/>has an answer?}
     P -- no --> W([Refills one at a time,<br/>like stamina])
     P -- yes --> S{Shared pool<br/>has room?}
