@@ -78,6 +78,7 @@ class Character(BaseModel):
     weapon_type: str
     region: str | None = None
     title: str | None = None
+    summary: str | None = None  # official one-line description
     base_stats: BaseStats | None = None
     talents: list[Talent] = Field(default_factory=list)
     constellations: list[Constellation] = Field(default_factory=list)
@@ -108,6 +109,18 @@ class ArtifactSet(BaseModel):
     rarities: list[int]
     bonuses: dict[int, str]  # piece count -> effect text
     release: Release
+    source: SourceRef
+
+
+class Video(BaseModel):
+    """An official video linked from an entity's page, for embedding in the UI."""
+
+    entity_id: str
+    group: str  # e.g. "Character Details", "Story Teasers & Trailers"
+    title: str
+    url: str
+    youtube_id: str | None = None
+    thumbnail: str | None = None
     source: SourceRef
 
 

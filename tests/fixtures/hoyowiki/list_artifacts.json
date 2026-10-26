@@ -1,0 +1,46 @@
+{
+ "retcode": 0,
+ "message": "OK",
+ "data": {
+  "list": [
+   {
+    "entry_page_id": "11223",
+    "name": "Heart of the Furnace",
+    "filter_values": {
+     "filter_key_43": {
+      "values": [
+       "★★★★",
+       "★★★★★"
+      ]
+     },
+     "reliquary_effect": {
+      "values": [
+       "ATK",
+       "DMG Bonus"
+      ]
+     }
+    }
+   },
+   {
+    "entry_page_id": "11222",
+    "name": "Scarlet Proof",
+    "filter_values": {
+     "reliquary_effect": {
+      "values": [
+       "ATK",
+       "DMG Bonus",
+       "CRIT Rate"
+      ]
+     },
+     "filter_key_43": {
+      "values": [
+       "★★★★",
+       "★★★★★"
+      ]
+     }
+    }
+   }
+  ],
+  "total": 2
+ }
+}

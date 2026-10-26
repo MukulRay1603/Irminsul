@@ -1,0 +1,119 @@
+{
+ "retcode": 0,
+ "message": "OK",
+ "data": {
+  "list": [
+   {
+    "entry_page_id": "11828",
+    "name": "Valeriy",
+    "filter_values": {
+     "character_vision": {
+      "values": [
+       "Electro"
+      ]
+     },
+     "character_region": {
+      "values": [
+       "Snezhnaya"
+      ]
+     }
+    }
+   },
+   {
+    "entry_page_id": "11827",
+    "name": "Mitya",
+    "filter_values": {
+     "character_vision": {
+      "values": [
+       "Electro"
+      ]
+     },
+     "character_region": {
+      "values": [
+       "Snezhnaya"
+      ]
+     }
+    }
+   },
+   {
+    "entry_page_id": "11609",
+    "name": "Traveler (Cryo)",
+    "filter_values": {
+     "character_rarity": {
+      "values": [
+       "5-Star"
+      ]
+     },
+     "character_vision": {
+      "values": [
+       "Cryo"
+      ]
+     },
+     "character_weapon": {
+      "values": [
+       "Sword"
+      ]
+     },
+     "character_property": {
+      "values": [
+       "ATK"
+      ]
+     }
+    }
+   },
+   {
+    "entry_page_id": "20",
+    "name": "Traveler",
+    "filter_values": {
+     "character_weapon": {
+      "values": [
+       "Sword"
+      ]
+     },
+     "character_rarity": {
+      "values": [
+       "5-Star"
+      ]
+     },
+     "character_property": {
+      "values": [
+       "ATK"
+      ]
+     }
+    }
+   },
+   {
+    "entry_page_id": "2",
+    "name": "Lisa",
+    "filter_values": {
+     "character_property": {
+      "values": [
+       "Elemental Mastery"
+      ]
+     },
+     "character_rarity": {
+      "values": [
+       "4-Star"
+      ]
+     },
+     "character_region": {
+      "values": [
+       "Mondstadt"
+      ]
+     },
+     "character_vision": {
+      "values": [
+       "Electro"
+      ]
+     },
+     "character_weapon": {
+      "values": [
+       "Catalyst"
+      ]
+     }
+    }
+   }
+  ],
+  "total": 5
+ }
+}

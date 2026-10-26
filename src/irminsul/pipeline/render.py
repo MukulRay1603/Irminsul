@@ -1,6 +1,6 @@
 """Render entities into retrievable Markdown docs with stable ids."""
 
-from irminsul.schema import ArtifactSet, Character, Doc, Weapon, slugify
+from irminsul.schema import ArtifactSet, Character, Doc, ReleaseStatus, Weapon, slugify
 
 TALENT_TITLES = {
     "normal_attack": "Normal Attack",
@@ -21,12 +21,20 @@ def _pct(value: float | None, stat: str | None) -> str:
 
 def character_docs(c: Character) -> list[Doc]:
     common = {"entity_id": c.id, "release": c.release, "source": c.source}
+    descriptor = " ".join(
+        part for part in (f"{c.rarity}★" if c.rarity else "", c.element, c.weapon_type) if part
+    )
     lines = [
         f"# {c.name}" + (f" — {c.title}" if c.title else ""),
-        f"{c.rarity}★ {c.element} {c.weapon_type} character"
-        + (f" from {c.region}" if c.region else "")
-        + ".",
+        f"{descriptor} character" + (f" from {c.region}" if c.region else "") + ".",
     ]
+    if c.release.status == ReleaseStatus.ANNOUNCED:
+        lines.append(
+            "Officially announced by HoYoverse but not yet playable. Only officially "
+            "published information is included; the full kit is not official yet."
+        )
+    if c.summary:
+        lines.append(c.summary)
     if c.release.released_at:
         lines.append(f"Released: {c.release.released_at:%Y-%m-%d}.")
     if s := c.base_stats:
@@ -34,11 +42,12 @@ def character_docs(c: Character) -> list[Doc]:
             f"Base stats at Lv. {s.level}: HP {s.hp:.0f}, ATK {s.atk:.0f}, DEF {s.defense:.0f}, "
             f"{s.bonus_stat} {_pct(s.bonus_value, s.bonus_stat)} (ascension stat)."
         )
-    lines.append(
-        "Talents: "
-        + "; ".join(f"{TALENT_TITLES.get(t.kind, t.kind)}: {t.name}" for t in c.talents)
-        + "."
-    )
+    if c.talents:
+        lines.append(
+            "Talents: "
+            + "; ".join(f"{TALENT_TITLES.get(t.kind, t.kind)}: {t.name}" for t in c.talents)
+            + "."
+        )
     docs = [
         Doc(
             doc_id=f"{c.id}#overview",
