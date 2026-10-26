@@ -380,3 +380,24 @@ def test_alternative_citation_styles_are_normalised():
     answer = Engine(store(), FakeIndex(), llm).ask("How much ER does Raiden need?")
     assert answer.route == "rag" and "[1]" in answer.text and "【" not in answer.text
     assert answer.trace["cited"] == [1] and not answer.trace["uncited_answer"]
+
+
+def test_all_constellations_is_an_exact_answer_but_best_one_is_not():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    every = engine.ask("What are Raiden Shogun's constellations?")
+    assert every.route == "exact" and every.card["type"] == "constellations"
+    assert engine.ask("Which Raiden Shogun constellation is best?").route == "rag"
+
+
+def test_repeated_searches_reuse_results():
+    calls = []
+
+    class CountingIndex(FakeIndex):
+        def search(self, question, **kwargs):
+            calls.append(question)
+            return super().search(question, **kwargs)
+
+    engine = Engine(store(), CountingIndex(), None)  # no LLM: answers aren't cached
+    engine.ask("How much ER does Raiden need?")
+    engine.ask("how much ER does Raiden need")
+    assert len(calls) == 1
