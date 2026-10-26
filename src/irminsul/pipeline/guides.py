@@ -71,6 +71,7 @@ def reaction_guides(docs: list[Doc], now: datetime) -> list[Doc]:
         pattern = re.compile(re.escape(reaction), re.I)
         found: dict[str, list[str]] = defaultdict(list)
         urls: list[str] = []
+        first_url: dict[str, str] = {}  # per section: the page a guide's link should open
         seen: set[str] = set()
         for doc in official:
             for raw in _SENTENCES.split(doc.text):
@@ -84,10 +85,14 @@ def reaction_guides(docs: list[Doc], now: datetime) -> list[Doc]:
                 section = _kind(sentence, reaction)
                 if len(found[section]) < MAX_PER_SECTION:
                     found[section].append(f"- {_who(doc)}: {sentence}")
+                    first_url.setdefault(section, doc.source.url)
                     if doc.source.url not in urls:
                         urls.append(doc.source.url)
         if not found:
             continue
+        # Link the guide to the page that defines the reaction (what turns into it), not to
+        # whichever character happened to be quoted first.
+        primary = next(first_url[key] for key, _ in SECTIONS if key in first_url)
         lines = [
             f"# {reaction} (reaction guide)",
             f"{reaction} appears in the official descriptions of released characters and "
@@ -106,7 +111,7 @@ def reaction_guides(docs: list[Doc], now: datetime) -> list[Doc]:
                 release=Release(status=ReleaseStatus.RELEASED),
                 source=SourceRef(
                     source="official-kits",
-                    url=urls[0],
+                    url=primary,
                     tier=Tier.OFFICIAL,
                     fetched_at=now,
                     refs=urls[:50],

@@ -95,7 +95,12 @@ function labelCitations(container, citations) {
     const adjacent = prev && prev.dataset.n === a.dataset.n && (a.previousSibling === prev
       || (a.previousSibling?.nodeType === 3 && !a.previousSibling.textContent.trim() && a.previousSibling.previousSibling === prev));
     if (adjacent) { a.remove(); return; }
+    // One button per source within a paragraph, bullet or table cell keeps the text calm
+    const block = a.closest("p, li, td, blockquote") || container;
+    const label = sourceLabel(c);
+    if ([...block.querySelectorAll(".src-pill[data-labelled]")].some(p => p.textContent === label)) { a.remove(); return; }
     linkSource(a, c);
+    a.dataset.labelled = "";
     prev = a;
   });
 }
@@ -287,6 +292,7 @@ const BADGES = {
   no_llm: ["AI answers off", "Game-data answers still work", "busy"],
   rag_empty: ["No sources found", "Not in released data", "busy"],
   no_allowance: ["AI answers used up for now", "They refill over time", "busy"],
+  spoiler: ["Past your story point", "Spoiler filter", "story"],
 };
 
 function answerHeader(route, version, nSources) {

@@ -1,0 +1,24 @@
+{
+ "response": 200,
+ "data": {
+  "id": 1,
+  "name": "The Fox in the Dandelion Sea",
+  "rank": 4,
+  "icon": "UI_ItemIcon_100188",
+  "volume": [
+   {
+    "id": 100188,
+    "name": "The Fox in the Dandelion Sea (I)",
+    "description": "\"Dandelion, Dandelion, ride the wind to a faraway land,\" the Fox chants.\\nAn unforgettable Mondstadt fairytale about a hunter and a fox. The Fox in the Dandelion Sea, an 11-part story, begins here.",
+    "storyId": "7"
+   },
+   {
+    "id": 100189,
+    "name": "The Fox in the Dandelion Sea (II)",
+    "description": "\"Be good and stay put.\" Trapped by a Mist Flower, what does fate have in store by the fox who met a hunter?\\nThe story of the Hunter and the Fox continues in Part 2.",
+    "storyId": "8"
+   }
+  ],
+  "route": "The Fox in the Dandelion Sea"
+ }
+}

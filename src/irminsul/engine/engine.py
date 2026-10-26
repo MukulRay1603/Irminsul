@@ -2,10 +2,13 @@
 
 Order of operations (cheapest and safest first):
 1. guards: refuse injection, leaks/future versions and off-topic questions (no LLM)
-2. cache: identical questions are answered once
-3. exact: single-entity stat/passive questions answered from game data (no LLM);
+2. cache: identical questions are answered once (per story point)
+3. story-safe mode: a question naming a character released after the player's story point
+   gets a gentle "past your story point" reply instead of the answer
+4. exact: single-entity stat/passive questions answered from game data (no LLM);
    announced characters get the official overview only
-4. RAG: hybrid retrieval + re-rank, then an LLM writes an answer citing numbered sources
+5. RAG: hybrid retrieval + re-rank (minus passages past the story point), then an LLM writes
+   an answer citing numbered sources
 Every answer carries a trace: route, retrieval hits and scores, provider, tokens, latency.
 """
 
@@ -15,6 +18,7 @@ from collections import OrderedDict
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 
+from irminsul import story
 from irminsul.engine import grounding, guards
 from irminsul.engine.cards import pct
 from irminsul.engine.entities import EntityStore, Match
@@ -64,6 +68,10 @@ ALLOWANCE_REPLY = (
     "and answers straight from game data, like stats and passives, are always free."
 )
 SOURCE_WORDS = 180
+SPOILER_REPLY = (
+    "**{name}** comes after your story point (you've finished up to {label}), so I'm keeping "
+    "this hidden to avoid spoilers. Choose **Show anyway** if you'd like the answer."
+)
 
 
 # Some models (gpt-oss) cite as 【3】 or 【3†source】 whatever the prompt says; ours is [3].
@@ -135,17 +143,36 @@ class Engine:
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
 
-    def ask(self, question: str, allow_llm: bool = True, out_of_allowance: bool = False) -> Answer:
+    def ask(
+        self,
+        question: str,
+        allow_llm: bool = True,
+        out_of_allowance: bool = False,
+        story_until: str | None = None,
+    ) -> Answer:
+        """`story_until` (a key of story.STORY_POINTS) turns on story-safe mode."""
         start = time.perf_counter()
-        answer = self._ask(question.strip(), allow_llm, out_of_allowance)
-        answer.follow_ups = follow_ups(self.store, question.strip(), answer)
+        point = story.point(story_until)
+        answer = self._ask(question.strip(), allow_llm, out_of_allowance, point)
+        answer.follow_ups = self._follow_ups(question.strip(), answer)
+        _mark_filter(answer, point)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         return answer
 
-    def _ask(self, question: str, allow_llm: bool, out_of_allowance: bool) -> Answer:
-        answer = self._before_llm(question)
+    def _follow_ups(self, question: str, answer: Answer) -> list[dict]:
+        # Suggestions about a character past the story point would spoil it all over again.
+        return [] if answer.route == "spoiler" else follow_ups(self.store, question, answer)
+
+    def _ask(
+        self,
+        question: str,
+        allow_llm: bool,
+        out_of_allowance: bool,
+        point: story.StoryPoint | None = None,
+    ) -> Answer:
+        answer = self._before_llm(question, point)
         if answer is None:
-            prepared = self._prepare_rag(question, allow_llm, out_of_allowance)
+            prepared = self._prepare_rag(question, allow_llm, out_of_allowance, point)
             if isinstance(prepared, Answer):
                 answer = prepared
             else:
@@ -154,11 +181,15 @@ class Engine:
                 except AllProvidersBusy:
                     return Answer(BUSY_REPLY, "busy", trace=prepared.trace)
                 answer = self._finish_rag(prepared, completion)
-        self._remember(question, answer)
+        self._remember(question, answer, point)
         return answer
 
     def ask_stream(
-        self, question: str, allow_llm: bool = True, out_of_allowance: bool = False
+        self,
+        question: str,
+        allow_llm: bool = True,
+        out_of_allowance: bool = False,
+        story_until: str | None = None,
     ) -> Iterator[tuple[str, dict]]:
         """Yield ("meta" | "delta" | "done", payload) events for server-sent streaming.
 
@@ -167,8 +198,11 @@ class Engine:
         """
         start = time.perf_counter()
         question = question.strip()
-        answer = self._before_llm(question)
-        prepared = None if answer else self._prepare_rag(question, allow_llm, out_of_allowance)
+        point = story.point(story_until)
+        answer = self._before_llm(question, point)
+        prepared = (
+            None if answer else self._prepare_rag(question, allow_llm, out_of_allowance, point)
+        )
         if isinstance(prepared, Answer):
             answer = prepared
         if answer is None:
@@ -185,14 +219,15 @@ class Engine:
                 yield "delta", {"text": BUSY_REPLY}
             if completion is not None:
                 answer = self._finish_rag(prepared, completion)
-                self._remember(question, answer)
+                self._remember(question, answer, point)
         else:
-            self._remember(question, answer)
+            self._remember(question, answer, point)
             yield (
                 "meta",
                 {"route": answer.route, "citations": [asdict(c) for c in answer.citations]},
             )
             yield "delta", {"text": answer.text}
+        _mark_filter(answer, point)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         yield (
             "done",
@@ -200,22 +235,22 @@ class Engine:
                 "route": answer.route,
                 "citations": [asdict(c) for c in answer.citations],
                 "trace": answer.trace,
-                "follow_ups": follow_ups(self.store, question, answer),
+                "follow_ups": self._follow_ups(question, answer),
                 "card": answer.card,
                 # When the output guard changed a streamed answer, the page re-renders it
                 "text": answer.text if answer.trace.get("output_guard") else None,
             },
         )
 
-    def is_free(self, question: str) -> bool:
+    def is_free(self, question: str, story_until: str | None = None) -> bool:
         """Will this be answered without the AI (refusal, cache or game data)? No side effects."""
-        return self._before_llm(question.strip()) is not None
+        return self._before_llm(question.strip(), story.point(story_until)) is not None
 
-    def _before_llm(self, question: str) -> Answer | None:
-        """Guards, cache and exact answers: everything that needs no model."""
+    def _before_llm(self, question: str, point: story.StoryPoint | None = None) -> Answer | None:
+        """Guards, cache, the story-point check and exact answers: everything with no model."""
         if refusal := guards.check(question, self.store, self.guard_cfg):
             return refusal
-        key = _normalise(question)
+        key = _cache_key(question, point)
         if key in self._cache:
             self._cache.move_to_end(key)
             cached = self._cache[key]
@@ -226,31 +261,67 @@ class Engine:
                 {**cached.trace, "cache": "hit"},
                 card=cached.card,
             )
+        if spoiler := self._past_story_point(question, point):
+            return spoiler
         return answer_exact(self.store, question, self.patches)
 
-    def _remember(self, question: str, answer: Answer) -> None:
+    def _past_story_point(self, question: str, point: story.StoryPoint | None) -> Answer | None:
+        """A gentle "past your story point" reply when the question names a character who
+        was revealed after it. The UI offers "Show anyway", which asks again with no limit."""
+        if point is None:
+            return None
+        for m in self.store.find(question):
+            # The Traveler is the player, and element words alone ("Electro") match a Traveler
+            # variant, so it never stops a question; retrieval still filters its passages.
+            if m.kind != "character" or m.entity.id.startswith("character/traveler-"):
+                continue
+            revealed_in = getattr(m.entity, "revealed_in", None)
+            if story.hides(point, revealed_in):
+                name = m.entity.name
+                return Answer(
+                    SPOILER_REPLY.format(name=name, label=point.label),
+                    "spoiler",
+                    trace={"spoiler": {"name": name, "revealed_in": revealed_in}},
+                )
+        return None
+
+    def _remember(self, question: str, answer: Answer, point: story.StoryPoint | None) -> None:
         if (
             answer.route in ("busy", "no_index", "no_llm", "no_allowance")
             or answer.route in guards.SENSITIVE_ROUTES  # never keep personal text in memory
             or answer.trace.get("cache") == "hit"
         ):
             return
-        self._cache[_normalise(question)] = answer
+        self._cache[_cache_key(question, point)] = answer
         if len(self._cache) > self.cache_size:
             self._cache.popitem(last=False)
 
     def _prepare_rag(
-        self, question: str, allow_llm: bool, out_of_allowance: bool = False
+        self,
+        question: str,
+        allow_llm: bool,
+        out_of_allowance: bool = False,
+        point: story.StoryPoint | None = None,
     ) -> "Answer | _Prepared":
         if self.index is None:
             return Answer(NO_SOURCES_REPLY, "no_index")
+        report: dict = {}
+        # Story-safe mode filters inside the search, before re-ranking and the LLM.
+        spoiler_filter = {"max_revealed": point.until, "report": report} if point else {}
         hits = self.index.search(
-            question, k=self.k, mode="hybrid", rerank=True, exclude_tiers=self.exclude_tiers
+            question,
+            k=self.k,
+            mode="hybrid",
+            rerank=True,
+            exclude_tiers=self.exclude_tiers,
+            **spoiler_filter,
         )
         hits = [
             h
             for h in hits
-            if h.chunk.release_status == "released" and h.chunk.tier not in self.exclude_tiers
+            if h.chunk.release_status == "released"
+            and h.chunk.tier not in self.exclude_tiers
+            and not story.hides(point, getattr(h.chunk, "revealed_in", None))
         ]
         trace = {
             "retrieval": [
@@ -258,6 +329,8 @@ class Engine:
                 for h in hits
             ]
         }
+        if point:
+            trace["spoiler_filter"] = story.filter_info(point, report.get("hidden", 0))
         if not hits:
             return Answer(NO_SOURCES_REPLY, "rag_empty", trace=trace)
         citations = [
@@ -326,6 +399,17 @@ class _Prepared:
     trace: dict
     llm: ChatModel
     sources: dict[int, str]  # citation number -> the source text the model was given
+
+
+def _cache_key(question: str, point: story.StoryPoint | None) -> str:
+    # Answers never cross story points: the same question can have a spoiler-free answer.
+    return f"{point.key if point else '*'}|{_normalise(question)}"
+
+
+def _mark_filter(answer: Answer, point: story.StoryPoint | None) -> None:
+    """Every answer under a story point says so in its trace ("why this answer")."""
+    if point is not None:
+        answer.trace.setdefault("spoiler_filter", story.filter_info(point, 0))
 
 
 def answer_to_dict(answer: Answer) -> dict:

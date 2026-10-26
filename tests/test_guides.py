@@ -68,3 +68,10 @@ def test_guides_never_use_unreleased_or_third_party_text():
 def test_no_guide_without_official_mentions():
     ids = {g.doc_id for g in reaction_guides(DOCS, NOW)}
     assert "mechanic/stellar-conduct#guide" not in ids
+
+
+def test_guide_links_to_the_defining_page():
+    guide = next(
+        g for g in reaction_guides(DOCS, NOW) if g.doc_id == "mechanic/lunar-charged#guide"
+    )
+    assert guide.source.url == "https://example.org/character/ineffa#talent-passive-x"

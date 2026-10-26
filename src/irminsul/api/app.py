@@ -15,8 +15,9 @@ from dataclasses import asdict
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
+from irminsul import story
 from irminsul.api.limits import Limits
 from irminsul.engine.engine import Engine
 from irminsul.engine.guards import MAX_CHARS
@@ -63,6 +64,16 @@ PERMISSIONS_POLICY = (
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=MAX_CHARS)
+    # Story-safe mode: the player's Archon Quest progress, a key of story.STORY_POINTS
+    # ("inazuma"). Omitted or null: everything released, no spoiler filter.
+    story_until: str | None = Field(default=None, max_length=32)
+
+    @field_validator("story_until")
+    @classmethod
+    def _known_story_point(cls, value: str | None) -> str | None:
+        if value is not None and value not in story.BY_KEY:
+            raise ValueError(f"must be one of: {', '.join(story.BY_KEY)}")
+        return value
 
 
 class CitationOut(BaseModel):
@@ -219,13 +230,17 @@ def sse_events(
     question: str,
     allow_llm: bool,
     out_of_allowance: bool,
+    story_until: str | None = None,
 ) -> Iterator[str]:
     """The /ask/stream body. A fresh RAG answer is paid for even if the client hangs up
     before the `done` event: the LLM call already happened, so leaving early is not free."""
     pending = False
     try:
         for kind, payload in engine.ask_stream(
-            question, allow_llm=allow_llm, out_of_allowance=out_of_allowance
+            question,
+            allow_llm=allow_llm,
+            out_of_allowance=out_of_allowance,
+            story_until=story_until,
         ):
             if kind == "meta":
                 pending = payload["route"] == "rag"
@@ -310,12 +325,17 @@ def create_app(
         """The caller's AI-answer allowance and the shared pool, both refilling over time."""
         return _quota(limits, cid_of(request))
 
+    @app.get("/api/story")
+    def story_points() -> dict:
+        """The story points the spoiler filter understands, in Archon Quest order."""
+        return {"points": [asdict(p) for p in story.STORY_POINTS]}
+
     @app.post("/ask/stream")
     def ask_stream(body: AskRequest, request: Request):
         """Server-sent events: `meta` (route + candidate citations), `delta` (text chunks),
         `done` (final route, the citations actually used, trace, and the caller's quota)."""
         cid = cid_of(request)
-        if reason := limits.allow(cid, free=engine.is_free(body.question)):
+        if reason := limits.allow(cid, free=engine.is_free(body.question, body.story_until)):
             return JSONResponse(status_code=429, content={"detail": reason})
         return StreamingResponse(
             sse_events(
@@ -325,6 +345,7 @@ def create_app(
                 body.question,
                 allow_llm=limits.llm_budget_left(),
                 out_of_allowance=not limits.has_allowance(cid),
+                story_until=body.story_until,
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -333,13 +354,16 @@ def create_app(
     @app.post("/ask", response_model=AskResponse)
     def ask(body: AskRequest, request: Request):
         cid = cid_of(request)
-        if reason := limits.allow(cid, free=engine.is_free(body.question)):
+        if reason := limits.allow(cid, free=engine.is_free(body.question, body.story_until)):
             return JSONResponse(status_code=429, content={"detail": reason})
         # Once the shared pool or the player's allowance is spent, free routes still work
         # and LLM questions get a polite reply instead.
         allow_llm = limits.llm_budget_left()
         answer = engine.ask(
-            body.question, allow_llm=allow_llm, out_of_allowance=not limits.has_allowance(cid)
+            body.question,
+            allow_llm=allow_llm,
+            out_of_allowance=not limits.has_allowance(cid),
+            story_until=body.story_until,
         )
         _spend(limits, cid, answer.route, answer.trace)
         return AskResponse(

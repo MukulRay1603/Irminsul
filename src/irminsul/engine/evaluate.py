@@ -28,13 +28,14 @@ REFUSE_ROUTES = {
     "refuse_selfharm",
     "refuse_adult",
     "refuse_cheats",
+    "spoiler",  # story-safe mode: "that's past your story point"
 }
 
 
 def evaluate(engine: Engine) -> dict:
     rows = []
     for item in load():
-        answer = engine.ask(item.question)
+        answer = engine.ask(item.question, story_until=item.story_until)
         if answer.route in ("no_llm", "no_index"):
             rows.append(
                 {
