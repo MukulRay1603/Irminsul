@@ -73,3 +73,12 @@ def test_modes_find_the_right_doc(tmp_path):
     loaded._embed = FakeEmbedder()
     assert loaded.search("stellar cryo", k=1)[0].chunk.doc_id == "stellar"
     assert len(loaded.chunks) == 4 and loaded.vectors.shape == (4, len(VOCAB))
+
+
+def test_score_skips_questions_whose_gold_docs_are_not_indexed():
+    from irminsul.retrieval.evaluate import score
+
+    index = HybridIndex.build(chunk_docs(DOCS), embedder=FakeEmbedder())
+    report = score(index, k=3, configs={"bm25": {"mode": "bm25"}})
+    assert report["questions"] == 0 and report["configs"] == {}
+    assert len(report["skipped_missing_gold"]) > 50

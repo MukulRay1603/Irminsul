@@ -353,6 +353,7 @@ dependencies = [
     { name = "bm25s" },
     { name = "fastembed" },
     { name = "httpx" },
+    { name = "huggingface-hub" },
     { name = "numpy" },
     { name = "pydantic" },
 ]
@@ -368,6 +369,7 @@ requires-dist = [
     { name = "bm25s", specifier = ">=0.3.15" },
     { name = "fastembed", specifier = ">=0.9.1" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "huggingface-hub", specifier = ">=1.33.0" },
     { name = "numpy", specifier = ">=2.5.4" },
     { name = "pydantic", specifier = ">=2.7" },
 ]

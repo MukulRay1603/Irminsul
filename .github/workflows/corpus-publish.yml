@@ -1,0 +1,46 @@
+# Publish: when a weekly corpus PR is merged, promote its staged HF branch to `main`.
+name: Publish corpus
+
+on:
+  push:
+    branches: [main]
+    paths: [corpus/STAGED]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  HF_DATASET: MukulRay/irminsul-corpus
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked --python 3.12
+
+      - name: Promote the staged build
+        if: env.HF_TOKEN != ''
+        run: uv run irminsul-publish promote --repo "$HF_DATASET" --branch "$(cat corpus/STAGED)"
+
+      - name: No token
+        if: env.HF_TOKEN == ''
+        run: echo "HF_TOKEN not set; nothing to publish." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --title "Corpus publish failed ($(date -u +%F))" \
+            --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"

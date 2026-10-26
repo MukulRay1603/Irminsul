@@ -13,6 +13,7 @@ Metrics (doc level: any chunk of a gold doc counts as finding it):
 import argparse
 import json
 import statistics
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -40,8 +41,19 @@ def load_docs(paths: list[Path]) -> list[Doc]:
 
 
 def score(index: HybridIndex, k: int = 8, configs: dict | None = None) -> dict:
-    items = [i for i in load() if i.expect != Expect.REFUSE and i.gold_doc_ids]
-    report: dict = {"questions": len(items), "k": k, "configs": {}}
+    # Skip questions whose gold docs are not in this index (e.g. CI builds have no local
+    # team notes): those measure corpus coverage, not retrieval.
+    indexed = {c.doc_id for c in index.chunks}
+    answerable = [i for i in load() if i.expect != Expect.REFUSE and i.gold_doc_ids]
+    items = [i for i in answerable if set(i.gold_doc_ids) <= indexed]
+    report: dict = {
+        "questions": len(items),
+        "skipped_missing_gold": sorted(i.id for i in answerable if i not in items),
+        "k": k,
+        "configs": {},
+    }
+    if not items:
+        return report
     for name, cfg in (configs or CONFIGS).items():
         hits_at, recalls, rrs, latencies = [], [], [], []
         by_cat: dict[str, list[int]] = defaultdict(list)
@@ -81,6 +93,12 @@ def main() -> None:
     e.add_argument("--k", type=int, default=8)
     e.add_argument("--configs", nargs="*", default=list(CONFIGS))
     e.add_argument("--out", type=Path, default=None, help="write the JSON report here")
+    e.add_argument(
+        "--min-hit",
+        type=float,
+        default=None,
+        help="exit 1 if any config's hit@k is below this (quality gate)",
+    )
     args = parser.parse_args()
 
     if args.cmd == "build":
@@ -95,6 +113,14 @@ def main() -> None:
         if args.out:
             args.out.write_text(text, encoding="utf-8")
         print(text)
+        if args.min_hit is not None:
+            low = {
+                n: c[f"hit@{args.k}"]
+                for n, c in report["configs"].items()
+                if c[f"hit@{args.k}"] < args.min_hit
+            }
+            if low:
+                sys.exit(f"retrieval quality gate failed: {low} < {args.min_hit}")
 
 
 if __name__ == "__main__":
