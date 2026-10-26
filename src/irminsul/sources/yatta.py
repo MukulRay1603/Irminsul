@@ -11,6 +11,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
 
+from irminsul.pipeline.planner import character_materials, weapon_materials
 from irminsul.schema import (
     ArtifactSet,
     BaseStats,
@@ -272,6 +273,9 @@ class YattaSource:
     def __init__(self, client: PoliteClient, lang: str = "en") -> None:
         self.client = client
         self.lang = lang
+        # Item ids each parsed character / weapon uses, keyed by entity id, for the planner.
+        self.character_materials: dict[str, dict[str, Any]] = {}
+        self.weapon_materials: dict[str, dict[str, Any]] = {}
 
     def _get(self, path: str) -> Any:
         payload = self.client.get_json(f"{API}/{path}")
@@ -287,14 +291,14 @@ class YattaSource:
         seen: set[str] = set()
         for game_id in self._get(f"{self.lang}/avatar")["items"]:
             try:
-                character = parse_character(
-                    self._get(f"{self.lang}/avatar/{game_id}"), curves, fetched_at, version
-                )
+                data = self._get(f"{self.lang}/avatar/{game_id}")
+                character = parse_character(data, curves, fetched_at, version)
             except Exception:
                 log.exception("failed to parse character %s", game_id)
                 continue
             if character.id not in seen:  # Traveler twins share one entry per element
                 seen.add(character.id)
+                self.character_materials[character.id] = character_materials(data)
                 yield character
 
     def weapons(self, fetched_at: datetime, version: str) -> Iterator[Weapon]:
@@ -303,11 +307,17 @@ class YattaSource:
             if item.get("isWeaponSkin"):
                 continue
             try:
-                yield parse_weapon(
-                    self._get(f"{self.lang}/weapon/{game_id}"), curves, fetched_at, version
-                )
+                data = self._get(f"{self.lang}/weapon/{game_id}")
+                weapon = parse_weapon(data, curves, fetched_at, version)
             except Exception:
                 log.exception("failed to parse weapon %s", game_id)
+                continue
+            self.weapon_materials[weapon.id] = weapon_materials(data)
+            yield weapon
+
+    def daily_schedule(self) -> dict[str, Any]:
+        """Domain variants open on each weekday and their rewards (for the planner)."""
+        return self._get(f"{self.lang}/dailyDungeon")
 
     def artifact_sets(self, fetched_at: datetime, version: str) -> Iterator[ArtifactSet]:
         for item in self._get(f"{self.lang}/reliquary")["items"].values():

@@ -382,6 +382,7 @@ dependencies = [
     { name = "httpx" },
     { name = "huggingface-hub" },
     { name = "numpy" },
+    { name = "pillow" },
     { name = "pydantic" },
     { name = "uvicorn" },
 ]
@@ -400,6 +401,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.27" },
     { name = "huggingface-hub", specifier = ">=1.33.0" },
     { name = "numpy", specifier = ">=2.5.4" },
+    { name = "pillow", specifier = ">=11" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "uvicorn", specifier = ">=0.30" },
 ]

@@ -22,6 +22,8 @@ import uvicorn
 
 from irminsul.api.app import cors_origins, create_app, trusted_proxy_hops
 from irminsul.api.limits import Limits
+from irminsul.api.planner import add_planner
+from irminsul.api.web import Art, add_web, load_videos
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import GuardConfig, version_from_manifest
@@ -86,7 +88,7 @@ def build_app():
         allowance_cap=int(os.environ.get("IRMINSUL_ALLOWANCE_CAP", 20)),
         allowance_regen_s=60 * int(os.environ.get("IRMINSUL_ALLOWANCE_REGEN_MIN", 30)),
     )
-    return create_app(
+    app = create_app(
         engine,
         limits,
         meta,
@@ -94,6 +96,11 @@ def build_app():
         cors=cors_origins(),
         frame_ancestors=os.environ.get("IRMINSUL_FRAME_ANCESTORS", "'none'"),
     )
+    library = os.environ.get("IRMINSUL_ART")  # local art library; never part of the repo
+    cache = Path(os.environ.get("IRMINSUL_CACHE", "/tmp/irminsul")) / "art"
+    add_web(app, engine.store, load_videos(data), Art(Path(library) if library else None, cache))
+    add_planner(app, engine.store, data)
+    return app
 
 
 def main() -> None:

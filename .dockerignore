@@ -1,4 +1,4 @@
-# Only pyproject.toml, uv.lock, README.md, LICENSE, src/ and config/ are copied into the image.
+# Only pyproject.toml, uv.lock, README.md, LICENSE, src/, config/ and web/ are copied into the image.
 # Everything else stays out of the build context, secrets above all.
 .git
 .github

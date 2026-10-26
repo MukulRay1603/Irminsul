@@ -20,6 +20,7 @@ RUN uv sync --frozen --no-dev --no-install-project
 
 COPY src ./src
 COPY config ./config
+COPY web ./web
 RUN uv sync --frozen --no-dev
 
 # Bake the small ONNX models into the image so cold starts don't download them.

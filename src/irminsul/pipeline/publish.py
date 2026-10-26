@@ -30,6 +30,7 @@ PUBLISH_FILES = (
     "weapons.jsonl",
     "artifact_sets.jsonl",
     "videos.jsonl",
+    "planner.json",
     "CHANGELOG.md",
 )
 CARD = """---
