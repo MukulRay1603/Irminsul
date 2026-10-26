@@ -26,8 +26,23 @@ def test_keep_line_tags():
 def test_parse_note_keeps_only_verified_lines():
     result = parse_note(SAMPLE, "sample.md", FETCHED_AT)
     ids = [d.doc_id for d in result.docs]
-    assert ids == ["rayy/sample#1-weapon-facts", "rayy/sample#2-banner-rules"]
-    weapon, banner = result.docs
+    assert ids == [
+        "rayy/sample#1-weapon-facts",
+        "rayy/sample#2-banner-rules",
+        "rayy/sample#3-weapon-banner",
+    ]
+    weapon, banner, weapon_banner = result.docs
+    # A bare "**CONFIRMED**" line vouches for the untagged bullets under it...
+    assert "80 wishes" in weapon_banner.text and "One Fate Point" in weapon_banner.text
+    assert "**CONFIRMED**" not in weapon_banner.text  # ...but is not content itself
+    assert "Soft pity" not in weapon_banner.text  # uncertainty tags still win
+    assert "Observed max" not in weapon_banner.text  # so do hedges in prose
+    assert "7.7%" not in weapon_banner.text  # block tags never vouch for table rows
+    # "**Label** CONFIRMED" becomes a subheading that vouches for the lines under it
+    assert "### Chronicled Wish (official FAQ)" in weapon_banner.text
+    assert "One counter carries" in weapon_banner.text
+    assert "2 Fate Points" in weapon_banner.text  # a tagged subheading vouches too
+    assert "Lightrace" not in weapon_banner.text  # "CONFIRMED in part" does not
     assert "40% chance" in weapon.text and "61.3%" in weapon.text
     assert "OPINION" not in weapon.text and "VERIFY" not in weapon.text
     assert "Hook" not in weapon.text  # production subsection skipped
@@ -39,7 +54,7 @@ def test_parse_note_keeps_only_verified_lines():
     assert weapon.source.tier == Tier.RAYY_VERIFIED
     assert weapon.source.game_version == "7.1"
     assert weapon.source.refs == ["https://gi.yatta.moe/api/v2/en/weapon/11403"]
-    assert result.kept_lines == 3
+    assert result.kept_lines == 7  # 3 explicitly tagged + 4 vouched for by block tags
 
 
 def test_leak_files_are_refused(tmp_path):
