@@ -51,6 +51,20 @@ _OPINION = re.compile(
     re.I,
 )
 _COMPARE_MAX = 3
+# "What changed in 7.1?", "What's new this patch?", "New characters in 6.0": patch notes, when
+# the question is about a version (or is just "what's new?") and asks for no opinion.
+_PATCH_ASK = re.compile(
+    r"\bnew\b|\bchang(?:e|ed|es)\b|\badded\b|\breleased?\b|\bcame out\b|\bpatch notes?\b"
+    r"|\bchangelog\b",
+    re.I,
+)
+_PATCH_SCOPE = re.compile(
+    r"\bpatch\b|\bversion\b|\bupdate\b|\bv?\d\.\d\b|\bchangelog\b"
+    r"|^\W*what(?:['’]?s| is| has)? (?:new|changed)\W*$",
+    re.I,
+)
+_PATCH_VERSION = re.compile(r"\b(?:version |v|patch )?(\d)\.(\d)\b", re.I)
+_PATCH_SHOWN = 8  # items named per group in the text answer
 
 
 def _pct(value: float | None, stat: str | None) -> str:
@@ -236,8 +250,109 @@ def compare_answer(matches: list[Match], q: str) -> Answer | None:
     )
 
 
-def answer_exact(store: EntityStore, question: str) -> Answer | None:
+def is_patch_question(question: str) -> bool:
+    return bool(
+        _PATCH_ASK.search(question)
+        and _PATCH_SCOPE.search(question)
+        and not _OPINION.search(question)
+    )
+
+
+def _names(items: list[dict], cite: dict[str, int]) -> str:
+    shown = [
+        f"{x['name']}" + (f" [{cite[x['id']]}]" if x["id"] in cite else "")
+        for x in items[:_PATCH_SHOWN]
+    ]
+    more = len(items) - _PATCH_SHOWN
+    return ", ".join(shown) + (f" and {more} more" if more > 0 else "")
+
+
+def _long_date(iso: str) -> str:
+    y, m, d = (int(x) for x in iso[:10].split("-"))
+    months = "January February March April May June July August September October November December"
+    return f"{d} {months.split()[m - 1]} {y}"
+
+
+def patch_answer(notes: dict | None, question: str) -> Answer | None:
+    """Patch notes for one version, straight from the data: no AI, and released content only."""
+    if not notes or not notes.get("live"):
+        return None
+    asked = _PATCH_VERSION.search(question)
+    version = f"{asked.group(1)}.{asked.group(2)}" if asked else notes["live"]
+    note = next((n for n in notes["versions"] if n["version"] == version), None)
+    official = Citation(1, "Official version update notices", notes["versions_source"], "official")
+    trace = {"intent": "patch", "version": version}
+    if note is None:
+        live = tuple(int(x) for x in notes["live"].split("."))
+        if tuple(int(x) for x in version.split(".")) <= live:
+            text = f"There is no Version {version} in HoYoverse's official release history. [1]"
+            return Answer(text, "exact", [official], trace)
+        names = [a["name"] for a in notes.get("announced", [])]
+        text = (
+            f"**Version {version} isn't out yet**, so there are no patch notes for it. "
+            f"The live version is {notes['live']}."
+        )
+        if names:
+            text += (
+                " Officially announced by HoYoverse but not playable yet: "
+                + ", ".join(names)
+                + ". Their kits aren't official until release."
+            )
+        card = cards.patch_card({"version": version, "upcoming": True}, notes)
+        return Answer(text + " [1]", "exact", [official], trace, card=card)
+
+    citations = [official]
+    cite: dict[str, int] = {}
+    for x in note["characters"] + note["weapons"] + note["artifact_sets"] + note["changes"]:
+        if len(citations) > 3 * _PATCH_SHOWN or x["id"] in cite:
+            continue
+        cite[x["id"]] = len(citations) + 1
+        citations.append(
+            Citation(len(citations) + 1, x["name"], x["source"], x["tier"], f"{x['id']}#patch")
+        )
+    when = "went live" if not note["live"] else "is the live version; it went live"
+    lines = [f"**Version {version}** {when} on {_long_date(note['date'])}. [1]", ""]
+    groups = (
+        ("New characters", note["characters"]),
+        ("New weapons", note["weapons"]),
+        ("New artifact sets", note["artifact_sets"]),
+    )
+    for label, items in groups:
+        if items:
+            lines.append(f"- **{label}:** {_names(items, cite)}")
+    if note["changes"]:
+        changed = [
+            f"{c['name']}"
+            + (f" ({', '.join(f['field'] for f in c['fields'][:3])})" if c["fields"] else "")
+            + (f" [{cite[c['id']]}]" if c["id"] in cite else "")
+            for c in note["changes"][:_PATCH_SHOWN]
+        ]
+        lines.append("- **Changed:** " + "; ".join(changed))
+    if note["videos"]:
+        n = len(note["videos"])
+        lines.append(f"- **New official videos:** {n}")
+    if len(lines) == 2:
+        lines.append("- Nothing new in the released data for this version.")
+    if not note["tracked"] and notes.get("tracking_since"):
+        lines += [
+            "",
+            "New weapons, artifact sets and balance changes are tracked from "
+            f"{_long_date(notes['tracking_since'])}; before that, patch notes list new "
+            "characters from their official release dates.",
+        ]
+    return Answer(
+        "\n".join(lines),
+        "exact",
+        citations,
+        trace,
+        card=cards.patch_card(note, notes),
+    )
+
+
+def answer_exact(store: EntityStore, question: str, patches: dict | None = None) -> Answer | None:
     matches = store.find(question)
+    if not matches and is_patch_question(question):
+        return patch_answer(patches, question)
     if not matches:
         return None
     announced = [

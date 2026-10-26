@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 
 from irminsul.engine.entities import EntityStore
+from irminsul.engine.exact import is_patch_question
 from irminsul.engine.types import Answer
 
 MAX_CHARS = 600
@@ -85,7 +86,8 @@ def check(question: str, store: EntityStore | None, cfg: GuardConfig) -> Answer 
         )
     named = store.find(question) if store else []
     other_game = OTHER_GAMES.search(question) and not re.search(r"genshin", question, re.I)
-    if other_game or (not named and not GENSHIN_TERMS.search(question)):
+    on_topic = named or GENSHIN_TERMS.search(question) or is_patch_question(question)
+    if other_game or not on_topic:
         return Answer(OFFTOPIC_REPLY, "refuse_offtopic", trace={"guard": "offtopic"})
     return None
 

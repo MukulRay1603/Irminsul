@@ -22,12 +22,14 @@ import uvicorn
 
 from irminsul.api.app import cors_origins, create_app, trusted_proxy_hops
 from irminsul.api.limits import Limits
+from irminsul.api.patches import add_patches, load_patch_history
 from irminsul.api.planner import add_planner
 from irminsul.api.web import Art, add_web, load_videos
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import GuardConfig, version_from_manifest
 from irminsul.engine.llm import Router
+from irminsul.engine.patches import build_patch_notes
 
 log = logging.getLogger("irminsul.serve")
 
@@ -68,12 +70,16 @@ def build_app():
     kqm = kqm_enabled()
     if not kqm:
         log.info("KQM content is switched off (IRMINSUL_KQM): answers use official + team tiers")
+    store = EntityStore.load(data)
+    videos = load_videos(data)
+    patch_notes = build_patch_notes(store, load_patch_history(data), videos)
     engine = Engine(
-        EntityStore.load(data),
+        store,
         index,
         Router.from_config(),
         guard_cfg,
         exclude_tiers=frozenset() if kqm else frozenset({"kqm"}),
+        patches=patch_notes,
     )
     meta = {
         "built_at": manifest.get("built_at"),
@@ -99,8 +105,9 @@ def build_app():
     )
     library = os.environ.get("IRMINSUL_ART")  # local art library; never part of the repo
     cache = Path(os.environ.get("IRMINSUL_CACHE", "/tmp/irminsul")) / "art"
-    add_web(app, engine.store, load_videos(data), Art(Path(library) if library else None, cache))
+    add_web(app, engine.store, videos, Art(Path(library) if library else None, cache))
     add_planner(app, engine.store, data)
+    add_patches(app, patch_notes)
     return app
 
 

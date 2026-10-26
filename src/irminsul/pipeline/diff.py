@@ -2,7 +2,8 @@
 
 Usage:
     uv run irminsul-diff --old prev/manifest.json --new data/build/manifest.json \
-        --out changelog.md [--max-drop 0.10]
+        --out changelog.md [--max-drop 0.10] \
+        [--history prev/history.json --history-out data/build/history.json]
 
 Exit code 1 if a guard trips (e.g. a source silently lost >10% of its records), so the
 weekly job fails loudly instead of publishing a broken corpus.
@@ -13,6 +14,8 @@ import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+
+from irminsul.pipeline import history
 
 GUARDED = ("characters", "weapons", "artifact_sets", "kqm")
 
@@ -147,6 +150,10 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--max-drop", type=float, default=0.10)
     parser.add_argument("--decision", type=Path, default=None, help="write decide() as JSON")
+    parser.add_argument("--history", type=Path, default=None, help="published history.json")
+    parser.add_argument(
+        "--history-out", type=Path, default=None, help="write the history with this build added"
+    )
     args = parser.parse_args()
     old = json.loads(args.old.read_text(encoding="utf-8")) if args.old and args.old.exists() else {}
     new = json.loads(args.new.read_text(encoding="utf-8"))
@@ -157,6 +164,13 @@ def main() -> None:
         args.out.write_text(text, encoding="utf-8")
     if args.decision:
         args.decision.write_text(json.dumps(decide(diff)), encoding="utf-8")
+    if args.history_out:
+        # Records and videos of the previous build sit next to its manifest (fetch-manifest).
+        old_dir = args.old.parent if args.old else args.new.parent
+        log = history.update(old, new, old_dir, args.new.parent, args.history)
+        args.history_out.write_text(
+            json.dumps(log, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+        )
     print(text)
     sys.exit(1 if problems else 0)
 

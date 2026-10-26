@@ -69,7 +69,8 @@ jobs:
         id: diff
         run: |
           uv run irminsul-diff --old prev/manifest.json --new data/build/manifest.json \
-            --out data/build/CHANGELOG.md --decision data/build/decision.json
+            --out data/build/CHANGELOG.md --decision data/build/decision.json \
+            --history prev/history.json --history-out data/build/history.json
           echo "changed=$(jq -r .changed data/build/decision.json)" >> "$GITHUB_OUTPUT"
           echo "review=$(jq -r .review data/build/decision.json)" >> "$GITHUB_OUTPUT"
           if [ "$(jq -r .changed data/build/decision.json)" != "true" ]; then
