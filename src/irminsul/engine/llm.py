@@ -38,7 +38,7 @@ class Completion:
 
 
 class ChatModel(Protocol):
-    def complete(self, messages: list[dict], max_tokens: int = 700) -> Completion: ...
+    def complete(self, messages: list[dict], max_tokens: int = 1024) -> Completion: ...
 
 
 @dataclass
@@ -48,6 +48,8 @@ class Provider:
     model: str
     api_key_env: str
     daily_requests: int
+    enabled: bool = True
+    extra: dict = field(default_factory=dict)  # provider-specific request params
     used_today: int = 0
     day: str = ""
     cooldown_until: float = 0.0
@@ -61,7 +63,8 @@ class Provider:
         if self.day != today:
             self.day, self.used_today = today, 0
         return (
-            bool(self.api_key)
+            self.enabled
+            and bool(self.api_key)
             and self.used_today < self.daily_requests
             and now >= self.cooldown_until
         )
@@ -80,11 +83,13 @@ class Router:
         data = tomllib.loads(path.read_text(encoding="utf-8"))
         return cls([Provider(**p) for p in data.get("provider", [])])
 
-    def complete(self, messages: list[dict], max_tokens: int = 700) -> Completion:
+    def complete(self, messages: list[dict], max_tokens: int = 1024) -> Completion:
+        # 1024: reasoning models (gpt-oss) need headroom beyond the visible answer.
         self.attempts = []
         for p in self.providers:
             if not p.available(time.monotonic()):
-                self.attempts.append({"provider": p.name, "skipped": "no key, cap or cooldown"})
+                reason = "disabled" if not p.enabled else "no key, cap or cooldown"
+                self.attempts.append({"provider": p.name, "skipped": reason})
                 continue
             start = time.perf_counter()
             try:
@@ -96,6 +101,7 @@ class Router:
                         "messages": messages,
                         "max_tokens": max_tokens,
                         "temperature": self.temperature,
+                        **p.extra,
                     },
                     timeout=self.timeout_s,
                 )
