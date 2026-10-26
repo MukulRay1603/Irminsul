@@ -13,7 +13,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, model_validator
 
 EVALS_DIR = Path(__file__).resolve().parents[2] / "evals"
-FILES = ("golden_manual.jsonl", "golden_generated.jsonl")
+FILES = ("golden_manual.jsonl", "golden_generated.jsonl", "golden_viewer.jsonl")
 
 
 class Category(StrEnum):
