@@ -172,12 +172,17 @@ def parse_character(
     released_at = datetime.fromtimestamp(data["release"], UTC) if data.get("release") else None
     name = data["name"]
     route = data.get("route") or name
+    element = ELEMENTS.get(data.get("element") or "", data.get("element") or "None")
+    # The Traveler has one entry per element and twin (e.g. "10000005-cryo"); the kits are
+    # identical across twins, so each element gets its own id: character/traveler-cryo.
+    if "-" in str(data["id"]):
+        name = f"{name} ({element})"
     return Character(
         id=f"character/{slugify(name)}",
         game_id=str(data["id"]),
         name=name,
         rarity=int(data.get("rank") or 0),
-        element=ELEMENTS.get(data.get("element") or "", data.get("element") or "None"),
+        element=element,
         weapon_type=WEAPON_TYPES.get(data.get("weaponType") or "", data.get("weaponType") or ""),
         region=REGIONS.get(data.get("region") or "", (data.get("region") or "").title() or None),
         title=clean((data.get("fetter") or {}).get("title")) or None,
@@ -279,13 +284,18 @@ class YattaSource:
 
     def characters(self, fetched_at: datetime, version: str) -> Iterator[Character]:
         curves = self._get("static/avatarCurve")
+        seen: set[str] = set()
         for game_id in self._get(f"{self.lang}/avatar")["items"]:
             try:
-                yield parse_character(
+                character = parse_character(
                     self._get(f"{self.lang}/avatar/{game_id}"), curves, fetched_at, version
                 )
             except Exception:
                 log.exception("failed to parse character %s", game_id)
+                continue
+            if character.id not in seen:  # Traveler twins share one entry per element
+                seen.add(character.id)
+                yield character
 
     def weapons(self, fetched_at: datetime, version: str) -> Iterator[Weapon]:
         curves = self._get("static/weaponCurve")

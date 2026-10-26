@@ -60,3 +60,23 @@ def test_docs_have_stable_ids_and_provenance(avatar_curve, weapon_curve):
     assert [(d.doc_id, d.content_hash) for d in again] == [(d.doc_id, d.content_hash) for d in docs]
     w_doc = weapon_docs(parse_weapon(load_yatta("weapon_11403"), weapon_curve, FETCHED_AT, "71F2"))
     assert "Base ATK 454" in w_doc[0].text and "61.3%" in w_doc[0].text
+
+
+def test_traveler_gets_one_id_per_element(avatar_curve):
+    data = load_yatta("avatar_10000052")
+    data.update(id="10000007-cryo", name="Traveler", element="Ice")
+    c = parse_character(data, avatar_curve, FETCHED_AT, "71F2")
+    assert (c.id, c.name, c.element) == ("character/traveler-cryo", "Traveler (Cryo)", "Cryo")
+
+
+def test_duplicate_doc_ids_fail_the_build(avatar_curve):
+    import pytest
+
+    from irminsul.pipeline.build import check_unique_ids
+
+    docs = character_docs(
+        parse_character(load_yatta("avatar_10000052"), avatar_curve, FETCHED_AT, "71F2")
+    )
+    check_unique_ids(docs)
+    with pytest.raises(ValueError, match="duplicate doc ids"):
+        check_unique_ids(docs + docs[:1])
