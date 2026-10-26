@@ -12,6 +12,7 @@ dependencies = [
 
 [project.scripts]
 irminsul-build = "irminsul.pipeline.build:main"
+irminsul-evalgen = "irminsul.evalgen:main"
 
 [dependency-groups]
 dev = [
