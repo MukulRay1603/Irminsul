@@ -7,6 +7,7 @@ Parsing is kept in pure functions so it can be tested against saved fixtures.
 """
 
 import logging
+import re
 from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Any
@@ -83,12 +84,24 @@ REGIONS = {
     "OMNI_SCOURGE": None,
 }
 TALENT_LEVELS = (1, 6, 9, 10, 13)
+ASSET_NAME = re.compile(r"[A-Za-z0-9_]{1,80}")
 
 
 def stat_name(prop: str | None) -> str | None:
     if not prop:
         return None
     return STATS.get(prop, prop.removeprefix("FIGHT_PROP_").replace("_", " ").title())
+
+
+def asset_name(name: Any) -> str | None:
+    """An official image name such as "UI_AvatarIcon_Furina", or None if it isn't one.
+
+    Records keep only these names, never images. The web app turns a name into an image
+    URL on a fixed host, so anything that could change the path is rejected here.
+    """
+    if isinstance(name, str) and ASSET_NAME.fullmatch(name) and name != "UI_Icon_Item_Temp":
+        return name
+    return None
 
 
 def _curve_value(curves: dict[str, Any], level: int, curve_type: str) -> float:
@@ -151,6 +164,7 @@ def parse_talents(raw: dict[str, Any]) -> list[Talent]:
                 name=clean(t["name"]),
                 description=clean(t.get("description")),
                 scaling=scaling,
+                icon=asset_name(t.get("icon")),
             )
         )
     return talents
@@ -191,10 +205,15 @@ def parse_character(
         talents=parse_talents(data.get("talent") or {}),
         constellations=[
             Constellation(
-                level=int(k) + 1, name=clean(c["name"]), description=clean(c.get("description"))
+                level=int(k) + 1,
+                name=clean(c["name"]),
+                description=clean(c.get("description")),
+                icon=asset_name(c.get("icon")),
             )
             for k, c in sorted((data.get("constellation") or {}).items(), key=lambda kv: int(kv[0]))
         ],
+        icon=asset_name(data.get("icon")),
+        namecard=asset_name(((data.get("other") or {}).get("nameCard") or {}).get("icon")),
         release=Release(status=ReleaseStatus.RELEASED, released_at=released_at),
         source=SourceRef(
             source="yatta",
@@ -233,6 +252,7 @@ def parse_weapon(
         passive_name=clean(passive.get("name")) or None,
         passive_by_refinement=refinements,
         description=clean(data.get("description")) or None,
+        icon=asset_name(data.get("icon")),
         # Presence in Yatta's live data = in the live game. Weapons carry no release date,
         # so the gate cross-checks them against HoYoWiki before they can be served.
         release=Release(status=ReleaseStatus.RELEASED),
@@ -258,6 +278,7 @@ def parse_artifact_set(
         name=data["name"],
         rarities=list(data.get("levelList") or []),
         bonuses=dict(zip(counts, effects, strict=False)),
+        icon=asset_name(data.get("icon")),
         release=Release(status=ReleaseStatus.RELEASED),
         source=SourceRef(
             source="yatta",
