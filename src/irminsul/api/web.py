@@ -1,6 +1,7 @@
 """The player-facing web app: static files from `web/` plus the read-only data routes it uses.
 
 - GET /                    the app (web/index.html); /static/... serves its CSS and JS
+- GET /manifest.webmanifest, /sw.js, /favicon.ico   what makes it an installable app
 - GET /api/characters      released characters for the gallery (the leak gate decides who)
 - GET /api/entity?id=...   one character, weapon or artifact set, with official videos and art
 - GET /art/{path}?w=N      resized WebP art, only when IRMINSUL_ART points at a local art
@@ -9,13 +10,15 @@
 The page has no inline script or style, so it runs under the API's strict CSP unchanged.
 """
 
+import hashlib
 import json
 import logging
+import os
 from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from irminsul.engine.entities import EntityStore
@@ -95,6 +98,15 @@ def load_videos(data: Path) -> dict[str, list[dict]]:
     return videos
 
 
+def web_version(web_dir: Path) -> str:
+    """A short hash of every file in web/: a deploy that changes any of them renames the cache."""
+    h = hashlib.sha256()
+    for path in sorted(p for p in web_dir.rglob("*") if p.is_file()):
+        h.update(path.relative_to(web_dir).as_posix().encode())
+        h.update(path.read_bytes())
+    return h.hexdigest()[:12]
+
+
 def add_web(
     app: FastAPI,
     store: EntityStore,
@@ -105,9 +117,45 @@ def add_web(
     if (web_dir / "index.html").exists():
         app.mount("/static", StaticFiles(directory=web_dir / "static"), name="static")
 
+        page = (web_dir / "index.html").read_text(encoding="utf-8")
+        # Link previews need an absolute image URL; set IRMINSUL_PUBLIC_URL on the deploy.
+        if public_url := os.environ.get("IRMINSUL_PUBLIC_URL", "").rstrip("/"):
+            page = page.replace(
+                'content="/static/icons/og.png"', f'content="{public_url}/static/icons/og.png"'
+            )
+        worker = (
+            (web_dir / "sw.js")
+            .read_text(encoding="utf-8")
+            .replace("__VERSION__", web_version(web_dir))
+        )
+        fresh = {"Cache-Control": "no-cache"}
+
         @app.get("/", include_in_schema=False)
         def index():
-            return FileResponse(web_dir / "index.html", headers={"Cache-Control": "no-cache"})
+            return HTMLResponse(page, headers=fresh)
+
+        @app.get("/manifest.webmanifest", include_in_schema=False)
+        def manifest():
+            return FileResponse(
+                web_dir / "manifest.webmanifest",
+                media_type="application/manifest+json",
+                headers=fresh,
+            )
+
+        @app.get("/sw.js", include_in_schema=False)
+        def service_worker():
+            # The worker lives at the root so it can serve the page; browsers re-check it often.
+            return Response(
+                worker,
+                media_type="text/javascript",
+                headers={**fresh, "Service-Worker-Allowed": "/"},
+            )
+
+        @app.get("/favicon.ico", include_in_schema=False)
+        def favicon():
+            return FileResponse(
+                web_dir / "static" / "icons" / "favicon-32.png", media_type="image/png"
+            )
     else:
         log.warning("no web app at %s: serving the API only", web_dir)
 

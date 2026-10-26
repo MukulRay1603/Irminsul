@@ -185,7 +185,7 @@ soundBtn.onclick = () => {
 
 /* ---------- AI-answer counter: ticks locally, re-synced from the server after every answer ---------- */
 const quotaUI = (() => {
-  let q = null, synced = 0, lastCur = null;
+  let q = null, synced = 0, lastCur = null, lastCount = "";
   const hms = s => {
     s = Math.max(0, Math.round(s));
     const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = s % 60;
@@ -204,7 +204,8 @@ const quotaUI = (() => {
     box.classList.toggle("empty", me.cur === 0);
     if (lastCur !== null && me.cur !== lastCur) { box.classList.add("tick"); setTimeout(() => box.classList.remove("tick"), 300); }
     lastCur = me.cur;
-    $("#qCount").innerHTML = `${me.cur}<small> / ${q.personal.cap} AI answers</small>`;
+    const count = `${me.cur}<small> / ${q.personal.cap} AI answers</small>`;
+    if (count !== lastCount) { $("#qCount").innerHTML = count; lastCount = count; }
     $("#qTimer").innerHTML = me.full ? "Full" : `+1 in <b>${hms(me.next)}</b>`;
     $("#qGauge").style.transform = `scaleX(${me.cur / q.personal.cap})`;
     $("#qPool").innerHTML = pool.cur > 0 ? `Shared pool <b>${pool.cur}</b> ready` : `Shared pool refills in <b>${hms(pool.next)}</b>`;
@@ -223,13 +224,16 @@ const quotaUI = (() => {
 })();
 
 /* ---------- Live data facts ---------- */
-fetch("/health").then(r => r.json()).then(h => {
+// A free host sleeps when idle: if it takes a moment to answer, say so calmly in the hero
+const waking = setTimeout(() => $("#waking").textContent = "Waking up the tree… first load can take a few seconds.", 2000);
+const awake = () => { clearTimeout(waking); $("#waking").textContent = ""; };
+fetch("/health").then(r => { awake(); return r.json(); }).then(h => {
   const v = h.corpus.game_version || "", live = v.length >= 2 ? `${v[0]}.${v[1]}` : "?";
   const keys = h.llm_providers.filter(p => p.configured).length;
   $("#dataChip").innerHTML = `Game data <b>${esc(live)}</b>` + (keys ? "" : ", AI answers off");
   $("#fVersion").textContent = live; gameVersion = live; $("#fDocs").textContent = (h.corpus.docs || 0).toLocaleString();
   $("#facts").hidden = false;
-}).catch(() => $("#dataChip").textContent = "Offline");
+}).catch(() => { awake(); $("#dataChip").textContent = "Offline"; });
 
 /* ---------- Character gallery ---------- */
 let roster = [];
@@ -237,16 +241,20 @@ fetch("/api/characters").then(r => r.json()).then(list => {
   roster = list; $("#fChars").textContent = list.length;
   const els = Object.keys(ELEMENT).filter(e => list.some(c => c.element === e));
   const icon = e => list.find(c => c.element === e && c.element_icon)?.element_icon;
-  $("#filters").innerHTML = els.map(e => `<button type="button" data-el="${e}" aria-pressed="false" title="${e}">${icon(e) ? `<img src="${esc(icon(e))}" alt="${e}" width="22" height="22">` : `<span class="el-letter">${e[0]}</span>`}</button>`).join("");
+  $("#filters").innerHTML = els.map(e => `<button type="button" data-el="${e}" aria-pressed="false" aria-label="${e}" title="${e}">${icon(e) ? `<img src="${esc(icon(e))}" alt="" width="22" height="22">` : `<span class="el-letter">${e[0]}</span>`}</button>`).join("");
   renderGallery();
 });
+const fold = s => s.normalize("NFKD").replace(/\p{M}/gu, "").toLowerCase().trim();  // case and accents don't matter
 function renderGallery() {
-  const on = $("#filters [aria-pressed=true]")?.dataset.el;
-  $("#gallery").innerHTML = roster.filter(c => !on || c.element === on).map(c =>
+  const on = $("#filters [aria-pressed=true]")?.dataset.el, term = fold($("#gallerySearch").value);
+  const shown = roster.filter(c => (!on || c.element === on) && (!term || fold(c.name).includes(term)));
+  $("#galleryEmpty").textContent = roster.length && !shown.length ? "No released character matches that." : "";
+  $("#gallery").innerHTML = shown.map(c =>
     `<button type="button" class="ccard" data-id="${esc(c.id)}" data-r="${c.rarity}" data-el="${esc(c.element)}">
        ${c.card ? `<img src="${esc(c.card)}" alt="" loading="lazy" decoding="async" width="150" height="225">` : ""}
        <span class="meta"><b>${esc(c.name)}</b><span>${"★".repeat(c.rarity)} ${esc(c.element)}</span></span></button>`).join("");
 }
+$("#gallerySearch").addEventListener("input", renderGallery);
 $("#filters").onclick = e => {
   const b = e.target.closest("button"); if (!b) return;
   const was = b.getAttribute("aria-pressed") === "true";
@@ -285,8 +293,8 @@ async function ask(q) {
   thread.insertAdjacentHTML("beforeend", `<div class="q">${esc(q)}</div>`);
   const el = document.createElement("div"); el.className = "a";
   el.classList.add("streaming");
-  el.innerHTML = `<div class="route"><i></i><span>Searching the branches…</span></div><div class="body typing" aria-live="polite"></div>`;
-  thread.append(el);
+  el.innerHTML = `<div class="route"><i></i><span>Searching the branches…</span></div><div class="body typing"></div>`;
+  thread.append(el); thread.setAttribute("aria-busy", "true");
   $("#ask").scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
   const body = $(".body", el); let text = "", done = null;
   try {
@@ -306,7 +314,7 @@ async function ask(q) {
       }
     }
   } catch (err) { setRoute(el, "busy"); body.innerHTML = `<p>${esc(err.message)}</p>`; }
-  body.classList.remove("typing"); el.classList.remove("streaming");
+  body.classList.remove("typing"); el.classList.remove("streaming"); thread.removeAttribute("aria-busy");
   busy = false; document.querySelectorAll(".ask button").forEach(b => b.disabled = false);
   if (!done) return;
   quotaUI.set(done.quota);
@@ -438,3 +446,13 @@ function paintEntity(e, box) {
     });
   } else vp.hidden = true;
 }
+
+/* ---------- Keyboard: "/" jumps to the question box, Esc leaves it ---------- */
+document.addEventListener("keydown", e => {
+  const t = e.target, typing = t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName);
+  if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // The follow-up box when it's on screen, else the big one in the hero
+    const dock = $("#dockQ"), r = dock.getBoundingClientRect(), inView = r.top < innerHeight && r.bottom > 0;
+    e.preventDefault(); (inView ? dock : $("#heroQ")).focus();
+  } else if (e.key === "Escape" && typing && t.matches("input:not([type=checkbox]):not([type=radio]), textarea")) t.blur();
+});
