@@ -162,3 +162,37 @@ class Limits:
             "allowance_regen_s": self.allowance_regen_s,
             "pool_cap": self.pool_cap,
         }
+
+
+@dataclass
+class Window:
+    """A plain sliding-window limit: at most `limit` events per client in `seconds`.
+
+    For small side endpoints (feedback) that need nothing like the allowance above. Same
+    in-memory, keyed-on-client_id approach; clients whose window has emptied are pruned.
+    """
+
+    limit: int
+    seconds: float
+    prune_every: int = 1000
+
+    _events: dict[str, deque] = field(default_factory=lambda: defaultdict(deque))
+    _since_prune: int = 0
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+
+    def allow(self, client: str, now: float | None = None) -> bool:
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            self._since_prune += 1
+            if self._since_prune >= self.prune_every:
+                self._since_prune = 0
+                for key, events in list(self._events.items()):
+                    if not events or now - events[-1] > self.seconds:
+                        del self._events[key]
+            events = self._events[client]
+            while events and now - events[0] > self.seconds:
+                events.popleft()
+            if len(events) >= self.limit:
+                return False
+            events.append(now)
+            return True

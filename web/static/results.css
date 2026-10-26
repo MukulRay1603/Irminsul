@@ -67,6 +67,9 @@
 .cat-val { text-align: right; font-variant-numeric: tabular-nums; font-weight: 600; }
 .cat-note { grid-column: 1 / -1; margin-top: -4px; font-size: 12.5px; color: var(--muted); }
 .cat.llm .cat-val { color: var(--muted); font-weight: 400; }
+/* Player votes ("What players think"): the value column holds both counts */
+.cat.votes { grid-template-columns: minmax(0, 1.3fr) minmax(60px, 2fr) auto; }
+.cat.votes .cat-val { white-space: nowrap; }
 .allpass { margin: 14px 0 0; color: var(--leaf); font-size: 14px; }
 .fails { margin-top: 14px; font-size: 14px; }
 .fails summary { cursor: pointer; color: var(--danger); }
@@ -85,5 +88,6 @@
   .tile-detail { font-size: 12.5px; }
   .rpanel { padding: 16px; }
   .cat { grid-template-columns: minmax(0, 1fr) 70px 48px; gap: 10px; }
+  .cat.votes { grid-template-columns: minmax(0, 1fr) 50px auto; }
 }
 @media (prefers-reduced-motion: reduce) { .bar-fill { animation: none; } }

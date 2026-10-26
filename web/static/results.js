@@ -115,6 +115,27 @@
     }
   }
 
+  // Anonymous 👍/👎 from the app (api/feedback.py): shown once there is at least one vote
+  const ROUTE_NAMES = { exact: "Game-data answers", rag: "AI-written answers", busy: "Busy replies" };
+  const routeName = r => ROUTE_NAMES[r] || (r.startsWith("refuse") ? "Refusals" : r.replace(/_/g, " "));
+  function renderVotes(s) {
+    if (!s || !(s.up + s.down)) return;
+    const merged = {};
+    for (const [route, c] of Object.entries(s.routes)) {
+      const m = merged[routeName(route)] ||= { up: 0, down: 0 };
+      m.up += c.up; m.down += c.down;
+    }
+    $("#playerCats").replaceChildren(...Object.entries(merged).map(([name, c]) => {
+      const row = h("div", "cat votes"), bar = h("div", "bar-track"), fill = h("i", "bar-fill");
+      fill.style.setProperty("--v", String(c.up / Math.max(1, c.up + c.down)));
+      bar.append(fill);
+      row.append(h("span", "cat-name", name), bar, h("b", "cat-val", `👍 ${c.up} · 👎 ${c.down}`));
+      return row;
+    }));
+    $("#players").hidden = false;
+  }
+  fetch("/api/feedback-summary").then(r => r.ok ? r.json() : null).then(renderVotes).catch(() => {});
+
   fetch("/static/results.json", { cache: "no-cache" })
     .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
     .then(render)

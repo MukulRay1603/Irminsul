@@ -337,6 +337,7 @@ async function ask(q, opts = {}) {
   why.onclick = () => { renderTrace(done); $("#tracePanel").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
   el.append(why); renderTrace(done);
   window.trust?.decorate(el, done);  // source check marks and the Report button (trust.js)
+  window.feedback?.decorate(el, done, q);  // 👍/👎 and the "what went wrong?" form (feedback.js)
   window.story?.decorate(el, done, q, ask);  // "Show anyway" on a spoiler stop (story.js)
   // Suggested next questions: picked from game data, free ones marked (they don't use AI answers)
   if (done.follow_ups?.length) {

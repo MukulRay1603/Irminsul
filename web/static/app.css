@@ -50,6 +50,18 @@ img { display: block; }
 .icon-btn svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; }
 .icon-btn[aria-pressed="true"] { border-color: var(--leaf); color: var(--leaf); }
 @media (max-width: 560px) { .chip { display: none; } }
+/* About: a text link, and on narrow phones a round icon button like the two beside it, so the
+   bar stays on one line (three links and two buttons don't fit at 375px) */
+.about-link svg { display: none; width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; }
+@media (max-width: 430px) {  /* #bar: wins over the 480px rules in patches.css, loaded later */
+  #bar { gap: 6px; }
+  #bar .about-link { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border-radius: 50%; }
+  #bar .about-link span { display: none; }
+  #bar .about-link svg { display: block; }
+  #bar .icon-btn { width: 34px; height: 34px; }
+  #bar .mark { letter-spacing: .12em; }
+}
+@media (max-width: 360px) { #bar .mark { display: none; } }
 
 /* Hero: the tree is the subject */
 .hero { position: relative; min-height: 100svh; display: grid; place-items: center; overflow: hidden; isolation: isolate; }
