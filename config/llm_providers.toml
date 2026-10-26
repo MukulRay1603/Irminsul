@@ -1,0 +1,36 @@
+# LLM providers, tried in order. All speak the OpenAI-compatible chat API.
+#
+# - A provider without its API key in the environment is skipped, so nothing runs (or
+#   costs anything) until Ray adds keys as secrets.
+# - `daily_requests` is our own cap per provider. Keep it BELOW the provider's free-tier
+#   limit, so we fail over before we could ever be billed.
+# - Model ids change: re-check each provider's current free models before enabling.
+#   (verify) marks values not yet confirmed for Oct 2026.
+
+[[provider]]
+name = "groq"
+base_url = "https://api.groq.com/openai/v1"
+model = "llama-3.3-70b-versatile"  # (verify)
+api_key_env = "GROQ_API_KEY"
+daily_requests = 800
+
+[[provider]]
+name = "cerebras"
+base_url = "https://api.cerebras.ai/v1"
+model = "llama-3.3-70b"  # (verify)
+api_key_env = "CEREBRAS_API_KEY"
+daily_requests = 800
+
+[[provider]]
+name = "gemini"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+model = "gemini-2.5-flash"  # (verify)
+api_key_env = "GEMINI_API_KEY"
+daily_requests = 200
+
+[[provider]]
+name = "openrouter"
+base_url = "https://openrouter.ai/api/v1"
+model = "meta-llama/llama-3.3-70b-instruct:free"  # (verify)
+api_key_env = "OPENROUTER_API_KEY"
+daily_requests = 40

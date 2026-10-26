@@ -21,6 +21,7 @@ irminsul-diff = "irminsul.pipeline.diff:main"
 irminsul-publish = "irminsul.pipeline.publish:main"
 irminsul-evalgen = "irminsul.evalgen:main"
 irminsul-index = "irminsul.retrieval.evaluate:main"
+irminsul-answer-eval = "irminsul.engine.evaluate:main"
 
 [dependency-groups]
 dev = [
