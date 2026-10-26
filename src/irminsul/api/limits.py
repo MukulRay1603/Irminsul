@@ -7,10 +7,13 @@
 - global: a daily budget of LLM-backed answers (the "ley line" budget); once spent, only free
   routes keep working and LLM questions get a polite "busy" reply. Resets at 00:00 UTC.
 All in memory: a single small Space instance needs nothing more, and a restart only resets
-counters (which errs on the generous side, never on the costly side for long).
+counters (which errs on the generous side, never on the costly side for long). Per-client
+entries that carry no information (an expired burst window, a full Resin bar) are pruned, so
+memory follows the clients active in the last day, not every client ever seen.
 """
 
 import math
+import threading
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
@@ -24,12 +27,16 @@ class Limits:
     llm_per_day: int = 500  # all users combined; keep below the providers' free tiers
     resin_cap: int = 30  # AI-written answers a player can bank
     resin_regen_s: int = 24 * 60  # +1 Resin every 24 minutes, so a full refill takes 12 hours
+    prune_every: int = 1000  # requests between sweeps of stale per-client entries
 
     _recent: dict[str, deque] = field(default_factory=lambda: defaultdict(deque))
     _daily: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     _resin: dict[str, tuple[float, float]] = field(default_factory=dict)  # (amount, at)
     _llm_used: int = 0
     _day: str = ""
+    _since_prune: int = 0
+    # FastAPI runs sync endpoints in a thread pool, so counters are updated under a lock.
+    _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
 
     def _roll_day(self) -> None:
         today = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -38,18 +45,32 @@ class Limits:
 
     def allow(self, client: str, now: float | None = None) -> str | None:
         """Record a request; return a reason string if it must be rejected."""
-        self._roll_day()
         now = time.monotonic() if now is None else now
-        window = self._recent[client]
-        while window and now - window[0] > 60:
-            window.popleft()
-        if len(window) >= self.per_minute:
-            return "Too many questions in a short time. Please wait a minute."
-        if self._daily[client] >= self.per_day:
-            return "You've reached today's question limit. Please come back tomorrow!"
-        window.append(now)
-        self._daily[client] += 1
-        return None
+        with self._lock:
+            self._roll_day()
+            self._since_prune += 1
+            if self._since_prune >= self.prune_every:
+                self._prune(now, time.time())
+            window = self._recent[client]
+            while window and now - window[0] > 60:
+                window.popleft()
+            if len(window) >= self.per_minute:
+                return "Too many questions in a short time. Please wait a minute."
+            if self._daily[client] >= self.per_day:
+                return "You've reached today's question limit. Please come back tomorrow!"
+            window.append(now)
+            self._daily[client] += 1
+            return None
+
+    def _prune(self, now: float, wall: float) -> None:
+        """Drop entries that no longer change any decision. `_daily` resets with the day."""
+        self._since_prune = 0
+        for client, window in list(self._recent.items()):
+            if not window or now - window[-1] > 60:
+                del self._recent[client]
+        for client in list(self._resin):
+            if self._resin_now(client, wall) >= self.resin_cap:
+                del self._resin[client]  # a full bar is the same as never having asked
 
     # Resin: a regenerating allowance per player
 
@@ -63,7 +84,8 @@ class Limits:
 
     def spend_resin(self, client: str, now: float | None = None) -> None:
         now = time.time() if now is None else now
-        self._resin[client] = (max(0.0, self._resin_now(client, now) - 1), now)
+        with self._lock:
+            self._resin[client] = (max(0.0, self._resin_now(client, now) - 1), now)
 
     def resin(self, client: str, now: float | None = None) -> dict:
         """What the player's counter shows: current/cap, next point and full refill in seconds."""
@@ -86,8 +108,9 @@ class Limits:
         return self._llm_used < self.llm_per_day
 
     def spend_llm(self) -> None:
-        self._roll_day()
-        self._llm_used += 1
+        with self._lock:
+            self._roll_day()
+            self._llm_used += 1
 
     def resets_in_s(self) -> int:
         now = datetime.now(UTC)

@@ -25,7 +25,8 @@ RUN uv sync --frozen --no-dev
 # Bake the small ONNX models into the image so cold starts don't download them.
 RUN uv run --no-sync python -c "from irminsul.retrieval.index import EMBED_MODEL, RERANK_MODEL, _embedder, _reranker; _embedder(EMBED_MODEL); _reranker(RERANK_MODEL)"
 
-# Hugging Face Spaces run containers as uid 1000.
+# Hugging Face Spaces run containers as uid 1000. The app runs as that non-root user; no
+# secret is ever baked in (LLM keys and HF_TOKEN arrive as Space secrets at run time).
 RUN useradd -m -u 1000 user && chown -R user /app
 USER user
 

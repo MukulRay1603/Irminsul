@@ -46,6 +46,19 @@ def test_per_client_rate_limit():
     assert c.post("/ask", json=q).status_code == 200
     r = c.post("/ask", json=q)
     assert r.status_code == 429 and "wait" in r.json()["detail"]
+    # with no trusted proxy, a forged X-Forwarded-For is ignored: still the same client
+    spoofed = c.post("/ask", json=q, headers={"x-forwarded-for": "203.0.113.9"})
+    assert spoofed.status_code == 429
+
+
+def test_rate_limit_per_client_behind_one_proxy():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    c = TestClient(create_app(engine, Limits(per_minute=1), trusted_hops=1))
+    q = {"question": "What are Raiden Shogun's base stats?"}
+    assert c.post("/ask", json=q, headers={"x-forwarded-for": "198.51.100.1"}).status_code == 200
+    # the proxy appends the real address; whatever the client wrote before it is ignored
+    forged = {"x-forwarded-for": "203.0.113.9, 198.51.100.1"}
+    assert c.post("/ask", json=q, headers=forged).status_code == 429
     # a different client (behind the proxy) is not affected
     other = c.post("/ask", json=q, headers={"x-forwarded-for": "203.0.113.9"})
     assert other.status_code == 200
