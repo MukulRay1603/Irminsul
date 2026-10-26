@@ -56,3 +56,39 @@ def test_undated_records_need_official_confirmation():
     assert gate([undated], NOW, official_names={"Other"}).dropped[0][1] == (
         "not listed on official HoYoWiki"
     )
+
+
+@dataclass
+class LinkedDoc:
+    doc_id: str
+    entity_id: str | None
+
+
+def test_linked_docs_need_released_character():
+    from irminsul.pipeline.gate import gate_linked_docs
+
+    docs = [
+        LinkedDoc("kqm/characters/raiden-shogun#intro", "character/raiden-shogun"),
+        LinkedDoc("kqm/characters/someone-new#intro", "character/someone-new"),
+        LinkedDoc("kqm/characters/traveler-anemo#intro", "character/traveler-anemo"),
+        LinkedDoc("kqm/general-mechanics/icd#intro", None),
+    ]
+    released = {"character/raiden-shogun", "character/traveler"}
+    kept, dropped, unverified = gate_linked_docs(docs, released)
+    assert [d.doc_id for d in kept] == [
+        "kqm/characters/raiden-shogun#intro",
+        "kqm/characters/traveler-anemo#intro",
+        "kqm/general-mechanics/icd#intro",
+    ]
+    assert dropped[0][0] == "kqm/characters/someone-new#intro"
+    assert "not released" in dropped[0][1] and len(dropped) == 1
+    assert not unverified
+
+
+def test_linked_docs_unverified_without_official_data():
+    from irminsul.pipeline.gate import gate_linked_docs
+
+    kept, dropped, unverified = gate_linked_docs(
+        [LinkedDoc("kqm/characters/x#intro", "character/x")], None
+    )
+    assert len(kept) == 1 and not dropped and unverified == ["kqm/characters/x#intro"]

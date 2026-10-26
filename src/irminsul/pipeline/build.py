@@ -15,7 +15,7 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from irminsul.pipeline.gate import gate
+from irminsul.pipeline.gate import gate, gate_linked_docs
 from irminsul.pipeline.render import artifact_docs, character_docs, weapon_docs
 from irminsul.schema import SCHEMA_VERSION
 from irminsul.sources.http import PoliteClient
@@ -65,8 +65,11 @@ def build(
         "artifact_sets": artifact_docs,
     }
     docs, dropped, unverified, counts = [], [], [], {}
+    kept_characters: list = []
     for kind, records in fetched.items():
         report = gate(records, now, blocklist)
+        if kind == "characters":
+            kept_characters = report.kept
         _write_jsonl(out / f"{kind}.jsonl", report.kept)
         for record in report.kept:
             docs.extend(renderers[kind](record))
@@ -82,9 +85,15 @@ def build(
             pages = list(take(kqm.pages(now, blocklist)))
         finally:
             kqm.close()
-        kqm_docs = [d for _, page in pages for d in page.docs]
+        # KQM pages carry no release data: only serve character pages for characters
+        # that passed the gate from official data in this same build.
+        released = {c.id for c in kept_characters} if "yatta" in sources and not limit else None
+        kqm_docs, linked_drops, linked_unverified = gate_linked_docs(
+            [d for _, page in pages for d in page.docs], released
+        )
         docs += kqm_docs
-        dropped += [drop for _, page in pages for drop in page.dropped]
+        dropped += [drop for _, page in pages for drop in page.dropped] + linked_drops
+        unverified += linked_unverified
         counts["kqm"] = {"pages": len(pages), "docs": len(kqm_docs)}
         source_info["kqm"] = {"game_version": sha, "license": "CC BY-NC-SA 4.0"}
     _write_jsonl(out / "docs.jsonl", docs)
