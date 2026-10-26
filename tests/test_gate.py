@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from irminsul.pipeline.gate import gate
+from irminsul.pipeline.gate import gate, normalise_name
 from irminsul.schema import Release, ReleaseStatus, SourceRef, Tier
 
 NOW = datetime(2026, 10, 26, tzinfo=UTC)
@@ -56,3 +56,17 @@ def test_undated_records_need_official_confirmation():
     assert gate([undated], NOW, official_names={"Other"}).dropped[0][1] == (
         "not listed on official HoYoWiki"
     )
+
+
+def test_name_normalisation():
+    assert normalise_name('"The Catch"') == normalise_name("The Catch")
+    assert normalise_name("Wolf’s Gravestone") == normalise_name("Wolf's Gravestone")
+    assert normalise_name("Kagura's  Verity") == normalise_name("kagura's verity")
+    assert normalise_name("Pocztówka") == normalise_name("Pocztowka")
+    assert normalise_name("Skyward Harp") != normalise_name("Skyward Atlas")
+
+
+def test_official_names_match_despite_punctuation_and_case():
+    undated = rec("Wolf's Gravestone", ReleaseStatus.RELEASED)
+    r = gate([undated], NOW, official_names={"WOLF’S GRAVESTONE"})
+    assert r.kept and not r.unverified and not r.dropped

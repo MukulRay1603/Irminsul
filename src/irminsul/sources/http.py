@@ -40,6 +40,13 @@ class PoliteClient:
 
     def get_json(self, url: str, params: dict[str, Any] | None = None) -> Any:
         key = url + ("?" + json.dumps(params, sort_keys=True) if params else "")
+        return self._request_json("GET", url, key, params=params)
+
+    def post_json(self, url: str, body: Any) -> Any:
+        key = "POST " + url + " " + json.dumps(body, sort_keys=True)
+        return self._request_json("POST", url, key, json=body)
+
+    def _request_json(self, method: str, url: str, key: str, **kwargs: Any) -> Any:
         cached = self._cache_path(key)
         if cached and cached.exists():
             return json.loads(cached.read_text(encoding="utf-8"))
@@ -47,7 +54,7 @@ class PoliteClient:
         for attempt in range(self.retries + 1):
             self._wait()
             try:
-                resp = self._client.get(url, params=params)
+                resp = self._client.request(method, url, **kwargs)
             except httpx.TransportError as e:
                 err: str = f"transport error: {e}"
             else:
