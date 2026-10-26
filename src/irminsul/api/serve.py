@@ -22,6 +22,7 @@ import uvicorn
 
 from irminsul.api.app import cors_origins, create_app, trusted_proxy_hops
 from irminsul.api.limits import Limits
+from irminsul.api.planner import add_planner
 from irminsul.api.web import Art, add_web, load_videos
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
@@ -98,6 +99,7 @@ def build_app():
     library = os.environ.get("IRMINSUL_ART")  # local art library; never part of the repo
     cache = Path(os.environ.get("IRMINSUL_CACHE", "/tmp/irminsul")) / "art"
     add_web(app, engine.store, load_videos(data), Art(Path(library) if library else None, cache))
+    add_planner(app, engine.store, data)
     return app
 
 

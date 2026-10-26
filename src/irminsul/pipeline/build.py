@@ -17,6 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from irminsul.pipeline.gate import gate, gate_linked_docs, normalise_name
+from irminsul.pipeline.planner import build_planner, parse_schedule
 from irminsul.pipeline.render import artifact_docs, character_docs, weapon_docs
 from irminsul.schema import SCHEMA_VERSION, Character, ReleaseStatus, Video, slugify
 from irminsul.sources import hoyowiki
@@ -100,6 +101,8 @@ def build(
     fetched: dict[str, list] = {}
     source_info: dict[str, dict] = {}
     official = Official({}, [], [], [])
+    yatta: YattaSource | None = None
+    schedule: list[dict] = []
 
     if "yatta" in sources:
         client = PoliteClient(cache_dir=cache)
@@ -112,6 +115,7 @@ def build(
                 "weapons": list(take(yatta.weapons(now, version))),
                 "artifact_sets": list(take(yatta.artifact_sets(now, version))),
             }
+            schedule = parse_schedule(yatta.daily_schedule())
             source_info["yatta"] = {"game_version": version}
         finally:
             client.close()
@@ -141,13 +145,12 @@ def build(
         "artifact_sets": artifact_docs,
     }
     docs, dropped, unverified, counts = [], [], [], {}
-    kept_characters: list[Character] = []
+    kept: dict[str, list] = {}
     for kind, records in fetched.items():
         # Only full builds with HoYoWiki may drop undated records it does not list.
         names = official.names.get(kind) if limit is None and official.names else None
         report = gate(records, now, blocklist, official_names=names)
-        if kind == "characters":
-            kept_characters = report.kept
+        kept[kind] = report.kept
         _write_jsonl(out / f"{kind}.jsonl", report.kept)
         for record in report.kept:
             docs.extend(renderers[kind](record))
@@ -169,7 +172,7 @@ def build(
         # KQM pages carry no release data: only serve character pages for characters
         # that are *released* according to official data in this same build.
         released = (
-            {c.id for c in kept_characters if c.release.status == ReleaseStatus.RELEASED}
+            {c.id for c in kept.get("characters", []) if c.release.status == ReleaseStatus.RELEASED}
             if "yatta" in sources and not limit
             else None
         )
@@ -181,6 +184,25 @@ def build(
         unverified += linked_unverified
         counts["kqm"] = {"pages": len(pages), "docs": len(kqm_docs)}
         source_info["kqm"] = {"game_version": sha, "license": "CC BY-NC-SA 4.0"}
+
+    if yatta is not None:
+        # Only records the gate kept reach the planner; it skips announced characters itself.
+        planner = build_planner(
+            kept.get("characters", []),
+            yatta.character_materials,
+            kept.get("weapons", []),
+            yatta.weapon_materials,
+            schedule,
+            source_info["yatta"]["game_version"],
+            now.isoformat(),
+        )
+        (out / "planner.json").write_text(
+            json.dumps(planner, ensure_ascii=False, separators=(",", ":")), encoding="utf-8"
+        )
+        counts["planner"] = {
+            "characters": len(planner["characters"]),
+            "weapons": len(planner["weapons"]),
+        }
 
     check_unique_ids(docs)
     _write_jsonl(out / "docs.jsonl", docs)
