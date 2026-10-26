@@ -1,0 +1,38 @@
+{
+  "questions": 88,
+  "skipped_missing_gold": [
+    "man-4star-guarantee",
+    "man-4star-rate",
+    "man-ar-snezhnaya",
+    "man-eye-self",
+    "man-eye-snapshot",
+    "man-maintenance-primos",
+    "man-map-pins",
+    "man-old-regions",
+    "man-raiden-er",
+    "man-shared-pity",
+    "man-stellar-def",
+    "man-stellar-enablers",
+    "man-stellar-what",
+    "man-vesna-conduct",
+    "man-xl-vs-bennett-er"
+  ],
+  "k": 8,
+  "configs": {
+    "hybrid+rerank": {
+      "hit@8": 0.989,
+      "recall@8": 0.981,
+      "mrr": 0.859,
+      "p50_ms": 605.9,
+      "p95_ms": 1326.8,
+      "hit_by_category": {
+        "build": 1,
+        "gacha": 1,
+        "passive": 1,
+        "stat": 0.98,
+        "upcoming": 1
+      }
+    }
+  },
+  "embed_model": "BAAI/bge-small-en-v1.5"
+}
