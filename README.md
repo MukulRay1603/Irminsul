@@ -105,4 +105,5 @@ key on the real client address behind the Space proxy (the default, 0, ignores
 - **Game data** via the [Yatta API](https://gi.yatta.moe) and HoYoverse's
   [HoYoWiki](https://wiki.hoyolab.com).
 
-Code: MIT, see [LICENSE](LICENSE).
+Code: **source-available, all rights reserved** (see [LICENSE](LICENSE)). You're welcome to read
+and review it; please ask before reusing it. Versions up to tag `v0` remain MIT-licensed.

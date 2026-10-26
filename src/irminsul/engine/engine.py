@@ -147,6 +147,10 @@ class Engine:
             },
         )
 
+    def is_free(self, question: str) -> bool:
+        """Will this be answered without the AI (refusal, cache or game data)? No side effects."""
+        return self._before_llm(question.strip()) is not None
+
     def _before_llm(self, question: str) -> Answer | None:
         """Guards, cache and exact answers: everything that needs no model."""
         if refusal := guards.check(question, self.store, self.guard_cfg):
