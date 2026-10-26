@@ -1,0 +1,66 @@
+{
+ "response": 200,
+ "data": {
+  "props": {
+   "FIGHT_PROP_CRITICAL_HURT": "CRIT DMG",
+   "FIGHT_PROP_HEAL_ADD": "Healing Bonus",
+   "FIGHT_PROP_ATTACK_PERCENT": "ATK",
+   "FIGHT_PROP_ELEMENT_MASTERY": "Elemental Mastery",
+   "FIGHT_PROP_HP_PERCENT": "HP",
+   "FIGHT_PROP_CHARGE_EFFICIENCY": "Energy Recharge",
+   "FIGHT_PROP_CRITICAL": "CRIT Rate",
+   "FIGHT_PROP_PHYSICAL_ADD_HURT": "Physical DMG Bonus",
+   "FIGHT_PROP_ELEC_ADD_HURT": "Electro DMG Bonus",
+   "FIGHT_PROP_ROCK_ADD_HURT": "Geo DMG Bonus",
+   "FIGHT_PROP_FIRE_ADD_HURT": "Pyro DMG Bonus",
+   "FIGHT_PROP_WATER_ADD_HURT": "Hydro DMG Bonus",
+   "FIGHT_PROP_DEFENSE_PERCENT": "DEF",
+   "FIGHT_PROP_ICE_ADD_HURT": "Cryo DMG Bonus",
+   "FIGHT_PROP_WIND_ADD_HURT": "Anemo DMG Bonus",
+   "FIGHT_PROP_GRASS_ADD_HURT": "Dendro DMG Bonus"
+  },
+  "types": {
+   "WEAPON_SWORD_ONE_HAND": "Sword",
+   "WEAPON_CATALYST": "Catalyst",
+   "WEAPON_CLAYMORE": "Claymore",
+   "WEAPON_BOW": "Bow",
+   "WEAPON_POLE": "Polearm"
+  },
+  "items": {
+   "10000052": {
+    "id": 10000052,
+    "rank": 5,
+    "name": "Raiden Shogun",
+    "element": "Electric",
+    "weaponType": "WEAPON_POLE",
+    "region": "INAZUMA",
+    "specialProp": "FIGHT_PROP_CHARGE_EFFICIENCY",
+    "bodyType": "LADY",
+    "icon": "UI_AvatarIcon_Shougun",
+    "birthday": [
+     6,
+     26
+    ],
+    "release": 1630443600,
+    "route": "Raiden Shogun"
+   },
+   "10000003": {
+    "id": 10000003,
+    "rank": 5,
+    "name": "Jean",
+    "element": "Wind",
+    "weaponType": "WEAPON_SWORD_ONE_HAND",
+    "region": "MONDSTADT",
+    "specialProp": "FIGHT_PROP_HEAL_ADD",
+    "bodyType": "LADY",
+    "icon": "UI_AvatarIcon_Qin",
+    "birthday": [
+     3,
+     14
+    ],
+    "release": 1601244000,
+    "route": "Jean"
+   }
+  }
+ }
+}

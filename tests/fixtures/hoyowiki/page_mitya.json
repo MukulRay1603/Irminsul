@@ -1,0 +1,122 @@
+{
+ "retcode": 0,
+ "message": "OK",
+ "data": {
+  "page": {
+   "id": "11827",
+   "name": "Mitya",
+   "desc": "<p>Specialist, Royal Energy Commission of Snezhnaya.</p>",
+   "beta": false,
+   "version": "1792389662",
+   "status": "Online",
+   "modules": [
+    {
+     "name": "Ascend",
+     "is_poped": false,
+     "components": [
+      {
+       "component_id": "ascension",
+       "layout": "",
+       "data": "{\"list\":[]}",
+       "style": ""
+      },
+      {
+       "component_id": "map",
+       "layout": "",
+       "data": "{}",
+       "style": ""
+      }
+     ],
+     "id": "2",
+     "is_customize_name": false,
+     "is_abstract": false,
+     "is_show_switch": false,
+     "switch": false,
+     "desc": "",
+     "repeated": false,
+     "is_submodule": false,
+     "origin_module_id": "0",
+     "without_border": false,
+     "can_delete": false,
+     "is_hidden": false,
+     "rich_text_editing": false
+    },
+    {
+     "name": "Talents",
+     "is_poped": false,
+     "components": [
+      {
+       "component_id": "talent",
+       "layout": "",
+       "data": "{\"list\":[]}",
+       "style": ""
+      }
+     ],
+     "id": "4",
+     "is_customize_name": false,
+     "is_abstract": false,
+     "is_show_switch": false,
+     "switch": false,
+     "desc": "",
+     "repeated": false,
+     "is_submodule": false,
+     "origin_module_id": "0",
+     "without_border": false,
+     "can_delete": false,
+     "is_hidden": false,
+     "rich_text_editing": false
+    },
+    {
+     "name": "Constellation",
+     "is_poped": false,
+     "components": [
+      {
+       "component_id": "summaryList",
+       "layout": "",
+       "data": "",
+       "style": ""
+      }
+     ],
+     "id": "5",
+     "is_customize_name": false,
+     "is_abstract": false,
+     "is_show_switch": false,
+     "switch": false,
+     "desc": "",
+     "repeated": false,
+     "is_submodule": false,
+     "origin_module_id": "0",
+     "without_border": false,
+     "can_delete": false,
+     "is_hidden": false,
+     "rich_text_editing": false
+    },
+    {
+     "name": "Video Collection",
+     "is_poped": false,
+     "components": [
+      {
+       "component_id": "video_collection",
+       "layout": "",
+       "data": "{\"list\":[{\"name\":\"Character Details\",\"videos\":[{\"title\":\"Transcendence Trailer - \\\"Sudden Snow\\\" | Genshin Impact #GenshinImpact #GenshinSnezhnaya\",\"url\":\"https://www.youtube.com/watch?v=y2Zcmcbrm9s\",\"duration\":315,\"img\":\"https://i.ytimg.com/vi/y2Zcmcbrm9s/maxresdefault.jpg\"}]},{\"name\":\"Story Teasers & Trailers\",\"videos\":[{\"title\":\"Version 7.0 \\\"Everwinter Without Mercy\\\" Trailer | Genshin Impact #NowSnezhnaya #GenshinSnezhnaya\",\"url\":\"https://www.youtube.com/watch?v=QgLZe9BtRJE\",\"duration\":284,\"img\":\"https://i.ytimg.com/vi/QgLZe9BtRJE/maxresdefault.jpg\"},{\"title\":\"Cutscene Animation: \\\"Death Is Near\\\" | Genshin Impact #NowSnezhnaya #GenshinSnezhnaya\",\"url\":\"https://www.youtube.com/watch?v=0oPvFaBTE8M\",\"duration\":203,\"img\":\"https://i.ytimg.com/vi/0oPvFaBTE8M/maxresdefault.jpg\"},{\"title\":\"Cutscene Animation: \\\"The Hour of Resurrection Draws Near\\\" | Genshin Impact #NowSnezhnaya\",\"url\":\"https://www.youtube.com/watch?v=s5u5aSDvk0A\",\"duration\":210,\"img\":\"https://i.ytimg.com/vi/s5u5aSDvk0A/maxresdefault.jpg\"},{\"title\":\"Version 7.1 \\\"A Rekviem for the Underworld\\\" Trailer | Genshin Impact #StoriesofFrostSnow\",\"url\":\"https://www.youtube.com/watch?v=EwWbahV3qmU\",\"duration\":254,\"img\":\"https://i.ytimg.com/vi/EwWbahV3qmU/maxresdefault.jpg\"},{\"title\":\"Cutscene Animation: \\\"The Flow of Life and Death\\\" | Genshin Impact #StoriesofFrostSnow\",\"url\":\"https://www.youtube.com/watch?v=fj_3aa897zo\",\"duration\":284,\"img\":\"https://i.ytimg.com/vi/fj_3aa897zo/maxresdefault.jpg\"},{\"title\":\"Cutscene Animation: \\\"Death Abides No Reason\\\" | Genshin Impact #StoriesofFrostSnow #GenshinSnezhnaya\",\"url\":\"https://www.youtube.com/watch?v=yjdA21x1ak8\",\"duration\":193,\"img\":\"https://i.ytimg.com/vi/yjdA21x1ak8/maxresdefault.jpg\"}]}]}\n",
+       "style": ""
+      }
+     ],
+     "id": "10055",
+     "is_customize_name": false,
+     "is_abstract": false,
+     "is_show_switch": false,
+     "switch": false,
+     "desc": "",
+     "repeated": false,
+     "is_submodule": false,
+     "origin_module_id": "0",
+     "without_border": false,
+     "can_delete": false,
+     "is_hidden": false,
+     "rich_text_editing": false
+    }
+   ]
+  }
+ }
+}

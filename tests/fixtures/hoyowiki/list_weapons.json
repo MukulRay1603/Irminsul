@@ -1,0 +1,51 @@
+{
+ "retcode": 0,
+ "message": "OK",
+ "data": {
+  "list": [
+   {
+    "entry_page_id": "11733",
+    "name": "Breezeborne Refrain",
+    "filter_values": {
+     "weapon_type": {
+      "values": [
+       "Bow"
+      ]
+     },
+     "weapon_property": {
+      "values": [
+       "CRIT Rate"
+      ]
+     },
+     "weapon_rarity": {
+      "values": [
+       "4-Star"
+      ]
+     }
+    }
+   },
+   {
+    "entry_page_id": "11732",
+    "name": "Winter's Heavy Heart",
+    "filter_values": {
+     "weapon_property": {
+      "values": [
+       "CRIT DMG"
+      ]
+     },
+     "weapon_rarity": {
+      "values": [
+       "4-Star"
+      ]
+     },
+     "weapon_type": {
+      "values": [
+       "Catalyst"
+      ]
+     }
+    }
+   }
+  ],
+  "total": 2
+ }
+}

@@ -4,46 +4,26 @@
 !.env.example
 *.pem
 *.key
-credentials*.json
-service-account*.json
 
 # Python
-venv/
+.venv/
 __pycache__/
-*.pyc
-*.pyo
 *.py[cod]
 *.egg-info/
-.eggs/
+.pytest_cache/
+.ruff_cache/
 dist/
 build/
 
-# Models / large artifacts
-models/
+# Pipeline outputs (published to the HF Dataset, not git)
+data/
 
-# IDE
+# IDE / OS
 .vscode/
 .idea/
-*.swp
-*.swo
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Misc
-*.log
-.ipynb_checkpoints/
-README_v1.md
-pyvenv.cfg
-
-# Claude Code
+# Local agent files
 .claude/
 CLAUDE.md
-
-# Session artifacts
-CHANGES_APPLIED.md
-CLEANUP_DONE_*.md
-*_VERIFICATION.md
-*_RECON.md
-ROTATION_CHECKLIST.md

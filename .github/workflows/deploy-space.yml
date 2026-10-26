@@ -1,0 +1,37 @@
+name: Deploy to Hugging Face Space
+
+# Manual only: Ray decides when a version goes public.
+on:
+  workflow_dispatch:
+    inputs:
+      space:
+        description: "Space to deploy to"
+        default: "MukulRay/Irminsul"
+        required: true
+
+# Third-party actions are pinned to commit SHAs (tag in the comment); bump them together.
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-space
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only the reviewed branches can go live.
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/v1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+      - name: Tests must pass before deploying
+        run: uv sync --locked --python 3.12 && uv run pytest -q
+      - name: Upload to the Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          SPACE_ID: ${{ inputs.space }}
+        run: uv run python scripts/deploy_space.py
