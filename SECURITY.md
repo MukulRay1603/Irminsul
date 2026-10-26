@@ -14,8 +14,7 @@ Please report privately, not in a public issue:
 2. If that option is not available, open an issue titled "Security contact request" with no
    details, and you will be contacted for them privately.
 
-Include what you did, what happened and what you expected. A proof of concept against your
-own local copy (`uv run irminsul-serve`) is ideal; please don't load-test the public Space.
+Include what you did, what happened and what you expected. A minimal proof of concept is ideal; please don't load-test the public Space.
 You should get an answer within a week. Fixes are credited in the release notes unless you
 prefer otherwise.
 

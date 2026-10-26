@@ -1,6 +1,6 @@
 # Answer eval (offline, no LLM): Oct 26 2026
 
-Engine run over the 107-item golden set with **no model calls**. Corpus: the full combined build (Yatta + HoYoWiki + KQM).
+Engine run over the 107-item golden set with **no model calls**. Corpus: the full combined build (official game data + HoYoWiki + KQM).
 
 | Route | Items | Result |
 |---|---|---|
@@ -21,8 +21,3 @@ Engine run over the 107-item golden set with **no model calls**. Corpus: the ful
 
 ## Why this matters
 85% of the golden set is answered *without a language model*: exactly, instantly, for free, and impossible to hallucinate. The LLM is only used where judgement or synthesis is needed. That's the main cost-control lever for a free public app.
-
-Reproduce:
-```bash
-uv run irminsul-answer-eval --build data/build
-```

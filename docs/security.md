@@ -7,18 +7,6 @@ Severity is for this app: a free public service with no accounts, whose main ris
 fair access, the leak policy and secrets. Tests for every fix are in `tests/test_security.py`
 unless noted.
 
-## Deployment settings
-
-| Variable | Default | Set it to |
-|---|---|---|
-| `IRMINSUL_TRUSTED_PROXY_HOPS` | `0` (ignore `X-Forwarded-For`) | `1` on a Hugging Face Space |
-| `IRMINSUL_CORS_ORIGINS` | empty (no CORS headers) | comma-separated origins of a separate front end, if any |
-| `IRMINSUL_FRAME_ANCESTORS` | `'none'` | `https://huggingface.co` to let the Space page embed the app |
-| `IRMINSUL_MAX_CONCURRENCY` | `64` | requests in flight before uvicorn answers 503 |
-
-Without `IRMINSUL_TRUSTED_PROXY_HOPS=1` on a Space every player shares the proxy's address and
-so one set of limits. That fails safe (cost stays capped) but is unfair, so set it at deploy.
-
 ## Findings
 
 | # | Finding | Severity | Status |
@@ -42,7 +30,7 @@ so one set of limits. That fails safe (cost stays capped) but is unfair, so set 
 caller could send a new value per request and bypass the burst limit, the daily cap and the AI-answer
 allowance, i.e. unlimited AI answers until the shared pool ran out for everyone.
 
-Fix: `X-Forwarded-For` is ignored unless `IRMINSUL_TRUSTED_PROXY_HOPS` is set. With N trusted
+Fix: `X-Forwarded-For` is ignored unless trusted proxy hops are configured at deploy. With N trusted
 proxies the client is the N-th entry from the right (the one our own proxy appended);
 everything to its left is ignored. If the header has fewer entries than proxies, the socket
 peer is used. IPv6 clients are grouped by /64 so one subscriber can't rotate through its
@@ -71,7 +59,7 @@ embeds need a referrer origin), `Permissions-Policy` denying camera, microphone,
 payment and USB, and `Cross-Origin-Opener-Policy: same-origin`. `/docs` and `/redoc` get a
 policy that also allows Swagger UI / ReDoc from jsDelivr.
 
-CORS stays closed: no `CORSMiddleware` unless `IRMINSUL_CORS_ORIGINS` lists origins (a `*`
+CORS stays closed: no `CORSMiddleware` unless the deployment lists allowed origins (a `*`
 entry is ignored), and then only GET/POST with `content-type`.
 
 HSTS is left to the Hugging Face front end, which terminates TLS.
@@ -132,7 +120,7 @@ also happens in the stream's `finally` once a RAG answer has started.
 ### 11. Thread safety (Low, fixed)
 FastAPI runs the sync endpoints in a thread pool. Counter updates in `Limits` now take a lock,
 so concurrent requests can't lose increments. The budget check and the spend are still
-separate steps, so up to `IRMINSUL_MAX_CONCURRENCY` in-flight answers can overshoot the shared
+separate steps, so up to the in-flight request cap's worth of answers can overshoot the shared
 pool by that many; that stays well under the providers' free tiers.
 
 ### 12. UI rendering (Info)
