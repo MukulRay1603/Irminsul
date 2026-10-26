@@ -15,7 +15,16 @@ from pathlib import Path
 from huggingface_hub import HfApi
 
 ROOT = Path(__file__).resolve().parents[1]
-SHIP = ["Dockerfile", ".dockerignore", "pyproject.toml", "uv.lock", "LICENSE", "src", "config", "web"]
+SHIP = [
+    "Dockerfile",
+    ".dockerignore",
+    "pyproject.toml",
+    "uv.lock",
+    "LICENSE",
+    "src",
+    "config",
+    "web",
+]
 SPACE_README = """---
 title: Irminsul
 emoji: 🌳
