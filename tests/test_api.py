@@ -116,3 +116,11 @@ def test_shared_pool_refills_through_the_day_not_at_midnight():
 def test_stream_done_event_carries_quota():
     r = client().post("/ask/stream", json={"question": "What are Raiden Shogun's base stats?"})
     assert '"quota"' in r.text and '"personal"' in r.text and '"pool"' in r.text
+
+
+def test_follow_ups_in_api_and_stream():
+    c = client()
+    body = c.post("/ask", json={"question": "What does Sacrificial Sword's passive do?"}).json()
+    assert body["follow_ups"] and {"question", "free"} <= set(body["follow_ups"][0])
+    r = c.post("/ask/stream", json={"question": "What does Sacrificial Sword's passive do?"})
+    assert '"follow_ups"' in r.text
