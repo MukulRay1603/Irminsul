@@ -1,5 +1,5 @@
 {
-  "questions": 88,
+  "questions": 90,
   "skipped_missing_gold": [
     "man-4star-guarantee",
     "man-4star-rate",
@@ -20,19 +20,21 @@
   "k": 8,
   "configs": {
     "hybrid+rerank": {
-      "hit@8": 0.989,
-      "recall@8": 0.981,
-      "mrr": 0.859,
-      "p50_ms": 605.9,
-      "p95_ms": 1326.8,
+      "hit@8": 0.967,
+      "recall@8": 0.959,
+      "mrr": 0.858,
+      "p50_ms": 593.8,
+      "p95_ms": 1175.8,
       "hit_by_category": {
         "build": 1,
         "gacha": 1,
-        "passive": 1,
-        "stat": 0.98,
+        "passive": 0.968,
+        "spoiler": 1,
+        "stat": 0.959,
         "upcoming": 1
       }
     }
   },
+  "spoiler_leaks": [],
   "embed_model": "BAAI/bge-small-en-v1.5"
 }
