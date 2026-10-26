@@ -1,0 +1,3 @@
+# Entity ids that must never be served, one per line (e.g. "weapon/some-name").
+# Used for manual takedowns: anything found to be unreleased or wrong goes here
+# until the source is fixed. Lines starting with '#' are comments.
