@@ -58,3 +58,15 @@ def test_new_leak_gate_drops_are_listed():
     d = compare(old, new)
     assert [x["id"] for x in d.new_drops] == ["weapon/new"]
     assert "Newly dropped by the leak gate (1)" in to_markdown(d, new, [])
+
+
+def test_decide_publishes_routine_changes_and_asks_about_new_content():
+    from irminsul.pipeline.diff import CorpusDiff, decide
+
+    assert decide(CorpusDiff()) == {"changed": False, "review": False, "reasons": []}
+    routine = decide(CorpusDiff(changed=["character/raiden-shogun#overview"], added=["kqm/x#1"]))
+    assert routine["changed"] and not routine["review"]
+    new_char = decide(CorpusDiff(added=["character/new-hero#overview"]))
+    assert new_char["review"] and "added or removed" in new_char["reasons"][0]
+    announced = decide(CorpusDiff(announced=(["Mitya"], ["Mitya", "Valeriy"])))
+    assert announced["changed"] and announced["review"] and "Valeriy" in announced["reasons"][0]

@@ -61,6 +61,34 @@ def compare(old: dict, new: dict) -> CorpusDiff:
     return d
 
 
+ENTITY_PREFIXES = ("character/", "weapon/", "artifact/")
+
+
+def decide(diff: CorpusDiff) -> dict:
+    """What the daily job does with a build: nothing, publish it alone, or ask a person first.
+
+    Routine changes (corrected text, guide updates, new official videos) publish on their own.
+    Anything that changes *who or what* the corpus covers (new or removed characters, weapons or
+    sets, a change in who is announced, new leak-gate drops) waits for a human review, because
+    that is where a leak would show up.
+    """
+    entities = [d for d in diff.added + diff.removed if d.startswith(ENTITY_PREFIXES)]
+    before, after = diff.announced
+    announced = sorted(set(before) ^ set(after))
+    reasons = []
+    if entities:
+        reasons.append(f"{len(entities)} character, weapon or set docs added or removed")
+    if announced:
+        reasons.append("announced characters changed: " + ", ".join(announced))
+    if diff.new_drops:
+        reasons.append(f"{len(diff.new_drops)} new leak-gate drops")
+    return {
+        "changed": not diff.is_empty or bool(announced),
+        "review": bool(reasons),
+        "reasons": reasons,
+    }
+
+
 def guard(old: dict, new: dict, max_drop: float = 0.10) -> list[str]:
     """Reasons to refuse publishing this build."""
     problems = []
@@ -118,13 +146,17 @@ def main() -> None:
     parser.add_argument("--new", type=Path, required=True)
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--max-drop", type=float, default=0.10)
+    parser.add_argument("--decision", type=Path, default=None, help="write decide() as JSON")
     args = parser.parse_args()
     old = json.loads(args.old.read_text(encoding="utf-8")) if args.old and args.old.exists() else {}
     new = json.loads(args.new.read_text(encoding="utf-8"))
     problems = guard(old, new, args.max_drop)
-    text = to_markdown(compare(old, new), new, problems)
+    diff = compare(old, new)
+    text = to_markdown(diff, new, problems)
     if args.out:
         args.out.write_text(text, encoding="utf-8")
+    if args.decision:
+        args.decision.write_text(json.dumps(decide(diff)), encoding="utf-8")
     print(text)
     sys.exit(1 if problems else 0)
 
