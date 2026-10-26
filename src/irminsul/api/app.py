@@ -3,14 +3,15 @@
 The engine and limits are injected (`create_app`) so tests run without data or models.
 """
 
+import json
 from dataclasses import asdict
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from irminsul.api.limits import Limits
-from irminsul.engine.engine import BUSY_REPLY, Engine
+from irminsul.engine.engine import Engine
 from irminsul.engine.guards import MAX_CHARS
 
 
@@ -63,6 +64,30 @@ def create_app(engine: Engine, limits: Limits | None = None, meta: dict | None =
             "limits": limits.snapshot(),
         }
 
+    @app.post("/ask/stream")
+    def ask_stream(body: AskRequest, request: Request):
+        """Server-sent events: `meta` (route + candidate citations), `delta` (text chunks),
+        `done` (final route, the citations actually used, trace)."""
+        if reason := limits.allow(client_id(request)):
+            return JSONResponse(status_code=429, content={"detail": reason})
+        allow_llm = limits.llm_budget_left()
+
+        def events():
+            for kind, payload in engine.ask_stream(body.question, allow_llm=allow_llm):
+                if (
+                    kind == "done"
+                    and payload["route"] == "rag"
+                    and payload["trace"].get("cache") != "hit"
+                ):
+                    limits.spend_llm()
+                yield f"event: {kind}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+        return StreamingResponse(
+            events(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
     @app.post("/ask", response_model=AskResponse)
     def ask(body: AskRequest, request: Request):
         if reason := limits.allow(client_id(request)):
@@ -70,8 +95,6 @@ def create_app(engine: Engine, limits: Limits | None = None, meta: dict | None =
         # Once the daily LLM budget is spent, free routes still work and LLM questions get "busy".
         allow_llm = limits.llm_budget_left()
         answer = engine.ask(body.question, allow_llm=allow_llm)
-        if answer.route == "no_llm" and engine.llm is not None:
-            answer.text, answer.route = BUSY_REPLY, "busy"
         if answer.route == "rag" and answer.trace.get("cache") != "hit":
             limits.spend_llm()
         return AskResponse(

@@ -12,12 +12,13 @@ Every answer carries a trace: route, retrieval hits and scores, provider, tokens
 import re
 import time
 from collections import OrderedDict
-from dataclasses import asdict
+from collections.abc import Iterator
+from dataclasses import asdict, dataclass
 
 from irminsul.engine import guards
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.exact import answer_exact
-from irminsul.engine.llm import AllProvidersBusy, ChatModel
+from irminsul.engine.llm import AllProvidersBusy, ChatModel, Completion
 from irminsul.engine.types import Answer, Citation
 
 SYSTEM_PROMPT = """You are Irminsul, a Genshin Impact assistant.
@@ -68,6 +69,66 @@ class Engine:
         return answer
 
     def _ask(self, question: str, allow_llm: bool) -> Answer:
+        answer = self._before_llm(question)
+        if answer is None:
+            prepared = self._prepare_rag(question, allow_llm)
+            if isinstance(prepared, Answer):
+                answer = prepared
+            else:
+                try:
+                    completion = prepared.llm.complete(prepared.messages)
+                except AllProvidersBusy:
+                    return Answer(BUSY_REPLY, "busy", trace=prepared.trace)
+                answer = self._finish_rag(prepared, completion)
+        self._remember(question, answer)
+        return answer
+
+    def ask_stream(self, question: str, allow_llm: bool = True) -> Iterator[tuple[str, dict]]:
+        """Yield ("meta" | "delta" | "done", payload) events for server-sent streaming.
+
+        Free routes (refusals, cache, exact answers) arrive as one delta. RAG answers stream
+        token by token; the final "done" event carries the citations the answer actually used.
+        """
+        start = time.perf_counter()
+        question = question.strip()
+        answer = self._before_llm(question)
+        prepared = None if answer else self._prepare_rag(question, allow_llm)
+        if isinstance(prepared, Answer):
+            answer = prepared
+        if answer is None:
+            yield "meta", {"route": "rag", "citations": [asdict(c) for c in prepared.citations]}
+            completion = None
+            try:
+                for item in prepared.llm.stream(prepared.messages):
+                    if isinstance(item, Completion):
+                        completion = item
+                    else:
+                        yield "delta", {"text": item}
+            except AllProvidersBusy:
+                answer = Answer(BUSY_REPLY, "busy", trace=prepared.trace)
+                yield "delta", {"text": BUSY_REPLY}
+            if completion is not None:
+                answer = self._finish_rag(prepared, completion)
+                self._remember(question, answer)
+        else:
+            self._remember(question, answer)
+            yield (
+                "meta",
+                {"route": answer.route, "citations": [asdict(c) for c in answer.citations]},
+            )
+            yield "delta", {"text": answer.text}
+        answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
+        yield (
+            "done",
+            {
+                "route": answer.route,
+                "citations": [asdict(c) for c in answer.citations],
+                "trace": answer.trace,
+            },
+        )
+
+    def _before_llm(self, question: str) -> Answer | None:
+        """Guards, cache and exact answers: everything that needs no model."""
         if refusal := guards.check(question, self.store, self.guard_cfg):
             return refusal
         key = _normalise(question)
@@ -77,14 +138,16 @@ class Engine:
             return Answer(
                 cached.text, cached.route, cached.citations, {**cached.trace, "cache": "hit"}
             )
-        answer = answer_exact(self.store, question) or self._rag(question, allow_llm)
-        if answer.route not in ("busy", "no_index", "no_llm"):
-            self._cache[key] = answer
-            if len(self._cache) > self.cache_size:
-                self._cache.popitem(last=False)
-        return answer
+        return answer_exact(self.store, question)
 
-    def _rag(self, question: str, allow_llm: bool) -> Answer:
+    def _remember(self, question: str, answer: Answer) -> None:
+        if answer.route in ("busy", "no_index", "no_llm") or answer.trace.get("cache") == "hit":
+            return
+        self._cache[_normalise(question)] = answer
+        if len(self._cache) > self.cache_size:
+            self._cache.popitem(last=False)
+
+    def _prepare_rag(self, question: str, allow_llm: bool) -> "Answer | _Prepared":
         if self.index is None:
             return Answer(NO_SOURCES_REPLY, "no_index")
         hits = self.index.search(question, k=self.k, mode="hybrid", rerank=True)
@@ -109,23 +172,37 @@ class Engine:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": f"Sources:\n{sources}\n\nQuestion: {question}"},
         ]
+        if self.llm is not None and not allow_llm:  # the API's daily LLM budget is spent
+            return Answer(BUSY_REPLY, "busy", trace=trace)
         llm = self.llm if allow_llm else None
         if llm is None:
             return Answer(NO_SOURCES_REPLY, "no_llm", citations, trace)
-        try:
-            completion = llm.complete(messages)
-        except AllProvidersBusy:
-            return Answer(BUSY_REPLY, "busy", trace=trace)
+        return _Prepared(messages, citations, trace, llm)
+
+    @staticmethod
+    def _finish_rag(prepared: "_Prepared", completion: Completion) -> Answer:
         used = {int(n) for n in re.findall(r"\[(\d+)\]", completion.text)}
-        cited = [c for c in citations if c.n in used]
-        trace.update(
-            provider=completion.provider,
-            model=completion.model,
-            tokens={"prompt": completion.prompt_tokens, "completion": completion.completion_tokens},
-            cited=sorted(used),
-            uncited_answer=not cited,
-        )
-        return Answer(completion.text.strip(), "rag", cited or citations, trace)
+        cited = [c for c in prepared.citations if c.n in used]
+        trace = {
+            **prepared.trace,
+            "provider": completion.provider,
+            "model": completion.model,
+            "tokens": {
+                "prompt": completion.prompt_tokens,
+                "completion": completion.completion_tokens,
+            },
+            "cited": sorted(used),
+            "uncited_answer": not cited,
+        }
+        return Answer(completion.text.strip(), "rag", cited or prepared.citations, trace)
+
+
+@dataclass
+class _Prepared:
+    messages: list[dict]
+    citations: list[Citation]
+    trace: dict
+    llm: ChatModel
 
 
 def answer_to_dict(answer: Answer) -> dict:
