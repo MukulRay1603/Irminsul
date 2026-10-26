@@ -1,21 +1,25 @@
-MIT License
+Copyright (c) 2026 Mukul Rayana. All rights reserved.
 
-Copyright (c) 2026 Mukul Rayana
+Irminsul v1 is source-available, not open source. This repository is public so that its code,
+design and evaluation results can be read and reviewed.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+No licence is granted to copy, modify, merge, publish, distribute, sublicense, sell, deploy or
+otherwise use this software, its documentation or its data, in whole or in part, beyond:
+  - viewing the repository, and
+  - the use and forking within GitHub that GitHub's Terms of Service allow for public
+    repositories.
+For any other use, ask the copyright holder first (open an issue on this repository).
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+Earlier versions: the code at tag v0 and in commits before the v1 rework was released under the
+MIT License. That licence continues to apply to those earlier versions only.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+Third-party material keeps its own terms and is not covered by this notice:
+  - Genshin Impact names, text, data and artwork are trademarks and copyrights of HoYoverse.
+    Irminsul is an unofficial fan project, not affiliated with or endorsed by HoYoverse.
+  - Content derived from the KQM Theorycrafting Library remains under the KQM community's
+    licence and attribution requirements.
+  - Third-party libraries are used under their own licences.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED. IN NO EVENT
+SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR
+ITS USE.

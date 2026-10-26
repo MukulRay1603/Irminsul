@@ -41,26 +41,27 @@ def test_validation_rejects_empty_and_huge_questions():
 
 def test_per_client_rate_limit():
     c = client(Limits(per_minute=2, per_day=100))
-    q = {"question": "What are Raiden Shogun's base stats?"}
-    assert c.post("/ask", json=q).status_code == 200
-    assert c.post("/ask", json=q).status_code == 200
-    r = c.post("/ask", json=q)
+    # Distinct questions that need the AI (a repeat would be a free cache hit)
+    q = [{"question": f"How much Energy Recharge does Raiden need in team {i}?"} for i in range(4)]
+    assert c.post("/ask", json=q[0]).status_code == 200
+    assert c.post("/ask", json=q[1]).status_code == 200
+    r = c.post("/ask", json=q[2])
     assert r.status_code == 429 and "wait" in r.json()["detail"]
     # with no trusted proxy, a forged X-Forwarded-For is ignored: still the same client
-    spoofed = c.post("/ask", json=q, headers={"x-forwarded-for": "203.0.113.9"})
+    spoofed = c.post("/ask", json=q[3], headers={"x-forwarded-for": "203.0.113.9"})
     assert spoofed.status_code == 429
 
 
 def test_rate_limit_per_client_behind_one_proxy():
     engine = Engine(store(), FakeIndex(), FakeLLM())
     c = TestClient(create_app(engine, Limits(per_minute=1), trusted_hops=1))
-    q = {"question": "What are Raiden Shogun's base stats?"}
-    assert c.post("/ask", json=q, headers={"x-forwarded-for": "198.51.100.1"}).status_code == 200
+    q = [{"question": f"Is Raiden good in team {i}?"} for i in range(3)]  # AI questions
+    assert c.post("/ask", json=q[0], headers={"x-forwarded-for": "198.51.100.1"}).status_code == 200
     # the proxy appends the real address; whatever the client wrote before it is ignored
     forged = {"x-forwarded-for": "203.0.113.9, 198.51.100.1"}
-    assert c.post("/ask", json=q, headers=forged).status_code == 429
+    assert c.post("/ask", json=q[1], headers=forged).status_code == 429
     # a different client (behind the proxy) is not affected
-    other = c.post("/ask", json=q, headers={"x-forwarded-for": "203.0.113.9"})
+    other = c.post("/ask", json=q[2], headers={"x-forwarded-for": "203.0.113.9"})
     assert other.status_code == 200
 
 
@@ -124,3 +125,14 @@ def test_follow_ups_in_api_and_stream():
     assert body["follow_ups"] and {"question", "free"} <= set(body["follow_ups"][0])
     r = c.post("/ask/stream", json={"question": "What does Sacrificial Sword's passive do?"})
     assert '"follow_ups"' in r.text
+
+
+def test_free_answers_have_their_own_burst_limit():
+    c = client(Limits(per_minute=1, free_per_minute=5, per_day=100))
+    stats = {"question": "What are Raiden Shogun's base stats?"}
+    for _ in range(5):  # clicking through free follow-ups never hits the AI limit
+        assert c.post("/ask", json=stats).status_code == 200
+    assert c.post("/ask", json=stats).status_code == 429
+    ai = {"question": "How much Energy Recharge does Raiden need?"}
+    assert c.post("/ask", json=ai).status_code == 200  # the AI window is separate
+    assert c.post("/ask", json=ai).status_code == 429

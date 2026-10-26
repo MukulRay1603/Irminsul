@@ -83,6 +83,7 @@ def build_app():
     }
     limits = Limits(
         per_minute=int(os.environ.get("IRMINSUL_PER_MINUTE", 6)),
+        free_per_minute=int(os.environ.get("IRMINSUL_FREE_PER_MINUTE", 30)),
         per_day=int(os.environ.get("IRMINSUL_PER_DAY", 200)),
         llm_per_day=int(os.environ.get("IRMINSUL_LLM_PER_DAY", 500)),
         allowance_cap=int(os.environ.get("IRMINSUL_ALLOWANCE_CAP", 20)),

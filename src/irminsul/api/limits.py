@@ -24,7 +24,8 @@ from datetime import UTC, datetime
 
 @dataclass
 class Limits:
-    per_minute: int = 6
+    per_minute: int = 6  # questions that may need the AI
+    free_per_minute: int = 30  # game-data answers, cache hits and refusals (microseconds each)
     per_day: int = 200  # all requests, free ones included; stops scripted abuse
     llm_per_day: int = 500  # all players combined; keep below the providers' free tiers
     allowance_cap: int = 20  # AI answers a player can bank
@@ -33,6 +34,7 @@ class Limits:
     prune_every: int = 1000  # requests between sweeps of stale per-client entries
 
     _recent: dict[str, deque] = field(default_factory=lambda: defaultdict(deque))
+    _recent_free: dict[str, deque] = field(default_factory=lambda: defaultdict(deque))
     _daily: dict[str, int] = field(default_factory=lambda: defaultdict(int))
     _allowance: dict[str, tuple[float, float]] = field(default_factory=dict)  # (amount, at)
     _pool: tuple[float, float] | None = None  # (amount, at)
@@ -51,18 +53,23 @@ class Limits:
         if today != self._day:
             self._day, self._daily, self._llm_used = today, defaultdict(int), 0
 
-    def allow(self, client: str, now: float | None = None) -> str | None:
-        """Record a request; return a reason string if it must be rejected."""
+    def allow(self, client: str, now: float | None = None, free: bool = False) -> str | None:
+        """Record a request; return a reason string if it must be rejected.
+
+        `free` requests (answered without the AI) have their own, much higher burst limit, so
+        clicking through follow-ups and cards never trips the limit meant for AI questions.
+        Both kinds count toward the daily cap.
+        """
         now = time.monotonic() if now is None else now
         with self._lock:
             self._roll_day()
             self._since_prune += 1
             if self._since_prune >= self.prune_every:
                 self._prune(now, time.time())
-            window = self._recent[client]
+            window = (self._recent_free if free else self._recent)[client]
             while window and now - window[0] > 60:
                 window.popleft()
-            if len(window) >= self.per_minute:
+            if len(window) >= (self.free_per_minute if free else self.per_minute):
                 return "Too many questions in a short time. Please wait a minute."
             if self._daily[client] >= self.per_day:
                 return "You've reached today's question limit. Please come back tomorrow!"
@@ -73,9 +80,10 @@ class Limits:
     def _prune(self, now: float, wall: float) -> None:
         """Drop entries that no longer change any decision. `_daily` resets with the day."""
         self._since_prune = 0
-        for client, window in list(self._recent.items()):
-            if not window or now - window[-1] > 60:
-                del self._recent[client]
+        for windows in (self._recent, self._recent_free):
+            for client, window in list(windows.items()):
+                if not window or now - window[-1] > 60:
+                    del windows[client]
         for client, state in list(self._allowance.items()):
             if self._level(state, self.allowance_cap, self.allowance_regen_s, wall) >= (
                 self.allowance_cap

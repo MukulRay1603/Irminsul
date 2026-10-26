@@ -315,7 +315,7 @@ def create_app(
         """Server-sent events: `meta` (route + candidate citations), `delta` (text chunks),
         `done` (final route, the citations actually used, trace, and the caller's quota)."""
         cid = cid_of(request)
-        if reason := limits.allow(cid):
+        if reason := limits.allow(cid, free=engine.is_free(body.question)):
             return JSONResponse(status_code=429, content={"detail": reason})
         return StreamingResponse(
             sse_events(
@@ -333,7 +333,7 @@ def create_app(
     @app.post("/ask", response_model=AskResponse)
     def ask(body: AskRequest, request: Request):
         cid = cid_of(request)
-        if reason := limits.allow(cid):
+        if reason := limits.allow(cid, free=engine.is_free(body.question)):
             return JSONResponse(status_code=429, content={"detail": reason})
         # Once the shared pool or the player's allowance is spent, free routes still work
         # and LLM questions get a polite reply instead.
