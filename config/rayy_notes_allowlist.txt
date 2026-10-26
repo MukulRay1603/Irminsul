@@ -1,0 +1,10 @@
+# Research notes that may be ingested as the rayy_verified tier (file names only, no paths).
+# Only fact-checked, tagged notes about RELEASED content belong here.
+# Never add: anything about leaks, unreleased versions (7.2 notes stay out until 7.2 is live),
+# or video-production audits (scripts, VO and card verdicts).
+F2P National - builds + Ray notes check (Oct 25).md
+Raiden National rotation - deep dive (Oct 25).md
+Stellar Conduct and Swirl teams + F2P builds.md
+Stellar meta catch-up.md
+New player catch-up guide.md
+Pity system explained.md

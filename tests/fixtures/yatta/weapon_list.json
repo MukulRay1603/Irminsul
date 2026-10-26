@@ -1,0 +1,34 @@
+{
+ "response": 200,
+ "data": {
+  "props": {
+   "NONE": "None",
+   "FIGHT_PROP_ATTACK_PERCENT": "ATK",
+   "FIGHT_PROP_CRITICAL_HURT": "CRIT DMG",
+   "FIGHT_PROP_DEFENSE_PERCENT": "DEF",
+   "FIGHT_PROP_ELEMENT_MASTERY": "Elemental Mastery",
+   "FIGHT_PROP_CHARGE_EFFICIENCY": "Energy Recharge",
+   "FIGHT_PROP_HP_PERCENT": "HP",
+   "FIGHT_PROP_PHYSICAL_ADD_HURT": "Physical DMG Bonus",
+   "FIGHT_PROP_CRITICAL": "CRIT Rate"
+  },
+  "types": {
+   "WEAPON_SWORD_ONE_HAND": "Sword",
+   "WEAPON_CLAYMORE": "Claymore",
+   "WEAPON_POLE": "Polearm",
+   "WEAPON_CATALYST": "Catalyst",
+   "WEAPON_BOW": "Bow"
+  },
+  "items": {
+   "11403": {
+    "id": 11403,
+    "rank": 4,
+    "type": "WEAPON_SWORD_ONE_HAND",
+    "name": "Sacrificial Sword",
+    "specialProp": "FIGHT_PROP_CHARGE_EFFICIENCY",
+    "icon": "UI_EquipIcon_Sword_Fossil",
+    "route": "Sacrificial Sword"
+   }
+  }
+ }
+}

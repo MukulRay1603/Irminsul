@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main, v1]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --locked --python 3.12
+      - name: Lint
+        run: uv run ruff check src tests && uv run ruff format --check src tests
+      - name: Test
+        run: uv run pytest -q
+
+  docker:
+    # Build-only check of the API image (never pushed or deployed from CI).
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build image
+        run: docker build -t irminsul:ci .
+      - name: Image size
+        run: docker image ls irminsul:ci --format '{{.Size}}' >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,48 @@
+# LLM providers, tried in order. All speak the OpenAI-compatible chat API.
+#
+# - A provider without its API key in the environment is skipped, so nothing runs (or
+#   costs anything) until keys are added as secrets. `enabled = false` also skips it.
+# - `daily_requests` is our own cap per provider. Keep it BELOW the provider's free-tier
+#   limit, so we fail over before we could ever be billed.
+# - `extra` is merged into the request body (provider-specific parameters).
+# - Checked against each provider's public docs on Oct 26 2026. Free models change: re-check
+#   before relying on a provider, and confirm the free-tier limits in each console.
+
+# Groq: Llama 3.3 70B is now "Enterprise / contact sales"; gpt-oss-120b is production.
+# gpt-oss is a reasoning model: keep effort low and hide the reasoning text.
+[[provider]]
+name = "groq"
+base_url = "https://api.groq.com/openai/v1"
+model = "openai/gpt-oss-120b"
+api_key_env = "GROQ_API_KEY"
+daily_requests = 800
+extra = { reasoning_effort = "low", include_reasoning = false }
+
+# Cerebras: Llama 3.3 70B is no longer in the shared (free-trial) catalog;
+# gpt-oss-120b and qwen-3.8-27b are.
+[[provider]]
+name = "cerebras"
+base_url = "https://api.cerebras.ai/v1"
+model = "gpt-oss-120b"
+api_key_env = "CEREBRAS_API_KEY"
+daily_requests = 800
+extra = { reasoning_effort = "low" }
+
+# Gemini through its OpenAI-compatible endpoint; current Flash model in Google's docs.
+[[provider]]
+name = "gemini"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+model = "gemini-3.8-flash"
+api_key_env = "GEMINI_API_KEY"
+daily_requests = 200
+
+# OpenRouter: free models allow 20/min and 50/day (1000/day after buying 10 credits).
+# The free catalogue changes often and had no large chat model on Oct 26, so this stays
+# disabled until a current ":free" chat model is chosen from openrouter.ai/models?max_price=0.
+[[provider]]
+name = "openrouter"
+base_url = "https://openrouter.ai/api/v1"
+model = "choose-a-current-free-model:free"
+api_key_env = "OPENROUTER_API_KEY"
+daily_requests = 40
+enabled = false

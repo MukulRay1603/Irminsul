@@ -1,0 +1,128 @@
+# Weekly corpus update: build -> diff + guards -> index + retrieval gate -> stage on HF -> PR.
+#
+# Nothing user-facing changes here. The PR (corpus/manifest.json + CHANGELOG) is the review
+# gate; merging it runs corpus-publish.yml, which promotes the staged build on Hugging Face.
+# Schedules only run from the default branch, so this is inert until merged into main.
+name: Weekly corpus update
+
+on:
+  schedule:
+    - cron: "17 6 * * 0" # Sundays 06:17 UTC
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why run now (e.g. 'patch day 7.2')"
+        required: false
+        default: "manual run"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: corpus-update
+  cancel-in-progress: false
+
+env:
+  HF_DATASET: MukulRay/irminsul-corpus
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  IRMINSUL_MODEL_CACHE: ${{ github.workspace }}/.models
+  MIN_HIT_AT_8: "0.90"
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked --python 3.12
+
+      - name: Cache embedding models
+        uses: actions/cache@v4
+        with:
+          path: .models
+          key: models-bge-small-msmarco-v1
+
+      - name: Previous manifest
+        run: |
+          mkdir -p prev
+          if [ -n "$HF_TOKEN" ]; then
+            uv run irminsul-publish fetch-manifest --repo "$HF_DATASET" --out prev || true
+          fi
+          if [ ! -f prev/manifest.json ] && [ -f corpus/manifest.json ]; then
+            cp corpus/manifest.json prev/manifest.json
+          fi
+
+      - name: Build corpus (Yatta + HoYoWiki + KQM, leak-gated)
+        run: uv run irminsul-build --out data/build
+
+      - name: Diff and guards
+        run: |
+          uv run irminsul-diff --old prev/manifest.json --new data/build/manifest.json \
+            --out data/build/CHANGELOG.md
+          cat data/build/CHANGELOG.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Index and retrieval quality gate
+        run: |
+          uv run irminsul-index build --docs data/build/docs.jsonl --out data/index
+          uv run irminsul-index eval --index data/index --k 8 --configs hybrid+rerank \
+            --out data/build/retrieval.json --min-hit "$MIN_HIT_AT_8"
+
+      - name: Keep the build as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: corpus-${{ github.run_number }}
+          path: |
+            data/build
+            data/index
+          retention-days: 30
+
+      - name: Stage on Hugging Face (dated branch)
+        if: env.HF_TOKEN != ''
+        run: |
+          uv run irminsul-publish stage --repo "$HF_DATASET" --build data/build \
+            --index data/index --branch "update-$(date -u +%F)"
+
+      - name: Open the review PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          day="$(date -u +%F)"
+          branch="corpus/update-$day"
+          mkdir -p corpus
+          cp data/build/manifest.json corpus/manifest.json
+          cp data/build/retrieval.json corpus/retrieval.json
+          echo "update-$day" > corpus/STAGED
+          { cat data/build/CHANGELOG.md; echo; [ -f corpus/CHANGELOG.md ] && cat corpus/CHANGELOG.md; } > /tmp/changelog
+          mv /tmp/changelog corpus/CHANGELOG.md
+          git switch -c "$branch"
+          git add corpus
+          if git diff --cached --quiet; then
+            echo "No corpus changes this week."; exit 0
+          fi
+          git -c user.name="github-actions[bot]" \
+              -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+              commit -m "corpus: weekly update $day (${{ inputs.reason || 'scheduled' }})"
+          git push origin "$branch"
+          staged="Staged on HF branch \`update-$day\`; merging publishes it."
+          [ -z "$HF_TOKEN" ] && staged="HF_TOKEN not set: nothing staged; merging records the manifest only."
+          { cat data/build/CHANGELOG.md; echo; echo "$staged"; } > /tmp/body.md
+          gh pr create --base "${{ github.event.repository.default_branch }}" --head "$branch" \
+            --title "Corpus update $day" --body-file /tmp/body.md
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue create --title "Weekly corpus update failed ($(date -u +%F))" \
+            --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          A guard (record drop, unverified records, retrieval quality) or a source fetch failed.
+          Nothing was published."
