@@ -291,3 +291,79 @@ def test_exact_answers_carry_structured_cards():
     assert again.trace.get("cache") == "hit" and again.card == sword  # cache keeps the card
     mitya = engine.ask("Is Mitya playable yet?").card
     assert mitya["type"] == "announced" and "talents" not in mitya  # overview only
+
+
+def test_talent_cards_carry_scaling_for_the_level_slider():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    card = engine.ask("What does Raiden Shogun's Elemental Burst do?").card
+    burst = next(t for t in card["talents"] if t["kind"] == "burst")
+    assert 10 in burst["levels"] and burst["scaling"]
+    assert all(len(row["values"]) == len(burst["levels"]) for row in burst["scaling"])
+    assert all(t["levels"] == [] for t in card["talents"] if t["kind"] == "passive")
+
+
+def comparison_store() -> EntityStore:
+    base = store()
+    raiden = base.by_id["character/raiden-shogun"].entity
+    yae = raiden.model_copy(
+        update={
+            "id": "character/yae-miko",
+            "name": "Yae Miko",
+            "base_stats": raiden.base_stats.model_copy(
+                update={"atk": 340.0, "hp": 10372.0, "bonus_stat": "CRIT Rate"}
+            ),
+        }
+    )
+    sac = base.by_id["weapon/sacrificial-sword"].entity
+    fav = sac.model_copy(
+        update={"id": "weapon/favonius-sword", "name": "Favonius Sword", "base_atk": 510.0}
+    )
+    leak = yae.model_copy(
+        update={
+            "id": "character/leaky",
+            "name": "Leaky",
+            "release": Release(status=ReleaseStatus.UNKNOWN),
+        }
+    )
+    mitya = base.by_id["character/mitya"].entity
+    sets = [m.entity for m in base.by_id.values() if m.kind == "artifact"]
+    return EntityStore([raiden, yae, leak, mitya], [sac, fav], sets)
+
+
+def test_data_comparisons_are_exact_with_a_compare_card():
+    engine = Engine(comparison_store(), FakeIndex(), FakeLLM())
+    chars = engine.ask("Raiden Shogun vs Yae Miko base stats")
+    assert chars.route == "exact" and chars.trace["intent"] == "compare:character"
+    assert "not a recommendation" in chars.text and len(chars.citations) == 2
+    card = chars.card
+    assert card["type"] == "compare" and [c["name"] for c in card["columns"]] == [
+        "Raiden Shogun",
+        "Yae Miko",
+    ]
+    rows = {r["label"]: r for r in card["rows"]}
+    assert rows["Base ATK"]["best"] == [1] and rows["Base HP"]["best"] == [0]
+    assert rows["Base DEF"]["best"] == []  # equal values: nothing highlighted
+    assert rows["Ascension stat"]["best"] == []  # different stats never compete
+    swords = engine.ask("Sacrificial Sword vs Favonius Sword")
+    assert swords.route == "exact" and swords.card["kind"] == "weapon"
+    assert swords.card["rows"][0]["best"] == [1]
+    sets = engine.ask("Compare Resolution of Sojourner and Brave Heart set bonuses")
+    assert sets.route == "exact" and sets.card["kind"] == "artifact"
+
+
+def test_opinion_comparisons_and_mixed_kinds_go_to_rag():
+    engine = Engine(comparison_store(), FakeIndex(), FakeLLM())
+    assert engine.ask("Sacrificial Sword or Favonius Sword, which is better?").route == "rag"
+    assert engine.ask("Which is better for my Raiden, Sacrificial Sword or Favonius?").route == (
+        "rag"
+    )
+    assert engine.ask("Raiden Shogun or Yae Miko, who should I pull?").route == "rag"
+    assert engine.ask("Raiden Shogun vs Sacrificial Sword").route == "rag"
+
+
+def test_unreleased_entities_are_never_compared():
+    engine = Engine(comparison_store(), FakeIndex(), FakeLLM())
+    leak = engine.ask("Raiden Shogun vs Leaky base stats")
+    assert leak.route != "exact" and leak.card is None
+    announced = engine.ask("Raiden Shogun vs Mitya base stats")
+    assert announced.route == "announced" and announced.card["type"] == "announced"
