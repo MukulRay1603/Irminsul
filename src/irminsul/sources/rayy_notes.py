@@ -19,7 +19,26 @@ from pathlib import Path
 
 from irminsul.schema import Doc, Release, ReleaseStatus, SourceRef, Tier, slugify
 
-ACCEPT = re.compile(r"\[(?:OFFICIAL|KQM)\b[^\]]*\]|\bCONFIRMED\b")
+ACCEPT = re.compile(r"\[(?:OFFICIAL|KQM)\b[^\]]*\]|\bCONFIRMED\b(?!\s+in part)")
+# A line that is only a tag ("**CONFIRMED**", "**CONFIRMED (official)**", "[KQM]") vouches for
+# the untagged lines under it, until the next heading. So does a tag in a heading.
+_BARE_TAG = re.compile(
+    r"^[\s*_:-]*(?:\[(?:OFFICIAL|KQM)\b[^\]]*\]|CONFIRMED(?!\s+in part))"
+    r"[\s*_:-]*(?:\((?:official|unless noted)\))?[\s*_:.-]*$",
+    re.IGNORECASE,
+)
+# "**Chronicled Wish (official FAQ)** CONFIRMED": a bold label plus a tag acts as a tagged
+# subheading.
+_LABEL_TAG = re.compile(r"^\s*\*\*([^*]+)\*\*\s*CONFIRMED(?!\s+in part)\s*$", re.IGNORECASE)
+_TAGGED_HEADING = re.compile(r"\[(?:OFFICIAL|KQM)\b|\bCONFIRMED\b(?!\s+in part)", re.IGNORECASE)
+# Lines vouched for only by a block tag must not hedge: the notes mark "unless noted"
+# exceptions in prose ("community rule", "observed", "I could not open ..."), not with tags.
+_HEDGE = re.compile(
+    r"\bcommunity\b|second-hand|\bprobably\b|\blikely\b|\bmight\b|could not|couldn't"
+    r"|\bguess|\bassum|\bestimat|reported as|\bmodel\b|\bobserved\b|\bunverified\b|\bI think\b"
+    r"|soft pity",  # never published by HoYoverse: always community-derived
+    re.IGNORECASE,
+)
 REJECT = re.compile(
     r"\[(?:OPINION|VERIFY|DATAMINED|COMMUNITY)\b[^\]]*\]"
     r"|\bDATA-DERIVED\b|\bCOMMUNITY THEORY\b|\bMY MATH\b"
@@ -98,10 +117,19 @@ def parse_note(text: str, file_name: str, fetched_at: datetime) -> NoteResult:
             continue
         kept: list[str] = []
         subheading = None
+        section_tagged = bool(_TAGGED_HEADING.search(heading))
+        block_tagged = section_tagged  # untagged lines here are vouched for by a block tag
         table_header: str | None = None  # header row of the current table, until emitted
         for i, line in enumerate(lines):
             if line.startswith("#"):
                 subheading = line.lstrip("#").strip()
+                block_tagged = section_tagged or bool(_TAGGED_HEADING.search(subheading))
+                continue
+            if _BARE_TAG.match(line) and line.strip():
+                block_tagged = True  # the tag line itself is not content
+                continue
+            if label := _LABEL_TAG.match(line):
+                subheading, block_tagged = label.group(1).strip(), True
                 continue
             if not line.strip().startswith("|"):
                 table_header = None
@@ -110,7 +138,14 @@ def parse_note(text: str, file_name: str, fetched_at: datetime) -> NoteResult:
                 continue
             if not line.strip() or _is_separator(line):
                 continue
-            if keep_line(line):
+            by_block = (
+                block_tagged
+                and not line.strip().startswith("|")  # table rows need their own tag
+                and not REJECT.search(line)
+                and not _LEGEND.search(line)
+                and not _HEDGE.search(line)
+            )
+            if keep_line(line) or by_block:
                 if subheading and SKIP_SECTION.search(subheading):
                     result.dropped_lines += 1
                     continue
