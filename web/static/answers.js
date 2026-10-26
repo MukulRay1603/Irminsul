@@ -12,7 +12,8 @@ function inline(s) {
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\s][^*]*?)\*(?!\*)/g, "$1<em>$2</em>")
-    .replace(/\[(\d+)\]/g, '<sup class="cite"><a href="#src-$1" aria-label="Source $1">$1</a></sup>');
+    // A citation becomes a small source button; labelCitations() names it once the answer ends.
+    .replace(/\[(\d+)\]/g, '<a class="cite src-pill" data-n="$1" href="#src-$1" aria-label="Source"><i aria-hidden="true"></i></a>');
 }
 
 /* Markdown subset the AI is asked to use: a bold lead sentence, bullets, numbered steps,
@@ -61,6 +62,66 @@ function renderMarkdown(text) {
   }
   flushPara(); closeList(); closeTable();
   return html;
+}
+
+/* ---------- Sources: small named buttons instead of numbers ---------- */
+const TIER_NAMES = { official: "Official game data", kqm: "KQM theorycrafting", rayy_verified: "Team-verified notes", community: "Community" };
+
+// "Raiden Shogun: Elemental Burst" -> "Raiden Shogun"; "Mika constellations" -> "Mika"
+function sourceLabel(c) {
+  let t = String(c.title || "").replace(/^Official profile:\s*/i, "");
+  t = t.split(/:\s|\s[—–]\s/)[0].replace(/\s+(overview|constellations)$/i, "").trim();
+  if (c.tier === "kqm") t = `KQM · ${t}`;
+  else if (c.tier === "rayy_verified") t = `Team notes · ${t}`;
+  return t.length > 26 ? `${t.slice(0, 25)}…` : t;
+}
+
+function linkSource(a, c) {
+  a.textContent = sourceLabel(c);
+  a.title = `${TIER_NAMES[c.tier] || c.tier} · ${c.title}`;
+  a.setAttribute("aria-label", `Source: ${c.title} (${TIER_NAMES[c.tier] || c.tier})`);
+  a.dataset.tier = c.tier;
+  if (/^https?:/.test(c.url)) { a.href = c.url; a.target = "_blank"; a.rel = "noopener noreferrer"; }
+  else a.removeAttribute("href");
+}
+
+// Name every citation button in an answer; repeats of the same source in a row show once.
+function labelCitations(container, citations) {
+  const byN = new Map((citations || []).map(c => [String(c.n), c]));
+  let prev = null;
+  container.querySelectorAll(".src-pill[data-n]").forEach(a => {
+    const c = byN.get(a.dataset.n);
+    if (!c) { a.remove(); return; }
+    const adjacent = prev && prev.dataset.n === a.dataset.n && (a.previousSibling === prev
+      || (a.previousSibling?.nodeType === 3 && !a.previousSibling.textContent.trim() && a.previousSibling.previousSibling === prev));
+    if (adjacent) { a.remove(); return; }
+    // One button per source within a paragraph, bullet or table cell keeps the text calm
+    const block = a.closest("p, li, td, blockquote") || container;
+    const label = sourceLabel(c);
+    if ([...block.querySelectorAll(".src-pill[data-labelled]")].some(p => p.textContent === label)) { a.remove(); return; }
+    linkSource(a, c);
+    a.dataset.labelled = "";
+    prev = a;
+  });
+}
+
+// The "Sources" row under an answer: one button per distinct source, no numbers.
+function sourceRow(citations) {
+  const row = document.createElement("div");
+  row.className = "sources";
+  row.innerHTML = '<span class="sources-label">Sources</span>';
+  const seen = new Set();
+  for (const c of citations || []) {
+    const key = `${c.url}|${sourceLabel(c)}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const a = document.createElement("a");
+    a.className = "src-pill";
+    a.id = `src-${c.n}`;
+    linkSource(a, c);
+    row.append(a);
+  }
+  return row;
 }
 
 /* ---------- Cards for exact answers ---------- */
@@ -114,7 +175,22 @@ const CARDS = {
 
   announced: c => `${cardHead(c, "Officially announced")}
     <div class="xc-callout"><b>Not playable yet.</b> Only what HoYoverse has officially shown is listed here. Talents and constellations appear once the character is released.</div>`,
+
+  // Patch notes for one version. Each name opens its dossier; the link opens the full section.
+  patch: c => c.upcoming ? `<header class="xc-head"><div><span class="xc-kicker">Patch notes</span><h3>Version ${escHTML(c.version)}</h3></div></header>
+    <div class="xc-callout"><b>Not released yet.</b> The live version is ${escHTML(c.live)}.${c.announced.length ? ` Officially announced, not playable yet: ${c.announced.map(a => escHTML(a.name)).join(", ")}.` : ""}</div>`
+    : `<header class="xc-head"><div><span class="xc-kicker">Patch notes${c.is_live ? " · live now" : ""}</span><h3>Version ${escHTML(c.version)}</h3>
+      <div class="xc-title">Released ${escHTML(patchDate(c.date))}</div></div></header>
+    ${c.groups.map(g => `<h4 class="xc-sub">${escHTML(g.label)} <span class="pn-count">${g.items.length}</span></h4>
+      <div class="pn-chips">${g.items.map(patchChip).join("")}</div>`).join("")}
+    ${c.changes.length ? `<h4 class="xc-sub">Changed <span class="pn-count">${c.changes.length}</span></h4>
+      <ul class="pn-changed">${c.changes.map(x => `<li>${patchChip(x)}<span>${escHTML(x.fields.slice(0, 4).join(", ") || "Text updated")}${x.fields.length > 4 ? ` and ${x.fields.length - 4} more` : ""}</span></li>`).join("")}</ul>` : ""}
+    ${!c.groups.length && !c.changes.length ? `<p class="xc-foot">Nothing new in the released data for this version.</p>` : ""}
+    <p class="xc-foot">${c.videos ? `${c.videos} new official video${c.videos === 1 ? "" : "s"}. ` : ""}${!c.tracked && c.tracking_since ? `Weapons, sets and balance changes are tracked from ${escHTML(patchDate(c.tracking_since))}. ` : ""}<a href="#patches" data-patch="${escHTML(c.version)}">Open the full patch notes</a></p>`,
 };
+
+const patchDate = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const patchChip = x => `<button type="button" class="pn-chip" data-entity="${escHTML(x.id)}" data-kind="${escHTML(x.kind)}" data-el="${escHTML(x.element || "")}"><i></i>${escHTML(x.name)}${x.rarity ? `<span class="pn-r">${x.rarity}★</span>` : ""}</button>`;
 
 /* Talent scaling with a level slider. The data only has some levels (1, 6, 9, 10, 13), so the
    slider steps through those. Every value is already in the card: moving it asks nothing. */
@@ -179,6 +255,10 @@ function renderCard(card) {
   el.className = `xcard card-${card.type}`;
   el.dataset.el = card.element || "";
   el.innerHTML = make(card);
+  if (card.type === "patch") el.addEventListener("click", e => {
+    const b = e.target.closest("[data-entity]");
+    if (b && typeof showEntity === "function") showEntity(b.dataset.entity);  // app.js dossier
+  });
   const panel = el.querySelector("[data-panel]"), seg = el.querySelector(".seg");
   if (panel && PANELS[card.type]) {
     const show = key => {
@@ -212,6 +292,7 @@ const BADGES = {
   no_llm: ["AI answers off", "Game-data answers still work", "busy"],
   rag_empty: ["No sources found", "Not in released data", "busy"],
   no_allowance: ["AI answers used up for now", "They refill over time", "busy"],
+  spoiler: ["Past your story point", "Spoiler filter", "story"],
 };
 
 function answerHeader(route, version, nSources) {

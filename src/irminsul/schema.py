@@ -53,12 +53,14 @@ class Talent(BaseModel):
     name: str
     description: str
     scaling: list[ScalingRow] = Field(default_factory=list)
+    icon: str | None = None  # official asset name, e.g. "Skill_S_Furina_01" (never the image)
 
 
 class Constellation(BaseModel):
     level: int  # 1..6
     name: str
     description: str
+    icon: str | None = None
 
 
 class BaseStats(BaseModel):
@@ -83,8 +85,11 @@ class Character(BaseModel):
     base_stats: BaseStats | None = None
     talents: list[Talent] = Field(default_factory=list)
     constellations: list[Constellation] = Field(default_factory=list)
+    icon: str | None = None  # e.g. "UI_AvatarIcon_Furina"; the web app derives its art from it
+    namecard: str | None = None  # e.g. "UI_NameCardIcon_Furina"
     release: Release
     source: SourceRef
+    revealed_in: str | None = None  # game version that made them public (story-safe mode)
 
 
 class Weapon(BaseModel):
@@ -99,6 +104,7 @@ class Weapon(BaseModel):
     passive_name: str | None = None
     passive_by_refinement: list[str] = Field(default_factory=list)  # R1..R5
     description: str | None = None
+    icon: str | None = None  # e.g. "UI_EquipIcon_Sword_Narukami"
     release: Release
     source: SourceRef
 
@@ -109,6 +115,7 @@ class ArtifactSet(BaseModel):
     name: str
     rarities: list[int]
     bonuses: dict[int, str]  # piece count -> effect text
+    icon: str | None = None  # e.g. "UI_RelicIcon_15003_4"
     release: Release
     source: SourceRef
 
@@ -130,11 +137,14 @@ class Doc(BaseModel):
 
     doc_id: str  # stable: "<entity id>#<section>"
     entity_id: str | None
-    kind: str  # character_overview | talent | constellations | weapon | artifact_set | ...
+    kind: str  # character_overview | talent | constellations | weapon | lore_story | ...
     title: str
     text: str
     release: Release
     source: SourceRef
+    # Game version that first made this text public; story-safe mode hides it from players
+    # whose story progress ends earlier. None: not story content, never hidden.
+    revealed_in: str | None = None
 
     @property
     def content_hash(self) -> str:

@@ -217,3 +217,42 @@ def compare_card(kind: str, entities: list) -> dict:
 
 def announced_card(c: Character) -> dict:
     return {"type": "announced", **_head(c)}
+
+
+def _patch_item(x: dict) -> dict:
+    return {k: x[k] for k in ("id", "kind", "name", "rarity", "element", "weapon_type") if k in x}
+
+
+def patch_card(note: dict, notes: dict) -> dict:
+    """One version's patch notes (engine/patches.py). An unreleased version gets names only."""
+    if note.get("upcoming"):
+        return {
+            "type": "patch",
+            "version": note["version"],
+            "upcoming": True,
+            "live": notes.get("live"),
+            "announced": [
+                {"name": a["name"], "element": a["element"]} for a in notes.get("announced", [])
+            ],
+        }
+    return {
+        "type": "patch",
+        "version": note["version"],
+        "date": note["date"],
+        "is_live": note["live"],
+        "groups": [
+            {"label": label, "items": [_patch_item(x) for x in note[key]]}
+            for key, label in (
+                ("characters", "New characters"),
+                ("weapons", "New weapons"),
+                ("artifact_sets", "New artifact sets"),
+            )
+            if note[key]
+        ],
+        "changes": [
+            {**_patch_item(c), "fields": [f["field"] for f in c["fields"]]} for c in note["changes"]
+        ],
+        "videos": len(note["videos"]),
+        "tracked": note["tracked"],
+        "tracking_since": notes.get("tracking_since"),
+    }

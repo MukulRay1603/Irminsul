@@ -22,6 +22,7 @@ class Chunk(BaseModel):
     release_status: str
     source_url: str
     game_version: str | None = None
+    revealed_in: str | None = None  # story-safe mode, see irminsul.story
 
 
 def _windows(paragraphs: list[str], max_words: int, overlap: int) -> list[str]:
@@ -66,6 +67,7 @@ def chunk_doc(doc: Doc, max_words: int = 300, overlap: int = 40) -> list[Chunk]:
             release_status=doc.release.status,
             source_url=doc.source.url,
             game_version=doc.source.game_version,
+            revealed_in=doc.revealed_in,
         )
         for n, text in enumerate(texts)
     ]

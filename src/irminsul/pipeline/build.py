@@ -4,6 +4,7 @@ Usage:
     uv run irminsul-build --out data/build --cache data/cache
     uv run irminsul-build --limit 5     # quick dev run on a few items per type
     uv run irminsul-build --sources kqm # only some sources (default: all)
+    uv run irminsul-build --sources yatta,hoyowiki,kqm,lore,books   # add in-game books too
 """
 
 import argparse
@@ -16,24 +17,60 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
+from irminsul.engine.entities import ALIASES
+from irminsul.engine.guards import version_from_manifest
 from irminsul.pipeline.gate import gate, gate_linked_docs, normalise_name
+from irminsul.pipeline.guides import reaction_guides
 from irminsul.pipeline.planner import build_planner, parse_schedule
-from irminsul.pipeline.render import artifact_docs, character_docs, weapon_docs
-from irminsul.schema import SCHEMA_VERSION, Character, ReleaseStatus, Video, slugify
+from irminsul.pipeline.render import (
+    artifact_docs,
+    book_docs,
+    character_docs,
+    story_docs,
+    weapon_docs,
+)
+from irminsul.schema import (
+    SCHEMA_VERSION,
+    Character,
+    Doc,
+    Release,
+    ReleaseStatus,
+    SourceRef,
+    Tier,
+    Video,
+    slugify,
+)
 from irminsul.sources import hoyowiki
 from irminsul.sources.http import PoliteClient
 from irminsul.sources.kqm import KqmSource
-from irminsul.sources.yatta import YattaSource
+from irminsul.sources.yatta import SITE, YattaSource
+from irminsul.story import Changelog, MentionDater, character_revealed_in, later
 
 log = logging.getLogger("irminsul.build")
 
-SOURCES = ("yatta", "hoyowiki", "kqm")
+SOURCES = ("yatta", "hoyowiki", "kqm", "lore")
+# In-game books: ~600 books and ~2,000 volume texts, one request each, so opt-in for now.
+OPTIONAL_SOURCES = ("books",)
 
 
 def _write_jsonl(path: Path, rows: list[BaseModel]) -> None:
     with path.open("w", encoding="utf-8") as f:
         for row in rows:
             f.write(row.model_dump_json() + "\n")
+
+
+def art_names_if_released(record: BaseModel) -> BaseModel:
+    """Official image names stay on released records only: nothing announced ever gets art."""
+    if record.release.status == ReleaseStatus.RELEASED:
+        return record
+    update: dict = {"icon": None}
+    if isinstance(record, Character):
+        update["namecard"] = None
+        update["talents"] = [t.model_copy(update={"icon": None}) for t in record.talents]
+        update["constellations"] = [
+            c.model_copy(update={"icon": None}) for c in record.constellations
+        ]
+    return record.model_copy(update=update)
 
 
 def check_unique_ids(docs: list) -> None:
@@ -89,6 +126,109 @@ def fetch_official(
     return official
 
 
+def live_version(yatta_version: str | None) -> str | None:
+    """Yatta's '71F2' -> '7.1'."""
+    v = version_from_manifest(yatta_version)
+    return f"{v[0]}.{v[1]}" if v else None
+
+
+def stamp_revealed(docs: list[Doc], kept: dict[str, list], changelog: Changelog) -> None:
+    """Give every doc the version it became public, for story-safe mode.
+
+    Entity docs (official or guide) take their entity's version. Docs still undated after
+    that (boss pages, mechanics, pre-3.0 weapons) take the latest version of any character
+    they name, so a page about the Shogun boss fight hides until the Raiden Shogun is out.
+    """
+    characters = kept.get("characters", [])
+    when: dict[str, str | None] = {c.id: c.revealed_in for c in characters}
+    for kind, category in (("weapons", "weapon"), ("artifact_sets", "reliquary")):
+        for record in kept.get(kind, []):
+            when[record.id] = changelog.version_of(category, record.game_id)
+    names = {c.name: c.revealed_in for c in characters if c.revealed_in and "(" not in c.name}
+    names |= {
+        alias.title(): when[eid]
+        for alias, eid in ALIASES.items()
+        if eid.startswith("character/") and when.get(eid)
+    }
+    dater = MentionDater(names)
+    for doc in docs:
+        if doc.revealed_in is None and doc.entity_id in when:
+            doc.revealed_in = when[doc.entity_id]
+        if doc.revealed_in is None:
+            doc.revealed_in = dater(doc.text)
+
+
+def fetch_lore(
+    yatta: YattaSource,
+    characters: list[Character],
+    changelog: Changelog,
+    live: str | None,
+    now: datetime,
+    blocklist: set[str],
+    books: bool,
+    limit: int | None,
+) -> tuple[list[Doc], list[tuple[str, str]], dict]:
+    """Official lore for story-safe mode: character stories (and, opt-in, in-game books).
+
+    Leak safety: stories are fetched only for characters the gate kept as *released*, never
+    for announced ones, and any text revealed after the live version is dropped.
+    """
+    docs, dropped = [], []
+    # The Traveler has one entry per element ("10000005-anemo") but one profile, served under
+    # the base id: it goes to the earliest-revealed element only.
+    by_profile: dict[str, Character] = {}
+    for c in characters:
+        if c.release.status != ReleaseStatus.RELEASED:
+            continue
+        profile = c.game_id.split("-")[0]
+        current = by_profile.get(profile)
+        if current is None or later(current.revealed_in, c.revealed_in):
+            by_profile[profile] = c
+    released = list(by_profile.items())
+    for profile, c in released[:limit] if limit else released:
+        try:
+            docs += story_docs(c, yatta.character_stories(profile))
+        except Exception:
+            log.exception("no stories for %s", c.id)
+    counts = {"stories": len(docs)}
+    if books:
+        fetched = 0
+        for book, volumes in yatta.books():
+            entity = f"book/{book['id']}"
+            if entity in blocklist:
+                dropped.append((entity, "blocklisted"))
+                continue
+            dated = [
+                (
+                    v,
+                    text,
+                    changelog.version_of("book", v["id"], book["id"])
+                    or changelog.untracked_ceiling("book"),
+                )
+                for v, text in volumes
+            ]
+            source = SourceRef(
+                source="yatta",
+                url=f"{SITE}/archive/book/{book['id']}",
+                tier=Tier.OFFICIAL,
+                fetched_at=now,
+                game_version=live,
+            )
+            docs += book_docs(book, dated, Release(status=ReleaseStatus.RELEASED), source)
+            fetched += 1
+            if limit and fetched >= limit:
+                break
+        counts["books"] = fetched
+        counts["book_volumes"] = len(docs) - counts["stories"]
+    kept = []
+    for doc in docs:
+        if later(doc.revealed_in, live):
+            dropped.append((doc.doc_id, f"revealed in {doc.revealed_in}, after live {live}"))
+        else:
+            kept.append(doc)
+    return kept, dropped, counts
+
+
 def build(
     out: Path,
     cache: Path | None,
@@ -103,6 +243,8 @@ def build(
     official = Official({}, [], [], [])
     yatta: YattaSource | None = None
     schedule: list[dict] = []
+    changelog: Changelog | None = None
+    live: str | None = None
 
     if "yatta" in sources:
         client = PoliteClient(cache_dir=cache)
@@ -110,6 +252,8 @@ def build(
         try:
             version = yatta.game_version()
             log.info("Yatta live data version: %s", version)
+            changelog = Changelog(yatta.changelog())
+            live = live_version(version)
             fetched = {
                 "characters": list(take(yatta.characters(now, version))),
                 "weapons": list(take(yatta.weapons(now, version))),
@@ -138,6 +282,16 @@ def build(
             len(official.videos),
         )
 
+    if changelog is not None:
+        # Story-safe mode: the version each character became public. Announced characters
+        # are not out yet, so they are past every story point.
+        for c in fetched["characters"]:
+            c.revealed_in = (
+                live
+                if c.release.status == ReleaseStatus.ANNOUNCED
+                else character_revealed_in(c.game_id, c.release.released_at, changelog, live)
+            )
+
     out.mkdir(parents=True, exist_ok=True)
     renderers = {
         "characters": character_docs,
@@ -150,6 +304,7 @@ def build(
         # Only full builds with HoYoWiki may drop undated records it does not list.
         names = official.names.get(kind) if limit is None and official.names else None
         report = gate(records, now, blocklist, official_names=names)
+        report.kept = [art_names_if_released(r) for r in report.kept]
         kept[kind] = report.kept
         _write_jsonl(out / f"{kind}.jsonl", report.kept)
         for record in report.kept:
@@ -204,6 +359,32 @@ def build(
             "weapons": len(planner["weapons"]),
         }
 
+    if changelog is not None and ("lore" in sources or "books" in sources):
+        lore_client = PoliteClient(cache_dir=cache)
+        try:
+            lore_docs, lore_dropped, counts["lore"] = fetch_lore(
+                YattaSource(lore_client),
+                kept.get("characters", []),
+                changelog,
+                live,
+                now,
+                blocklist,
+                books="books" in sources,
+                limit=limit,
+            )
+        finally:
+            lore_client.close()
+        docs += lore_docs
+        dropped += lore_dropped
+        log.info("lore: %s", counts["lore"])
+
+    # Newer reactions are defined across many kits: compile each into one guide (no model).
+    guides = reaction_guides(docs, now)
+    docs += guides
+    counts["reaction_guides"] = len(guides)
+
+    if changelog is not None:
+        stamp_revealed(docs, kept, changelog)
     check_unique_ids(docs)
     _write_jsonl(out / "docs.jsonl", docs)
     _write_jsonl(out / "videos.jsonl", official.videos)
@@ -238,7 +419,8 @@ def main() -> None:
         "--sources",
         type=lambda s: tuple(x.strip() for x in s.split(",") if x.strip()),
         default=SOURCES,
-        help=f"comma-separated subset of {','.join(SOURCES)} (default: all)",
+        help=f"comma-separated subset of {','.join(SOURCES + OPTIONAL_SOURCES)} "
+        f"(default: {','.join(SOURCES)})",
     )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -250,7 +432,7 @@ def main() -> None:
             for line in args.blocklist.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.startswith("#")
         }
-    if unknown := set(args.sources) - set(SOURCES):
+    if unknown := set(args.sources) - set(SOURCES + OPTIONAL_SOURCES):
         parser.error(f"unknown sources: {', '.join(sorted(unknown))}")
     manifest = build(args.out, args.cache, args.limit, blocklist, args.sources)
     log.info(

@@ -6,6 +6,8 @@ Data comes from local folders, or is downloaded once at boot from the public HF 
 LLM keys (GROQ_API_KEY, ...) are read from the environment; without any, the API still
 serves exact answers and refusals, and LLM questions get a "busy" reply.
 IRMINSUL_KQM=off keeps KQM-derived chunks out of every answer (see kqm_enabled).
+Character art (api/art.py): IRMINSUL_ART=<folder> serves a local art library; without it,
+official images are fetched and cached under IRMINSUL_CACHE/art unless IRMINSUL_ART_REMOTE=off.
 Security settings (docs/security.md):
     IRMINSUL_TRUSTED_PROXY_HOPS=1    on HF Spaces, so limits key on the real client address
     IRMINSUL_CORS_ORIGINS=https://a.example,https://b.example   (default: no CORS)
@@ -21,13 +23,16 @@ from pathlib import Path
 import uvicorn
 
 from irminsul.api.app import cors_origins, create_app, trusted_proxy_hops
+from irminsul.api.art import LocalArt, RemoteArt
 from irminsul.api.limits import Limits
+from irminsul.api.patches import add_patches, load_patch_history
 from irminsul.api.planner import add_planner
-from irminsul.api.web import Art, add_web, load_videos
+from irminsul.api.web import add_web, load_videos
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import GuardConfig, version_from_manifest
 from irminsul.engine.llm import Router
+from irminsul.engine.patches import build_patch_notes
 
 log = logging.getLogger("irminsul.serve")
 
@@ -38,12 +43,29 @@ def fetch_dataset(repo: str, dest: Path) -> Path:
     return Path(snapshot_download(repo, repo_type="dataset", local_dir=dest))
 
 
+def _switch(name: str) -> bool:
+    return os.environ.get(name, "on").strip().lower() not in {"off", "0", "false", "no"}
+
+
+def make_art(store: EntityStore) -> LocalArt | RemoteArt:
+    """A local art library if IRMINSUL_ART names one, else official images fetched on demand.
+
+    IRMINSUL_ART_REMOTE=off turns the fetching off: the app then shows no art at all.
+    """
+    cache = Path(os.environ.get("IRMINSUL_CACHE", "/tmp/irminsul")) / "art"
+    if library := os.environ.get("IRMINSUL_ART"):  # never part of the repo
+        return LocalArt(Path(library), cache)
+    if _switch("IRMINSUL_ART_REMOTE"):
+        return RemoteArt(store, cache / "remote")
+    return LocalArt(None, cache)
+
+
 def kqm_enabled() -> bool:
     """KQM (CC BY-NC-SA) content is on unless IRMINSUL_KQM is off/0/false/no.
 
     The switch is a deploy setting, so a commercial build can drop KQM without a rebuild.
     """
-    return os.environ.get("IRMINSUL_KQM", "on").strip().lower() not in {"off", "0", "false", "no"}
+    return _switch("IRMINSUL_KQM")
 
 
 def build_app():
@@ -68,12 +90,16 @@ def build_app():
     kqm = kqm_enabled()
     if not kqm:
         log.info("KQM content is switched off (IRMINSUL_KQM): answers use official + team tiers")
+    store = EntityStore.load(data)
+    videos = load_videos(data)
+    patch_notes = build_patch_notes(store, load_patch_history(data), videos)
     engine = Engine(
-        EntityStore.load(data),
+        store,
         index,
         Router.from_config(),
         guard_cfg,
         exclude_tiers=frozenset() if kqm else frozenset({"kqm"}),
+        patches=patch_notes,
     )
     meta = {
         "built_at": manifest.get("built_at"),
@@ -97,10 +123,9 @@ def build_app():
         cors=cors_origins(),
         frame_ancestors=os.environ.get("IRMINSUL_FRAME_ANCESTORS", "'none'"),
     )
-    library = os.environ.get("IRMINSUL_ART")  # local art library; never part of the repo
-    cache = Path(os.environ.get("IRMINSUL_CACHE", "/tmp/irminsul")) / "art"
-    add_web(app, engine.store, load_videos(data), Art(Path(library) if library else None, cache))
+    add_web(app, engine.store, videos, make_art(engine.store))
     add_planner(app, engine.store, data)
+    add_patches(app, patch_notes)
     return app
 
 

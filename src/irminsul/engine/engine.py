@@ -2,10 +2,13 @@
 
 Order of operations (cheapest and safest first):
 1. guards: refuse injection, leaks/future versions and off-topic questions (no LLM)
-2. cache: identical questions are answered once
-3. exact: single-entity stat/passive questions answered from game data (no LLM);
+2. cache: identical questions are answered once (per story point)
+3. story-safe mode: a question naming a character released after the player's story point
+   gets a gentle "past your story point" reply instead of the answer
+4. exact: single-entity stat/passive questions answered from game data (no LLM);
    announced characters get the official overview only
-4. RAG: hybrid retrieval + re-rank, then an LLM writes an answer citing numbered sources
+5. RAG: hybrid retrieval + re-rank (minus passages past the story point), then an LLM writes
+   an answer citing numbered sources
 Every answer carries a trace: route, retrieval hits and scores, provider, tokens, latency.
 """
 
@@ -15,17 +18,29 @@ from collections import OrderedDict
 from collections.abc import Iterator
 from dataclasses import asdict, dataclass
 
+from irminsul import story
 from irminsul.engine import grounding, guards
-from irminsul.engine.entities import EntityStore
+from irminsul.engine.cards import pct
+from irminsul.engine.entities import EntityStore, Match
 from irminsul.engine.exact import answer_exact
 from irminsul.engine.followups import follow_ups
 from irminsul.engine.llm import AllProvidersBusy, ChatModel, Completion
 from irminsul.engine.types import Answer, Citation
+from irminsul.schema import ReleaseStatus
 
 SYSTEM_PROMPT = """You are Irminsul, a Genshin Impact assistant.
 Rules:
-- Answer ONLY from the numbered sources provided. If they do not contain the answer, say you
-  don't have verified information on that.
+- Answer ONLY from the numbered sources provided. The "Official profile" sources give each
+  named character's or weapon's element, weapon type and rarity: use them to connect facts.
+- If the sources contain relevant facts but no direct recommendation (for example, which of
+  two characters fits a team), explain what the sources say about each option and how it
+  relates to the question, and say plainly what the sources don't state. Say you don't have
+  verified information only when the sources are unrelated to the question.
+- For a weapon on a character, say what its passive does and whether it applies to that
+  character (some passives only work for specific characters), and name its stats.
+- Only talk about Genshin Impact. Keep it family-friendly. Never ask for or repeat personal
+  information. Never help with cheats, mods, private servers or account trading. Don't add
+  links: the app shows the sources.
 - Cite every factual sentence with its source number in plain square brackets, e.g. [2].
   Never use any other citation style.
 - Only officially released information. Never speculate about unreleased characters,
@@ -53,6 +68,10 @@ ALLOWANCE_REPLY = (
     "and answers straight from game data, like stats and passives, are always free."
 )
 SOURCE_WORDS = 180
+SPOILER_REPLY = (
+    "**{name}** comes after your story point (you've finished up to {label}), so I'm keeping "
+    "this hidden to avoid spoilers. Choose **Show anyway** if you'd like the answer."
+)
 
 
 # Some models (gpt-oss) cite as 【3】 or 【3†source】 whatever the prompt says; ours is [3].
@@ -61,6 +80,41 @@ _ALT_CITATION = re.compile(r"【\s*(\d+)[^】]*】")
 
 def normalise_citations(text: str) -> str:
     return _ALT_CITATION.sub(r"[\1]", text)
+
+
+def official_profile(match: Match) -> tuple[str, str, str] | None:
+    """(title, text, doc_id) for a released entity's key facts, from the official records."""
+    e = match.entity
+    if match.kind == "character":
+        if e.release.status != ReleaseStatus.RELEASED:
+            return None
+        parts = [f"{e.name} is a {e.rarity}-star {e.element} character who uses a {e.weapon_type}"]
+        if e.region:
+            parts[0] += f", from {e.region}"
+        if e.title:
+            parts.append(f"Title: {e.title}")
+        if s := e.base_stats:
+            parts.append(
+                f"Level {s.level} base stats: HP {s.hp:.0f}, ATK {s.atk:.0f}, DEF {s.defense:.0f}; "
+                f"ascension stat {s.bonus_stat} {pct(s.bonus_value, s.bonus_stat)}"
+            )
+        talents = ", ".join(f"{t.kind.replace('_', ' ')}: {t.name}" for t in e.talents[:3])
+        if talents:
+            parts.append(f"Talents: {talents}")
+        return f"Official profile: {e.name}", ". ".join(parts) + ".", f"{e.id}#overview"
+    if match.kind == "weapon":
+        parts = [f"{e.name} is a {e.rarity}-star {e.weapon_type}"]
+        if e.base_atk is not None:
+            parts.append(f"Base ATK {e.base_atk:.0f} at max level")
+        if e.secondary_stat:
+            parts.append(
+                f"secondary stat {e.secondary_stat} {pct(e.secondary_value, e.secondary_stat)}"
+            )
+        if e.passive_name and e.passive_by_refinement:
+            parts.append(f"Passive {e.passive_name} (R1): {e.passive_by_refinement[0]}")
+        return f"Official profile: {e.name}", ". ".join(parts) + ".", f"{e.id}#main"
+    bonuses = "; ".join(f"{n}-piece: {t}" for n, t in sorted(e.bonuses.items()))
+    return f"Official profile: {e.name}", f"{e.name} is an artifact set. {bonuses}", f"{e.id}#main"
 
 
 def _normalise(question: str) -> str:
@@ -77,6 +131,7 @@ class Engine:
         k: int = 6,
         cache_size: int = 512,
         exclude_tiers: frozenset[str] = frozenset(),
+        patches: dict | None = None,
     ) -> None:
         self.store = store
         self.index = index
@@ -84,20 +139,40 @@ class Engine:
         self.guard_cfg = guard_cfg or guards.GuardConfig()
         self.k = k
         self.exclude_tiers = exclude_tiers  # e.g. {"kqm"} when KQM content is switched off
+        self.patches = patches  # patch notes (engine/patches.py) for "what changed in 7.1?"
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
 
-    def ask(self, question: str, allow_llm: bool = True, out_of_allowance: bool = False) -> Answer:
+    def ask(
+        self,
+        question: str,
+        allow_llm: bool = True,
+        out_of_allowance: bool = False,
+        story_until: str | None = None,
+    ) -> Answer:
+        """`story_until` (a key of story.STORY_POINTS) turns on story-safe mode."""
         start = time.perf_counter()
-        answer = self._ask(question.strip(), allow_llm, out_of_allowance)
-        answer.follow_ups = follow_ups(self.store, question.strip(), answer)
+        point = story.point(story_until)
+        answer = self._ask(question.strip(), allow_llm, out_of_allowance, point)
+        answer.follow_ups = self._follow_ups(question.strip(), answer)
+        _mark_filter(answer, point)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         return answer
 
-    def _ask(self, question: str, allow_llm: bool, out_of_allowance: bool) -> Answer:
-        answer = self._before_llm(question)
+    def _follow_ups(self, question: str, answer: Answer) -> list[dict]:
+        # Suggestions about a character past the story point would spoil it all over again.
+        return [] if answer.route == "spoiler" else follow_ups(self.store, question, answer)
+
+    def _ask(
+        self,
+        question: str,
+        allow_llm: bool,
+        out_of_allowance: bool,
+        point: story.StoryPoint | None = None,
+    ) -> Answer:
+        answer = self._before_llm(question, point)
         if answer is None:
-            prepared = self._prepare_rag(question, allow_llm, out_of_allowance)
+            prepared = self._prepare_rag(question, allow_llm, out_of_allowance, point)
             if isinstance(prepared, Answer):
                 answer = prepared
             else:
@@ -106,11 +181,15 @@ class Engine:
                 except AllProvidersBusy:
                     return Answer(BUSY_REPLY, "busy", trace=prepared.trace)
                 answer = self._finish_rag(prepared, completion)
-        self._remember(question, answer)
+        self._remember(question, answer, point)
         return answer
 
     def ask_stream(
-        self, question: str, allow_llm: bool = True, out_of_allowance: bool = False
+        self,
+        question: str,
+        allow_llm: bool = True,
+        out_of_allowance: bool = False,
+        story_until: str | None = None,
     ) -> Iterator[tuple[str, dict]]:
         """Yield ("meta" | "delta" | "done", payload) events for server-sent streaming.
 
@@ -119,8 +198,11 @@ class Engine:
         """
         start = time.perf_counter()
         question = question.strip()
-        answer = self._before_llm(question)
-        prepared = None if answer else self._prepare_rag(question, allow_llm, out_of_allowance)
+        point = story.point(story_until)
+        answer = self._before_llm(question, point)
+        prepared = (
+            None if answer else self._prepare_rag(question, allow_llm, out_of_allowance, point)
+        )
         if isinstance(prepared, Answer):
             answer = prepared
         if answer is None:
@@ -137,14 +219,15 @@ class Engine:
                 yield "delta", {"text": BUSY_REPLY}
             if completion is not None:
                 answer = self._finish_rag(prepared, completion)
-                self._remember(question, answer)
+                self._remember(question, answer, point)
         else:
-            self._remember(question, answer)
+            self._remember(question, answer, point)
             yield (
                 "meta",
                 {"route": answer.route, "citations": [asdict(c) for c in answer.citations]},
             )
             yield "delta", {"text": answer.text}
+        _mark_filter(answer, point)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         yield (
             "done",
@@ -152,20 +235,22 @@ class Engine:
                 "route": answer.route,
                 "citations": [asdict(c) for c in answer.citations],
                 "trace": answer.trace,
-                "follow_ups": follow_ups(self.store, question, answer),
+                "follow_ups": self._follow_ups(question, answer),
                 "card": answer.card,
+                # When the output guard changed a streamed answer, the page re-renders it
+                "text": answer.text if answer.trace.get("output_guard") else None,
             },
         )
 
-    def is_free(self, question: str) -> bool:
+    def is_free(self, question: str, story_until: str | None = None) -> bool:
         """Will this be answered without the AI (refusal, cache or game data)? No side effects."""
-        return self._before_llm(question.strip()) is not None
+        return self._before_llm(question.strip(), story.point(story_until)) is not None
 
-    def _before_llm(self, question: str) -> Answer | None:
-        """Guards, cache and exact answers: everything that needs no model."""
+    def _before_llm(self, question: str, point: story.StoryPoint | None = None) -> Answer | None:
+        """Guards, cache, the story-point check and exact answers: everything with no model."""
         if refusal := guards.check(question, self.store, self.guard_cfg):
             return refusal
-        key = _normalise(question)
+        key = _cache_key(question, point)
         if key in self._cache:
             self._cache.move_to_end(key)
             cached = self._cache[key]
@@ -176,30 +261,67 @@ class Engine:
                 {**cached.trace, "cache": "hit"},
                 card=cached.card,
             )
-        return answer_exact(self.store, question)
+        if spoiler := self._past_story_point(question, point):
+            return spoiler
+        return answer_exact(self.store, question, self.patches)
 
-    def _remember(self, question: str, answer: Answer) -> None:
+    def _past_story_point(self, question: str, point: story.StoryPoint | None) -> Answer | None:
+        """A gentle "past your story point" reply when the question names a character who
+        was revealed after it. The UI offers "Show anyway", which asks again with no limit."""
+        if point is None:
+            return None
+        for m in self.store.find(question):
+            # The Traveler is the player, and element words alone ("Electro") match a Traveler
+            # variant, so it never stops a question; retrieval still filters its passages.
+            if m.kind != "character" or m.entity.id.startswith("character/traveler-"):
+                continue
+            revealed_in = getattr(m.entity, "revealed_in", None)
+            if story.hides(point, revealed_in):
+                name = m.entity.name
+                return Answer(
+                    SPOILER_REPLY.format(name=name, label=point.label),
+                    "spoiler",
+                    trace={"spoiler": {"name": name, "revealed_in": revealed_in}},
+                )
+        return None
+
+    def _remember(self, question: str, answer: Answer, point: story.StoryPoint | None) -> None:
         if (
             answer.route in ("busy", "no_index", "no_llm", "no_allowance")
+            or answer.route in guards.SENSITIVE_ROUTES  # never keep personal text in memory
             or answer.trace.get("cache") == "hit"
         ):
             return
-        self._cache[_normalise(question)] = answer
+        self._cache[_cache_key(question, point)] = answer
         if len(self._cache) > self.cache_size:
             self._cache.popitem(last=False)
 
     def _prepare_rag(
-        self, question: str, allow_llm: bool, out_of_allowance: bool = False
+        self,
+        question: str,
+        allow_llm: bool,
+        out_of_allowance: bool = False,
+        point: story.StoryPoint | None = None,
     ) -> "Answer | _Prepared":
         if self.index is None:
             return Answer(NO_SOURCES_REPLY, "no_index")
+        report: dict = {}
+        # Story-safe mode filters inside the search, before re-ranking and the LLM.
+        spoiler_filter = {"max_revealed": point.until, "report": report} if point else {}
         hits = self.index.search(
-            question, k=self.k, mode="hybrid", rerank=True, exclude_tiers=self.exclude_tiers
+            question,
+            k=self.k,
+            mode="hybrid",
+            rerank=True,
+            exclude_tiers=self.exclude_tiers,
+            **spoiler_filter,
         )
         hits = [
             h
             for h in hits
-            if h.chunk.release_status == "released" and h.chunk.tier not in self.exclude_tiers
+            if h.chunk.release_status == "released"
+            and h.chunk.tier not in self.exclude_tiers
+            and not story.hides(point, getattr(h.chunk, "revealed_in", None))
         ]
         trace = {
             "retrieval": [
@@ -207,6 +329,8 @@ class Engine:
                 for h in hits
             ]
         }
+        if point:
+            trace["spoiler_filter"] = story.filter_info(point, report.get("hidden", 0))
         if not hits:
             return Answer(NO_SOURCES_REPLY, "rag_empty", trace=trace)
         citations = [
@@ -217,6 +341,19 @@ class Engine:
             c.n: f"{c.title}\n" + " ".join(h.chunk.text.split()[:SOURCE_WORDS])
             for c, h in zip(citations, hits, strict=True)
         }
+        # The basic facts of every character, weapon or set the question names, so the model
+        # can connect them (e.g. that Skirk uses a sword) even when retrieval didn't surface
+        # their overview.
+        for match in self.store.find(question)[:3]:
+            profile = official_profile(match)
+            if profile is None:
+                continue
+            title, text, doc_id = profile
+            e = match.entity
+            n = len(citations) + 1
+            citations.append(Citation(n, title, e.source.url, e.source.tier, doc_id))
+            texts[n] = f"{title}\n{text}"
+            trace["retrieval"].append({"doc_id": doc_id, "score": None, "tier": e.source.tier})
         sources = "\n\n".join(f"[{c.n}] ({c.tier}) {texts[c.n]}" for c in citations)
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -234,6 +371,8 @@ class Engine:
     @staticmethod
     def _finish_rag(prepared: "_Prepared", completion: Completion) -> Answer:
         text = normalise_citations(completion.text)
+        # Only cited official links, no personal data, nothing explicit
+        text, output_flags = guards.check_output(text, [c.url for c in prepared.citations])
         used = {int(n) for n in re.findall(r"\[(\d+)\]", text)}
         cited = [c for c in prepared.citations if c.n in used]
         trace = {
@@ -248,6 +387,7 @@ class Engine:
             "uncited_answer": not cited,
             # Each sentence checked against the source text it cites (no model call).
             "grounding": grounding.check(text, prepared.sources),
+            "output_guard": output_flags,
         }
         return Answer(text.strip(), "rag", cited or prepared.citations, trace)
 
@@ -259,6 +399,17 @@ class _Prepared:
     trace: dict
     llm: ChatModel
     sources: dict[int, str]  # citation number -> the source text the model was given
+
+
+def _cache_key(question: str, point: story.StoryPoint | None) -> str:
+    # Answers never cross story points: the same question can have a spoiler-free answer.
+    return f"{point.key if point else '*'}|{_normalise(question)}"
+
+
+def _mark_filter(answer: Answer, point: story.StoryPoint | None) -> None:
+    """Every answer under a story point says so in its trace ("why this answer")."""
+    if point is not None:
+        answer.trace.setdefault("spoiler_filter", story.filter_info(point, 0))
 
 
 def answer_to_dict(answer: Answer) -> dict:

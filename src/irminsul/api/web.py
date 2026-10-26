@@ -5,8 +5,9 @@
 - GET /manifest.webmanifest, /sw.js, /favicon.ico   what makes it an installable app
 - GET /api/characters      released characters for the gallery (the leak gate decides who)
 - GET /api/entity?id=...   one character, weapon or artifact set, with official videos and art
-- GET /art/{path}?w=N      resized WebP art, only when IRMINSUL_ART points at a local art
-                           library. The artwork belongs to HoYoverse and is never committed.
+- GET /art/{key}?w=N       resized WebP art (see art.py): from a local library (IRMINSUL_ART)
+                           or official images fetched and cached by the server. The artwork
+                           belongs to HoYoverse and is never committed.
 
 The page has no inline script or style, so it runs under the API's strict CSP unchanged.
 """
@@ -16,77 +17,17 @@ import json
 import logging
 import os
 from pathlib import Path
-from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from irminsul.api.art import LocalArt, RemoteArt
 from irminsul.engine.entities import EntityStore
 
 log = logging.getLogger("irminsul.web")
 
 WEB_DIR = Path(__file__).resolve().parents[3] / "web"
-ART_WIDTHS = (64, 128, 256, 420, 900)  # never upscaled
-TALENT_PREFIX = {
-    "normal_attack": "Normal Attack",
-    "skill": "Skill",
-    "burst": "Burst",
-    "passive": "Passive",
-}
-
-
-def _key(text: str) -> str:
-    return "".join(ch for ch in text.casefold() if ch.isalnum())
-
-
-class Art:
-    """Maps entities to art URLs in a local library laid out as Characters/<Name>/..."""
-
-    def __init__(self, library: Path | None, cache: Path) -> None:
-        self.library = library if library and library.is_dir() else None
-        self.cache = cache
-
-    def url(self, rel: str, w: int = 256) -> str | None:
-        if self.library is None or not (self.library / rel).exists():
-            return None
-        return f"/art/{quote(rel)}?w={w}"
-
-    def folder(self, name: str) -> str:
-        """ "Traveler (Cryo)" has its own folder; other variants fall back to the base name."""
-        if self.library and (self.library / "Characters" / name).exists():
-            return name
-        return name.split(" (")[0]
-
-    def icons(self, folder: str, sub: str) -> dict[str, str]:
-        """Icon URLs keyed by normalised "<prefix><name>", e.g. "skilltranscendencebalefulomen"."""
-        base = self.library / "Characters" / folder / sub if self.library else None
-        if base is None or not base.exists():
-            return {}
-        return {
-            _key(p.stem.replace(" - ", "")): self.url(f"Characters/{folder}/{sub}/{p.name}", 128)
-            for p in base.glob("*.png")
-        }
-
-    def render(self, path: str, w: int) -> Path:
-        if self.library is None or w not in ART_WIDTHS:
-            raise HTTPException(404)
-        target = (self.library / path).resolve()
-        if self.library.resolve() not in target.parents or target.suffix.lower() != ".png":
-            raise HTTPException(404)
-        if not target.exists():
-            raise HTTPException(404)
-        out = self.cache / f"w{w}" / Path(path).with_suffix(".webp")
-        if not out.exists() or out.stat().st_mtime < target.stat().st_mtime:
-            from PIL import Image  # only needed when an art library is configured
-
-            out.parent.mkdir(parents=True, exist_ok=True)
-            with Image.open(target) as im:
-                im = im.convert("RGBA")
-                if im.width > w:
-                    im = im.resize((w, round(im.height * w / im.width)), Image.LANCZOS)
-                im.save(out, "WEBP", quality=82, method=6)
-        return out
 
 
 def load_videos(data: Path) -> dict[str, list[dict]]:
@@ -112,7 +53,7 @@ def add_web(
     app: FastAPI,
     store: EntityStore,
     videos: dict[str, list[dict]],
-    art: Art,
+    art: LocalArt | RemoteArt,
     web_dir: Path = WEB_DIR,
 ) -> None:
     if (web_dir / "index.html").exists():
@@ -176,7 +117,6 @@ def add_web(
             c = match.entity
             if match.kind != "character" or not released(match):
                 continue
-            folder = art.folder(c.name)
             out.append(
                 {
                     "id": c.id,
@@ -185,8 +125,8 @@ def add_web(
                     "rarity": c.rarity,
                     "weapon_type": c.weapon_type,
                     "region": c.region,
-                    "card": art.url(f"Characters/{folder}/card.png"),
-                    "element_icon": art.url(f"Elements/{c.element}.png", 64),
+                    "card": art.card(c),
+                    "element_icon": art.element(c.element),
                     "released_at": c.release.released_at.isoformat()
                     if c.release.released_at
                     else None,
@@ -205,27 +145,27 @@ def add_web(
         own = [v for v in videos.get(id, []) if v["group"] == "Character Details"]
         data["videos"] = own[:6]
         if match.kind == "character":
-            folder = art.folder(match.entity.name)
+            c = match.entity
             # Full art only for released characters, the same rule the leak gate uses for text.
             ok = released(match)
-            data["art"] = art.url(f"Characters/{folder}/icon.png", 256)
-            data["splash"] = art.url(f"Characters/{folder}/splash.png", 900) if ok else None
-            data["banner"] = (
-                art.url(f"Characters/{folder}/namecard_banner.png", 420) if ok else None
-            )
-            data["element_icon"] = art.url(f"Elements/{match.entity.element}.png", 64)
-            talents = art.icons(folder, "talents")
-            for t in data["talents"]:
-                t["icon"] = talents.get(_key(TALENT_PREFIX.get(t["kind"], "") + t["name"]))
-            cons = art.icons(folder, "constellations")
-            for c in data["constellations"]:
-                c["icon"] = cons.get(_key(f"C{c['level']}{c['name']}"))
+            data["art"] = art.icon(c)
+            data["splash"] = art.splash(c) if ok else None
+            data["banner"] = art.banner(c) if ok else None
+            data["element_icon"] = art.element(c.element)
+            data.pop("namecard", None)
+            for t, url in zip(data["talents"], art.talents(c), strict=True):
+                t["icon"] = url
+            for x, url in zip(data["constellations"], art.constellations(c), strict=True):
+                x["icon"] = url
+        else:
+            data["art"] = art.item(match.entity) if released(match) else None
+        data.pop("icon", None)  # an asset name; the URLs above are what the page uses
         return data
 
     @app.get("/art/{path:path}", include_in_schema=False)
     def art_file(path: str, w: int = 256):
         return FileResponse(
-            art.render(path, w),
+            art.file(path, w),
             media_type="image/webp",
             headers={"Cache-Control": "public, max-age=604800"},
         )

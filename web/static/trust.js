@@ -71,7 +71,7 @@ window.trust = (() => {
     // Wrap from the end backwards so splitting a text node never moves a piece still to come.
     for (const { s, parts } of jobs.reverse()) {
       const tip = TIPS[s.reason] || TIPS.words;
-      const where = s.cites?.length ? ` [${s.cites.join(", ")}]` : "";
+      const where = "";  // sources are named buttons now, so no numbers in the tip
       parts.reverse().forEach(([node, a, b], k) => {
         const range = document.createRange();
         range.setStart(node, a); range.setEnd(node, b);
@@ -140,7 +140,7 @@ window.trust = (() => {
     if (!body) return "";
     const copy = body.cloneNode(true);
     copy.querySelectorAll(".trust-mark").forEach(m => m.remove());
-    copy.querySelectorAll(".cite").forEach(c => c.replaceWith(` [${c.textContent.trim()}]`));
+    copy.querySelectorAll(".cite").forEach(c => c.replaceWith(` [${c.dataset.n || c.textContent.trim()}]`));
     // Game-data cards are laid out with many small elements: keep their words apart.
     if (body.classList.contains("has-card")) copy.querySelectorAll("span, b, strong, em, h3, h4").forEach(e => e.after(" "));
     copy.querySelectorAll("p, li, h4, tr, blockquote, div").forEach(b => b.append("\n"));

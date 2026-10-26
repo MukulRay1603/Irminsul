@@ -46,10 +46,19 @@ Cheapest and safest first:
 | Step | What | Cost |
 |---|---|---|
 | Guards | leaks, unannounced versions, prompt injection, other games, off-topic | free, rule-based |
-| Cache | the same question answered before | free |
+| Cache | the same question answered before (never shared across story points) | free |
+| Story point | a character released after the player's story point → "past your story point", with *Show anyway* | free |
 | Exact | a named character, weapon or set plus a factual question → an interactive card | free, instant |
 | Announced | an officially announced character → official overview only | free |
 | Search + AI | an AI writes from the retrieved sources and must cite them | free tiers |
+
+**Story-safe lore.** Official character stories are part of the data, and every passage carries
+the game version that first made it public, proven from official data (a version's added items,
+or a character's release date) and never guessed. Text with no date of its own takes the latest
+version of any character it names. A player can say how far they are in the Archon Quest; that
+maps to a version (the table and its sources are in `src/irminsul/story.py`), and search drops
+every later passage *before* re-ranking, so neither the re-ranker nor the AI ever sees it. The
+choice stays in the browser, and "Why this answer?" shows how many passages it hid.
 
 After an AI answer, every sentence that cites a source is checked against that source's text,
 and anything that doesn't match is flagged in the app. Every answer also carries a trace (route,

@@ -21,6 +21,7 @@ import bm25s
 import numpy as np
 
 from irminsul.retrieval.chunking import Chunk
+from irminsul.story import later
 
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 RERANK_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2"
@@ -136,10 +137,18 @@ class HybridIndex:
         candidates: int = 20,
         rerank_words: int = RERANK_WORDS,
         exclude_tiers: frozenset[str] = frozenset(),
+        max_revealed: str | None = None,
+        report: dict | None = None,
     ) -> list[Hit]:
-        """Top-k chunks; chunks whose tier is in `exclude_tiers` are never returned."""
+        """Top-k chunks; chunks whose tier is in `exclude_tiers` are never returned.
+
+        `max_revealed` (story-safe mode) also drops every chunk revealed in a later game
+        version, before re-ranking, so neither the re-ranker nor the LLM ever sees it.
+        `report`, if given, receives {"hidden": <candidates dropped by that filter>}.
+        """
         n = max(candidates, k)
-        pool = n * 2 if exclude_tiers else n  # dig deeper so filtering still leaves n
+        # Dig deeper so filtering still leaves n; a story filter can hide a lot of lore.
+        pool = n * 4 if max_revealed else n * 2 if exclude_tiers else n
         if mode == "bm25":
             fused = {i: 1.0 / (r + 1) for r, i in enumerate(self._bm25_ranking(query, pool))}
         elif mode == "dense":
@@ -152,6 +161,11 @@ class HybridIndex:
         else:
             raise ValueError(f"unknown mode {mode!r}")
         allowed = [i for i in fused if self.chunks[i].tier not in exclude_tiers]
+        if max_revealed:
+            visible = [i for i in allowed if not later(self.chunks[i].revealed_in, max_revealed)]
+            if report is not None:
+                report["hidden"] = len(allowed) - len(visible)
+            allowed = visible
         order = sorted(allowed, key=fused.get, reverse=True)[:n]
         if rerank and order:
             if self._rerank is None:

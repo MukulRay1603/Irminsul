@@ -5,14 +5,15 @@ from PIL import Image
 from test_engine import FakeIndex, FakeLLM, store
 
 from irminsul.api.app import create_app
-from irminsul.api.web import WEB_DIR, Art, add_web
+from irminsul.api.art import LocalArt
+from irminsul.api.web import WEB_DIR, add_web
 from irminsul.engine.engine import Engine
 
 
 def client(tmp_path, library=None):
     engine = Engine(store(), FakeIndex(), FakeLLM())
     app = create_app(engine)
-    add_web(app, engine.store, {}, Art(library, tmp_path / "cache"))
+    add_web(app, engine.store, {}, LocalArt(library, tmp_path / "cache"))
     return TestClient(app)
 
 
@@ -27,10 +28,13 @@ def test_page_and_assets_are_served_under_the_strict_csp(tmp_path):
         "<script>" not in page.text and " style=" not in page.text and "onclick=" not in page.text
     )
     assert c.get("/static/app.css").status_code == 200
-    for name in ("app.js", "planner.js"):
+    for name in ("app.js", "planner.js", "answers.js", "patches.js", "story.js"):
         js = (WEB_DIR / "static" / name).read_text(encoding="utf-8")
         assert ' style="' not in js and "onerror=" not in js and "onclick=" not in js
     assert "/static/planner.js" in page.text and c.get("/static/planner.css").status_code == 200
+    assert "/static/patches.js" in page.text and c.get("/static/patches.css").status_code == 200
+    assert "/static/story.js" in page.text and "data-story-slot" in page.text
+    assert c.get("/static/story.css").status_code == 200
 
 
 def test_gallery_lists_released_characters_only(tmp_path):

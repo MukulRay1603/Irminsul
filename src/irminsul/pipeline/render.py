@@ -1,6 +1,15 @@
 """Render entities into retrievable Markdown docs with stable ids."""
 
-from irminsul.schema import ArtifactSet, Character, Doc, ReleaseStatus, Weapon, slugify
+from irminsul.schema import (
+    ArtifactSet,
+    Character,
+    Doc,
+    Release,
+    ReleaseStatus,
+    SourceRef,
+    Weapon,
+    slugify,
+)
 
 TALENT_TITLES = {
     "normal_attack": "Normal Attack",
@@ -20,7 +29,12 @@ def _pct(value: float | None, stat: str | None) -> str:
 
 
 def character_docs(c: Character) -> list[Doc]:
-    common = {"entity_id": c.id, "release": c.release, "source": c.source}
+    common = {
+        "entity_id": c.id,
+        "release": c.release,
+        "source": c.source,
+        "revealed_in": c.revealed_in,
+    }
     descriptor = " ".join(
         part for part in (f"{c.rarity}★" if c.rarity else "", c.element, c.weapon_type) if part
     )
@@ -137,3 +151,61 @@ def artifact_docs(a: ArtifactSet) -> list[Doc]:
             source=a.source,
         )
     ]
+
+
+def _unique_slug(name: str, seen: set[str]) -> str:
+    slug, n = slugify(name) or "untitled", 2
+    while slug in seen:
+        slug, n = f"{slugify(name)}-{n}", n + 1
+    seen.add(slug)
+    return slug
+
+
+def story_docs(c: Character, stories: list[tuple[str, str]]) -> list[Doc]:
+    """A released character's official profile stories, one doc per story.
+
+    They carry the character's `revealed_in`, so story-safe mode hides them from players
+    whose story progress ends before the character's release.
+    """
+    seen: set[str] = set()
+    when = f" Revealed in version {c.revealed_in}." if c.revealed_in else ""
+    return [
+        Doc(
+            doc_id=f"{c.id}#lore-{_unique_slug(title, seen)}",
+            entity_id=c.id,
+            kind="lore_story",
+            title=f"{c.name}: {title}",
+            text=f"# {c.name} — {title}\nOfficial character story.{when}\n\n{text}",
+            release=c.release,
+            source=c.source,
+            revealed_in=c.revealed_in,
+        )
+        for title, text in stories
+    ]
+
+
+def book_docs(
+    book: dict, volumes: list[tuple[dict, str, str | None]], release: Release, source: SourceRef
+) -> list[Doc]:
+    """An in-game book, one doc per volume. `volumes` holds (volume, text, revealed_in)."""
+    seen: set[str] = set()
+    entity = f"book/{book['id']}"
+    docs = []
+    for volume, text, revealed_in in volumes:
+        if not text:
+            continue
+        name = volume.get("name") or book["name"]
+        when = f" Revealed in version {revealed_in} or earlier." if revealed_in else ""
+        docs.append(
+            Doc(
+                doc_id=f"{entity}#{_unique_slug(name, seen)}",
+                entity_id=entity,
+                kind="lore_book",
+                title=name,
+                text=f"# {name}\nIn-game book: {book['name']}.{when}\n\n{text}",
+                release=release,
+                source=source,
+                revealed_in=revealed_in,
+            )
+        )
+    return docs

@@ -8,7 +8,7 @@ const ROUTES = {
   rag: ["Written from sources", ""], refuse_leak: ["Leak filter", "guard"],
   refuse_injection: ["Guardrail", "guard"], refuse_offtopic: ["Genshin only", "guard"],
   busy: ["Busy", "busy"], no_llm: ["Needs an AI key", "busy"], rag_empty: ["No sources found", "busy"],
-  no_allowance: ["AI answers used up for now", "busy"],
+  no_allowance: ["AI answers used up for now", "busy"], spoiler: ["Past your story point", "guard"],
 };
 const TIERS = { official: "Official", rayy_verified: "Team-verified", kqm: "KQM", community: "Community" };
 
@@ -285,7 +285,7 @@ function setRoute(el, route) {
   const r = $(".route", el); r.className = `route ${cls}`; r.lastElementChild.textContent = label;
 }
 let busy = false, gameVersion = "";
-async function ask(q) {
+async function ask(q, opts = {}) {
   q = q.trim(); if (!q || busy) return;
   busy = true; document.querySelectorAll(".ask button").forEach(b => b.disabled = true);
   $("#hint")?.remove();
@@ -298,7 +298,7 @@ async function ask(q) {
   $("#ask").scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
   const body = $(".body", el); let text = "", done = null;
   try {
-    const res = await fetch("/ask/stream", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ question: q }) });
+    const res = await fetch("/ask/stream", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(askBody(q, opts)) });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(typeof e.detail === "string" ? e.detail : `Error ${res.status}`); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
     for (;;) {
@@ -318,6 +318,8 @@ async function ask(q) {
   busy = false; document.querySelectorAll(".ask button").forEach(b => b.disabled = false);
   if (!done) return;
   quotaUI.set(done.quota);
+  // The server's output guard changed a streamed answer (e.g. removed a link): show its version
+  if (done.text) { text = done.text; body.innerHTML = md(text); }
   $(".route", el).outerHTML = answerHeader(done.route, gameVersion, done.citations?.length || 0);
   const cardEl = done.card && renderCard(done.card);
   if (cardEl) { body.replaceChildren(cardEl); body.classList.add("has-card"); }
@@ -329,13 +331,13 @@ async function ask(q) {
   };
   if (done.route === "refuse_leak") body.insertAdjacentHTML("beforebegin",
     `<div class="redacted" aria-hidden="true"><span></span><span></span><span></span><div class="stamp"><b>Hidden by the leak filter</b></div></div>`);
-  if (done.citations?.length) el.insertAdjacentHTML("beforeend", `<div class="sources">${done.citations.map(c =>
-    `<a class="source" id="src-${c.n}" href="${esc(/^https?:/.test(c.url) ? c.url : "#")}" target="_blank" rel="noopener noreferrer">
-       <span class="tier ${c.tier === "kqm" ? "kqm" : ""}">${c.n} ${esc(TIERS[c.tier] || c.tier)}</span><span class="name">${esc(c.title)}</span></a>`).join("")}</div>`);
+  labelCitations(body, done.citations);
+  if (done.citations?.length) el.append(sourceRow(done.citations));
   const why = document.createElement("button"); why.type = "button"; why.className = "why"; why.textContent = "Why this answer?";
   why.onclick = () => { renderTrace(done); $("#tracePanel").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
   el.append(why); renderTrace(done);
   window.trust?.decorate(el, done);  // source check marks and the Report button (trust.js)
+  window.story?.decorate(el, done, q, ask);  // "Show anyway" on a spoiler stop (story.js)
   // Suggested next questions: picked from game data, free ones marked (they don't use AI answers)
   if (done.follow_ups?.length) {
     const box = document.createElement("div"); box.className = "next";
@@ -346,6 +348,11 @@ async function ask(q) {
   }
   const ent = done.trace.entity || done.citations?.map(c => c.doc_id || "").find(d => /^(character|weapon|artifact)\//.test(d))?.split("#")[0];
   if (ent) showEntity(ent);
+}
+// Story-safe mode (story.js): the player's story point rides along unless "Show anyway" said not to
+function askBody(q, opts) {
+  const story = opts.story ?? window.story?.value();
+  return story ? { question: q, story_until: story } : { question: q };
 }
 for (const id of ["heroForm", "dockForm"]) $("#" + id).addEventListener("submit", e => {
   e.preventDefault(); const inp = $("input", e.target); ask(inp.value); inp.value = "";
@@ -364,13 +371,15 @@ function renderTrace(d) {
     rag: "Search and re-ranking found the sources, then an AI model wrote the answer citing them.",
     busy: "This needs an AI model, and none is available right now.",
     no_allowance: "Your AI answers refill over time (see the counter). Answers from game data stay free.",
+    spoiler: "You set a story point, and this is about a character released after it, so nothing was searched.",
   }[d.route] || "";
   const hits = (t.retrieval || []).slice(0, 6), max = Math.max(...hits.map(h => h.score), 1e-6);
   p.innerHTML = `<div class="pad"><h3>Why this answer</h3><p class="placeholder">${esc((ROUTES[d.route] || [d.route])[0])}. ${why}</p>
     <ul class="list"><li><span>Time</span><span>${esc(t.latency_ms ?? "?")} ms</span></li>
     ${t.provider ? `<li><span>Model</span><span>${esc(t.provider)}, ${esc(t.model)}</span></li>` : ""}
     ${t.tokens ? `<li><span>Tokens</span><span>${esc(t.tokens.prompt)} in, ${esc(t.tokens.completion)} out</span></li>` : ""}
-    ${t.cache === "hit" ? `<li><span>Cache</span><span>Answered before</span></li>` : ""}</ul>
+    ${t.cache === "hit" ? `<li><span>Cache</span><span>Answered before</span></li>` : ""}
+    ${t.spoiler_filter ? `<li><span>Spoiler filter</span><span>${esc(window.story?.traceLine(t.spoiler_filter))}</span></li>` : ""}</ul>
     ${hits.length ? `<p class="placeholder searched">Sources searched</p>` + hits.map(h =>
       `<div class="row"><small title="${esc(h.doc_id)}">${esc(h.doc_id)}</small><div class="bar-s" data-w="${Math.max(8, 64 * h.score / max)}"></div></div>`).join("") : ""}</div>`;
 }
@@ -457,3 +466,9 @@ document.addEventListener("keydown", e => {
     e.preventDefault(); (inView ? dock : $("#heroQ")).focus();
   } else if (e.key === "Escape" && typing && t.matches("input:not([type=checkbox]):not([type=radio]), textarea")) t.blur();
 });
+
+// Art is fetched by the server on first use; if an image turns out to be missing (404), drop it
+// so the layout falls back as it does when there is no art at all, instead of a broken icon.
+document.addEventListener("error", e => {
+  if (e.target instanceof HTMLImageElement && new URL(e.target.src).pathname.startsWith("/art/")) e.target.remove();
+}, true);

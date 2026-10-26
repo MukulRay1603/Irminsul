@@ -1,0 +1,28 @@
+{
+ "response": 200,
+ "data": {
+  "story": {
+   "0": {
+    "title": "Character Details",
+    "title2": null,
+    "text": "An unknown bard that came from nowhere. He sometimes sings outdated songs, other times he hums new ones that none have ever heard of.\\nHe likes apples and lively atmospheres, but hates cheese and anything that is slimy.\\nWhen channeling Anemo, it appears in the form of feathers, because he likes things that look light.",
+    "text2": null,
+    "tips": ""
+   },
+   "1": {
+    "title": "Character Story 1",
+    "title2": null,
+    "text": "Back when traveling bard Venti had only been in Mondstadt for a few months, his income was far less than the other more established bards in town. But once he had a few Mora in the pot from his performance, you could be sure he would hurry off to spend it at the same place every time — one of the city's taverns.\\nUnfortunately for Venti, his childlike appearance meant that his attempts to acquire alcohol failed at every turn.\\nThe first time he was refused service, he was heard grumbling: \"I'm sure there were no such preposterous regulations last time I was here...\" Once he realized that the same rule applied to all taverns in town, he decided he would have to change his approach...\\nThe strategy he developed was drinking on the job — that is to say, playing the lyre while holding a wine cup in his mouth, urging his audience to buy him a drink from the bar if they liked his performances instead of giving him Mora.\\nThe novelty of this made him quite popular in Mondstadt.\\nThere was just one snag — he couldn't help but sneeze if a cat came close...\\nAnd if he happened to be holding a wine cup in his mouth when it happened... needless to say, it would spell disaster.\\nVenti, therefore, has one golden rule when selecting a spot to perform, and that is that there must be no cats in the vicinity.\\nEasier said than done — the stray cats of Mondstadt seem to be quite drawn to him.",
+    "text2": null,
+    "tips": "Unlocks at Friendship Lv. 2"
+   },
+   "2": {
+    "title": "Character Story 2",
+    "title2": null,
+    "text": "There is a towering oak tree at the center of Windrise, said to have sprouted when Vennessa ascended to the heavens a millennium ago.\\nIn the past few months, travelers resting in the shade of the great oak sometimes hear a young boy singing the tales of Barbatos, the Anemo Archon.\\nUnlike the ruling deities of the other nations, Barbatos has long left Mondstadt. In fact, the only visible proof of his connection with Mondstadt is the Statues of The Seven that appear across the land — even then, the resemblance is vague at best. Fortunately, Barbatos's past deeds are recorded in books and epics, sung and passed on by the bards.\\nIn contrast to these more canonical works, Venti's ballads tend to include bizarre adventures and acts of mischief, such as the time that Barbatos pinched the Cryo Archon's scepter and replaced it with a hilichurl's wooden club...\\nWorshippers of Barbatos are quick to decry these frivolous tales as blasphemous fabrications. But whenever someone confronts Venti about this, his response suggests that he has not an ounce of remorse.\\n\"How can you know that they're fabrications?\"\\nHe has a point — even the most devoted sister could not possibly know the details of all of Barbatos's deeds from a millennium ago.\\nOnly Venti knows the truth behind his song lyrics, and it is a truth he hides behind an enigmatic smile.\\nReason being, yes — Venti's tall tales of Barbatos's unorthodox exploits are entirely fabricated.\\nHey, Venti finds that a few drinks really gets his muse going. Can you really blame him?",
+    "text2": null,
+    "tips": "Unlocks at Friendship Lv. 3"
+   }
+  }
+ }
+}

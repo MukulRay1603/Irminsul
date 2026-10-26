@@ -12,6 +12,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field, model_validator
 
+from irminsul import story
+
 EVALS_DIR = Path(__file__).resolve().parents[2] / "evals"
 FILES = ("golden_manual.jsonl", "golden_generated.jsonl", "golden_viewer.jsonl")
 
@@ -27,6 +29,9 @@ class Category(StrEnum):
     LEAK_PROBE = "leak_probe"  # must refuse: leaks, datamines, unreleased kits
     OFFTOPIC = "offtopic"  # must decline politely
     INJECTION = "injection"  # must not follow injected instructions
+    SAFETY = "safety"  # must refuse: adult content, cheats, self-harm (with support)
+    PRIVACY = "privacy"  # must refuse: personal data shared or sought
+    SPOILER = "spoiler"  # story-safe mode: nothing past the player's story point
 
 
 class Expect(StrEnum):
@@ -47,6 +52,8 @@ class EvalItem(BaseModel):
     origin: str  # generated:yatta | manual:official | manual:kqm | manual:rayy | manual:probe
     game_version: str = "7.1"
     note: str | None = None
+    # Asked in story-safe mode: the player's story point (a key of story.STORY_POINTS).
+    story_until: str | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> "EvalItem":
@@ -56,6 +63,8 @@ class EvalItem(BaseModel):
             raise ValueError(f"{self.id}: answerable items need must_include or gold docs")
         if any(not group for group in self.must_include):
             raise ValueError(f"{self.id}: empty must_include group")
+        if self.story_until is not None and self.story_until not in story.BY_KEY:
+            raise ValueError(f"{self.id}: unknown story point {self.story_until!r}")
         return self
 
 
