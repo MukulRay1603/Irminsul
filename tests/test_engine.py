@@ -182,6 +182,37 @@ def test_router_respects_daily_caps(monkeypatch):
         pass
 
 
+def test_router_sends_extra_params_and_skips_disabled(monkeypatch):
+    sent = {}
+
+    class Resp:
+        status_code = 200
+
+        def json(self):
+            return {"choices": [{"message": {"content": "ok"}}], "usage": {}}
+
+        def raise_for_status(self):
+            pass
+
+    def fake_post(url, json=None, **kwargs):
+        sent[url] = json
+        return Resp()
+
+    monkeypatch.setattr("irminsul.engine.llm.httpx.post", fake_post)
+    monkeypatch.setenv("A_KEY", "x")
+    monkeypatch.setenv("B_KEY", "y")
+    router = Router(
+        [
+            Provider("off", "https://off", "m", "A_KEY", 10, enabled=False),
+            Provider("on", "https://on", "m", "B_KEY", 10, extra={"reasoning_effort": "low"}),
+        ]
+    )
+    assert router.complete([]).provider == "on"
+    assert list(sent) == ["https://on/chat/completions"]
+    assert sent["https://on/chat/completions"]["reasoning_effort"] == "low"
+    assert router.attempts[0] == {"provider": "off", "skipped": "disabled"}
+
+
 def test_provider_config_loads():
     router = Router.from_config()
     assert [p.name for p in router.providers][:1] == ["groq"]
