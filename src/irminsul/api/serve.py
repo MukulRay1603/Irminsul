@@ -5,6 +5,12 @@ Data comes from local folders, or is downloaded once at boot from the public HF 
     IRMINSUL_HF_DATASET=MukulRay/irminsul-corpus uv run irminsul-serve   # e.g. on a Space
 LLM keys (GROQ_API_KEY, ...) are read from the environment; without any, the API still
 serves exact answers and refusals, and LLM questions get a "busy" reply.
+IRMINSUL_KQM=off keeps KQM-derived chunks out of every answer (see kqm_enabled).
+Security settings (docs/security.md):
+    IRMINSUL_TRUSTED_PROXY_HOPS=1    on HF Spaces, so limits key on the real client address
+    IRMINSUL_CORS_ORIGINS=https://a.example,https://b.example   (default: no CORS)
+    IRMINSUL_FRAME_ANCESTORS="https://huggingface.co"   to allow the Space page to embed it
+    IRMINSUL_MAX_CONCURRENCY=64      requests in flight before uvicorn answers 503
 """
 
 import json
@@ -14,7 +20,7 @@ from pathlib import Path
 
 import uvicorn
 
-from irminsul.api.app import create_app
+from irminsul.api.app import cors_origins, create_app, trusted_proxy_hops
 from irminsul.api.limits import Limits
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
@@ -28,6 +34,14 @@ def fetch_dataset(repo: str, dest: Path) -> Path:
     from huggingface_hub import snapshot_download
 
     return Path(snapshot_download(repo, repo_type="dataset", local_dir=dest))
+
+
+def kqm_enabled() -> bool:
+    """KQM (CC BY-NC-SA) content is on unless IRMINSUL_KQM is off/0/false/no.
+
+    The switch is a deploy setting, so a commercial build can drop KQM without a rebuild.
+    """
+    return os.environ.get("IRMINSUL_KQM", "on").strip().lower() not in {"off", "0", "false", "no"}
 
 
 def build_app():
@@ -49,18 +63,37 @@ def build_app():
     else:
         log.warning("no index at %s: only exact answers and refusals will work", index_dir)
 
-    engine = Engine(EntityStore.load(data), index, Router.from_config(), guard_cfg)
+    kqm = kqm_enabled()
+    if not kqm:
+        log.info("KQM content is switched off (IRMINSUL_KQM): answers use official + team tiers")
+    engine = Engine(
+        EntityStore.load(data),
+        index,
+        Router.from_config(),
+        guard_cfg,
+        exclude_tiers=frozenset() if kqm else frozenset({"kqm"}),
+    )
     meta = {
         "built_at": manifest.get("built_at"),
         "game_version": yatta_version,
         "docs": manifest.get("docs"),
+        "kqm": kqm,
     }
     limits = Limits(
         per_minute=int(os.environ.get("IRMINSUL_PER_MINUTE", 6)),
-        per_day=int(os.environ.get("IRMINSUL_PER_DAY", 60)),
-        llm_per_day=int(os.environ.get("IRMINSUL_LLM_PER_DAY", 1500)),
+        per_day=int(os.environ.get("IRMINSUL_PER_DAY", 200)),
+        llm_per_day=int(os.environ.get("IRMINSUL_LLM_PER_DAY", 500)),
+        allowance_cap=int(os.environ.get("IRMINSUL_ALLOWANCE_CAP", 20)),
+        allowance_regen_s=60 * int(os.environ.get("IRMINSUL_ALLOWANCE_REGEN_MIN", 30)),
     )
-    return create_app(engine, limits, meta)
+    return create_app(
+        engine,
+        limits,
+        meta,
+        trusted_hops=trusted_proxy_hops(),
+        cors=cors_origins(),
+        frame_ancestors=os.environ.get("IRMINSUL_FRAME_ANCESTORS", "'none'"),
+    )
 
 
 def main() -> None:
@@ -69,6 +102,10 @@ def main() -> None:
         build_app(),
         host=os.environ.get("HOST", "127.0.0.1"),
         port=int(os.environ.get("PORT", 7860)),
+        # X-Forwarded-For is handled by client_id (IRMINSUL_TRUSTED_PROXY_HOPS), not uvicorn.
+        proxy_headers=False,
+        server_header=False,
+        limit_concurrency=int(os.environ.get("IRMINSUL_MAX_CONCURRENCY", 64)),
     )
 
 

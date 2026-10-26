@@ -135,20 +135,24 @@ class HybridIndex:
         rerank: bool = False,
         candidates: int = 20,
         rerank_words: int = RERANK_WORDS,
+        exclude_tiers: frozenset[str] = frozenset(),
     ) -> list[Hit]:
+        """Top-k chunks; chunks whose tier is in `exclude_tiers` are never returned."""
         n = max(candidates, k)
+        pool = n * 2 if exclude_tiers else n  # dig deeper so filtering still leaves n
         if mode == "bm25":
-            fused = {i: 1.0 / (r + 1) for r, i in enumerate(self._bm25_ranking(query, n))}
+            fused = {i: 1.0 / (r + 1) for r, i in enumerate(self._bm25_ranking(query, pool))}
         elif mode == "dense":
-            fused = {i: 1.0 / (r + 1) for r, i in enumerate(self._dense_ranking(query, n))}
+            fused = {i: 1.0 / (r + 1) for r, i in enumerate(self._dense_ranking(query, pool))}
         elif mode == "hybrid":
             fused: dict[int, float] = {}
-            for ranking in (self._bm25_ranking(query, n), self._dense_ranking(query, n)):
+            for ranking in (self._bm25_ranking(query, pool), self._dense_ranking(query, pool)):
                 for r, i in enumerate(ranking):
                     fused[i] = fused.get(i, 0.0) + 1.0 / (RRF_K + r + 1)
         else:
             raise ValueError(f"unknown mode {mode!r}")
-        order = sorted(fused, key=fused.get, reverse=True)[:n]
+        allowed = [i for i in fused if self.chunks[i].tier not in exclude_tiers]
+        order = sorted(allowed, key=fused.get, reverse=True)[:n]
         if rerank and order:
             if self._rerank is None:
                 self._rerank = _reranker(self._rerank_model)

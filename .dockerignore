@@ -1,13 +1,28 @@
+# Only pyproject.toml, uv.lock, README.md, LICENSE, src/ and config/ are copied into the image.
+# Everything else stays out of the build context, secrets above all.
 .git
-.venv
 .github
+.venv
+.claude
+.vscode
+.idea
+.models
 data
+corpus
+prev
 evals
 reports
 tests
+docs
+Images
+dist
+build
 **/__pycache__
 .ruff_cache
 .pytest_cache
 *.log
-.env
-.env.*
+**/.env
+**/.env.*
+**/*.pem
+**/*.key
+**/*.p12
