@@ -60,3 +60,47 @@ def test_daily_llm_budget_keeps_free_routes_working():
     assert second.json()["route"] == "busy" and second.json()["answer"] == BUSY_REPLY
     exact = c.post("/ask", json={"question": "What are Raiden Shogun's base stats?"})
     assert exact.json()["route"] == "exact" and llm.calls == 1
+
+
+def test_resin_is_spent_only_by_ai_answers_and_refills():
+    from irminsul.engine.engine import RESIN_REPLY
+
+    limits = Limits(resin_cap=1)
+    c = client(limits)
+    stats = {"question": "What are Raiden Shogun's base stats?"}
+    assert c.post("/ask", json=stats).json()["route"] == "exact"
+    assert c.get("/quota").json()["resin"]["current"] == 1  # game-data answers are free
+    assert (
+        c.post("/ask", json={"question": "How much ER does Raiden need?"}).json()["route"] == "rag"
+    )
+    quota = c.get("/quota").json()
+    assert quota["resin"]["current"] == 0 and 0 < quota["resin"]["next_in_s"] <= 24 * 60
+    assert quota["world"]["left"] == limits.llm_per_day - 1
+    empty = c.post("/ask", json={"question": "Is Raiden good in Hyperbloom?"}).json()
+    assert empty["route"] == "no_resin" and empty["answer"] == RESIN_REPLY
+    assert c.post("/ask", json=stats).json()["route"] == "exact"  # still free when empty
+
+
+def test_resin_regenerates_like_original_resin():
+    limits = Limits(resin_cap=3, resin_regen_s=480)
+    for _ in range(3):
+        limits.spend_resin("p", now=0)
+    assert limits.resin("p", now=0) == {
+        "current": 0,
+        "cap": 3,
+        "regen_s": 480,
+        "next_in_s": 480,
+        "full_in_s": 1440,
+    }
+    assert limits.resin("p", now=500)["current"] == 1
+    assert (
+        limits.resin("p", now=5000)["current"] == 3
+        and limits.resin("p", now=5000)["full_in_s"] == 0
+    )
+    assert limits.resin("someone-new", now=0)["current"] == 3
+
+
+def test_stream_done_event_carries_quota():
+    c = client()
+    r = c.post("/ask/stream", json={"question": "What are Raiden Shogun's base stats?"})
+    assert '"quota"' in r.text and '"resin"' in r.text

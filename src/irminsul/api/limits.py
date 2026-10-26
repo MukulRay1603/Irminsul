@@ -1,26 +1,33 @@
 """Abuse and cost limits for a free public endpoint.
 
-- per client: a short-window limit (burst) and a daily limit
-- global: a daily budget of LLM-backed answers; once spent, only free routes (exact answers,
-  refusals, cache hits) keep working and LLM questions get a polite "busy" reply
+- per client: a short-window limit (burst) and a daily request cap (abuse only; generous)
+- per client: Resin, modelled on Genshin's Original Resin. Each AI-written answer costs 1,
+  it refills 1 point at a time up to a cap, and anything answered without the LLM (exact
+  game data, cache hits, refusals) is free. Players see the counter and the refill timer.
+- global: a daily budget of LLM-backed answers (the "ley line" budget); once spent, only free
+  routes keep working and LLM questions get a polite "busy" reply. Resets at 00:00 UTC.
 All in memory: a single small Space instance needs nothing more, and a restart only resets
 counters (which errs on the generous side, never on the costly side for long).
 """
 
+import math
 import time
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 
 @dataclass
 class Limits:
     per_minute: int = 6
-    per_day: int = 60
-    llm_per_day: int = 1500  # all users combined; keep below the providers' free tiers
+    per_day: int = 200  # all requests, free ones included; stops scripted abuse
+    llm_per_day: int = 500  # all users combined; keep below the providers' free tiers
+    resin_cap: int = 30  # AI-written answers a player can bank
+    resin_regen_s: int = 24 * 60  # +1 Resin every 24 minutes, so a full refill takes 12 hours
 
     _recent: dict[str, deque] = field(default_factory=lambda: defaultdict(deque))
     _daily: dict[str, int] = field(default_factory=lambda: defaultdict(int))
+    _resin: dict[str, tuple[float, float]] = field(default_factory=dict)  # (amount, at)
     _llm_used: int = 0
     _day: str = ""
 
@@ -44,6 +51,36 @@ class Limits:
         self._daily[client] += 1
         return None
 
+    # Resin: a regenerating allowance per player
+
+    def _resin_now(self, client: str, now: float) -> float:
+        amount, at = self._resin.get(client, (float(self.resin_cap), now))
+        return min(float(self.resin_cap), amount + (now - at) / self.resin_regen_s)
+
+    def has_resin(self, client: str, now: float | None = None) -> bool:
+        now = time.time() if now is None else now
+        return self._resin_now(client, now) >= 1
+
+    def spend_resin(self, client: str, now: float | None = None) -> None:
+        now = time.time() if now is None else now
+        self._resin[client] = (max(0.0, self._resin_now(client, now) - 1), now)
+
+    def resin(self, client: str, now: float | None = None) -> dict:
+        """What the player's counter shows: current/cap, next point and full refill in seconds."""
+        now = time.time() if now is None else now
+        amount = self._resin_now(client, now)
+        full = amount >= self.resin_cap
+        next_in = 0 if full else math.ceil((1 - amount % 1) * self.resin_regen_s)
+        return {
+            "current": math.floor(amount),
+            "cap": self.resin_cap,
+            "regen_s": self.resin_regen_s,
+            "next_in_s": next_in,
+            "full_in_s": 0 if full else math.ceil((self.resin_cap - amount) * self.resin_regen_s),
+        }
+
+    # Global daily budget
+
     def llm_budget_left(self) -> bool:
         self._roll_day()
         return self._llm_used < self.llm_per_day
@@ -52,10 +89,18 @@ class Limits:
         self._roll_day()
         self._llm_used += 1
 
+    def resets_in_s(self) -> int:
+        now = datetime.now(UTC)
+        midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        return math.ceil((midnight - now).total_seconds())
+
     def snapshot(self) -> dict:
         self._roll_day()
         return {
             "llm_used_today": self._llm_used,
             "llm_per_day": self.llm_per_day,
+            "llm_resets_in_s": self.resets_in_s(),
             "clients_today": len(self._daily),
+            "resin_cap": self.resin_cap,
+            "resin_regen_s": self.resin_regen_s,
         }
