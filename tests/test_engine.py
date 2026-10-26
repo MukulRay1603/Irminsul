@@ -367,3 +367,16 @@ def test_unreleased_entities_are_never_compared():
     assert leak.route != "exact" and leak.card is None
     announced = engine.ask("Raiden Shogun vs Mitya base stats")
     assert announced.route == "announced" and announced.card["type"] == "announced"
+
+
+def test_alternative_citation_styles_are_normalised():
+    from irminsul.engine.engine import normalise_citations
+
+    text = "Raiden wants **250%** ER【1】. Her passive scales with it【2†source】."
+    assert (
+        normalise_citations(text) == "Raiden wants **250%** ER[1]. Her passive scales with it[2]."
+    )
+    llm = FakeLLM(text="Raiden wants about 200-220% Energy Recharge【1】.")
+    answer = Engine(store(), FakeIndex(), llm).ask("How much ER does Raiden need?")
+    assert answer.route == "rag" and "[1]" in answer.text and "【" not in answer.text
+    assert answer.trace["cited"] == [1] and not answer.trace["uncited_answer"]
