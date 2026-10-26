@@ -45,7 +45,7 @@ def score(index: HybridIndex, k: int = 8, configs: dict | None = None) -> dict:
     # team notes): those measure corpus coverage, not retrieval.
     indexed = {c.doc_id for c in index.chunks}
     answerable = [i for i in load() if i.expect != Expect.REFUSE and i.gold_doc_ids]
-    items = [i for i in answerable if set(i.gold_doc_ids) <= indexed]
+    items = [i for i in answerable if set(i.gold_doc_ids) & indexed]
     report: dict = {
         "questions": len(items),
         "skipped_missing_gold": sorted(i.id for i in answerable if i not in items),
@@ -61,7 +61,7 @@ def score(index: HybridIndex, k: int = 8, configs: dict | None = None) -> dict:
             hits, ms = timed_search(index, item.question, k=k, **cfg)
             latencies.append(ms)
             ranked_docs = list(dict.fromkeys(h.chunk.doc_id for h in hits))
-            gold = set(item.gold_doc_ids)
+            gold = set(item.gold_doc_ids) & indexed  # gold docs this index can find
             found = gold & set(ranked_docs)
             first = next((r for r, d in enumerate(ranked_docs, 1) if d in gold), None)
             hits_at.append(1 if found else 0)
