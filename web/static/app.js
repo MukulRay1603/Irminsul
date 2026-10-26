@@ -323,7 +323,7 @@ async function ask(q, opts = {}) {
   if (cardEl) { body.replaceChildren(cardEl); body.classList.add("has-card"); }
   const copy = $(".copy", el);
   copy.onclick = async () => {
-    try { await navigator.clipboard.writeText(text.replace(/\s*\[\d+\]/g, "")); copy.textContent = "Copied"; }
+    try { await navigator.clipboard.writeText(normaliseCitations(text).replace(/\s*\[\d+\]/g, "")); copy.textContent = "Copied"; }
     catch { copy.textContent = "Copy failed"; }
     setTimeout(() => copy.textContent = "Copy", 1600);
   };

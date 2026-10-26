@@ -30,12 +30,14 @@ SYSTEM_PROMPT = """You are Irminsul, a Genshin Impact assistant.
 Rules:
 - Answer ONLY from the numbered sources provided. If they do not contain the answer, say you
   don't have verified information on that.
-- Cite every factual sentence with its source number in square brackets, e.g. [2].
+- Cite every factual sentence with its source number in plain square brackets, e.g. [2].
+  Never use any other citation style.
 - Only officially released information. Never speculate about unreleased characters,
   leaks or future banners.
 - Format for a quick read on a phone:
   - Start with ONE sentence that answers the question directly, in **bold**.
-  - Then 2 to 5 short bullet points ("- ") with the supporting facts; bold the key numbers.
+  - Then 2 to 5 short bullet points ("- ") with the supporting facts. In bullets, bold only
+    a key number or name (a few words), never a whole sentence or bullet.
   - For a comparison of options, use a small Markdown table instead of bullets.
   - Use a "### " heading only when the answer has two or more distinct parts.
   - No filler, no closing offers ("Want me to...?"), no repeating the question.
@@ -59,6 +61,14 @@ SPOILER_REPLY = (
     "**{name}** comes after your story point (you've finished up to {label}), so I'm keeping "
     "this hidden to avoid spoilers. Choose **Show anyway** if you'd like the answer."
 )
+
+
+# Some models (gpt-oss) cite as 【3】 or 【3†source】 whatever the prompt says; ours is [3].
+_ALT_CITATION = re.compile(r"【\s*(\d+)[^】]*】")
+
+
+def normalise_citations(text: str) -> str:
+    return _ALT_CITATION.sub(r"[\1]", text)
 
 
 def _normalise(question: str) -> str:
@@ -296,7 +306,8 @@ class Engine:
 
     @staticmethod
     def _finish_rag(prepared: "_Prepared", completion: Completion) -> Answer:
-        used = {int(n) for n in re.findall(r"\[(\d+)\]", completion.text)}
+        text = normalise_citations(completion.text)
+        used = {int(n) for n in re.findall(r"\[(\d+)\]", text)}
         cited = [c for c in prepared.citations if c.n in used]
         trace = {
             **prepared.trace,
@@ -309,9 +320,9 @@ class Engine:
             "cited": sorted(used),
             "uncited_answer": not cited,
             # Each sentence checked against the source text it cites (no model call).
-            "grounding": grounding.check(completion.text, prepared.sources),
+            "grounding": grounding.check(text, prepared.sources),
         }
-        return Answer(completion.text.strip(), "rag", cited or prepared.citations, trace)
+        return Answer(text.strip(), "rag", cited or prepared.citations, trace)
 
 
 @dataclass
