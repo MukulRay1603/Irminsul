@@ -3,6 +3,7 @@
 Usage:
     uv run irminsul-build --out data/build --cache data/cache
     uv run irminsul-build --limit 5     # quick dev run on a few items per type
+    uv run irminsul-build --sources kqm # only some sources (default: all)
 """
 
 import argparse
@@ -15,14 +16,17 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-from irminsul.pipeline.gate import gate, normalise_name
+from irminsul.pipeline.gate import gate, gate_linked_docs, normalise_name
 from irminsul.pipeline.render import artifact_docs, character_docs, weapon_docs
-from irminsul.schema import SCHEMA_VERSION, Character, Video, slugify
+from irminsul.schema import SCHEMA_VERSION, Character, ReleaseStatus, Video, slugify
 from irminsul.sources import hoyowiki
 from irminsul.sources.http import PoliteClient
+from irminsul.sources.kqm import KqmSource
 from irminsul.sources.yatta import YattaSource
 
 log = logging.getLogger("irminsul.build")
+
+SOURCES = ("yatta", "hoyowiki", "kqm")
 
 
 def _write_jsonl(path: Path, rows: list[BaseModel]) -> None:
@@ -84,36 +88,51 @@ def fetch_official(
     return official
 
 
-def build(out: Path, cache: Path | None, limit: int | None, blocklist: set[str]) -> dict:
+def build(
+    out: Path,
+    cache: Path | None,
+    limit: int | None,
+    blocklist: set[str],
+    sources: tuple[str, ...] = SOURCES,
+) -> dict:
     now = datetime.now(UTC)
-    client = PoliteClient(cache_dir=cache)
-    yatta = YattaSource(client)
-    try:
-        version = yatta.game_version()
-        log.info("Yatta live data version: %s", version)
-        take = (lambda it: itertools.islice(it, limit)) if limit else (lambda it: it)
-        fetched = {
-            "characters": list(take(yatta.characters(now, version))),
-            "weapons": list(take(yatta.weapons(now, version))),
-            "artifact_sets": list(take(yatta.artifact_sets(now, version))),
-        }
-    finally:
-        client.close()
+    take = (lambda it: itertools.islice(it, limit)) if limit else (lambda it: it)
+    fetched: dict[str, list] = {}
+    source_info: dict[str, dict] = {}
+    official = Official({}, [], [], [])
 
-    wiki_client = PoliteClient(cache_dir=cache, headers=hoyowiki.HEADERS)
-    try:
-        official = fetch_official(
-            hoyowiki.HoYoWikiSource(wiki_client), fetched["characters"], now, limit
+    if "yatta" in sources:
+        client = PoliteClient(cache_dir=cache)
+        yatta = YattaSource(client)
+        try:
+            version = yatta.game_version()
+            log.info("Yatta live data version: %s", version)
+            fetched = {
+                "characters": list(take(yatta.characters(now, version))),
+                "weapons": list(take(yatta.weapons(now, version))),
+                "artifact_sets": list(take(yatta.artifact_sets(now, version))),
+            }
+            source_info["yatta"] = {"game_version": version}
+        finally:
+            client.close()
+
+    # HoYoWiki confirms Yatta's records, so it only runs alongside Yatta.
+    if "hoyowiki" in sources and fetched:
+        wiki_client = PoliteClient(cache_dir=cache, headers=hoyowiki.HEADERS)
+        try:
+            official = fetch_official(
+                hoyowiki.HoYoWikiSource(wiki_client), fetched["characters"], now, limit
+            )
+        finally:
+            wiki_client.close()
+        fetched["characters"] += official.announced
+        source_info["hoyowiki"] = {"official_names": {k: len(v) for k, v in official.names.items()}}
+        log.info(
+            "HoYoWiki: %s official names, %d announced, %d videos",
+            source_info["hoyowiki"]["official_names"],
+            len(official.announced),
+            len(official.videos),
         )
-    finally:
-        wiki_client.close()
-    fetched["characters"] += official.announced
-    log.info(
-        "HoYoWiki: %s official names, %d announced, %d videos",
-        {k: len(v) for k, v in official.names.items()},
-        len(official.announced),
-        len(official.videos),
-    )
 
     out.mkdir(parents=True, exist_ok=True)
     renderers = {
@@ -122,19 +141,47 @@ def build(out: Path, cache: Path | None, limit: int | None, blocklist: set[str])
         "artifact_sets": artifact_docs,
     }
     docs, dropped, unverified, counts = [], [], [], {}
+    kept_characters: list[Character] = []
     for kind, records in fetched.items():
-        # Partial builds only fetch a slice of the official lists' counterparts, so only
-        # full builds may drop undated records that HoYoWiki does not list.
-        names = official.names.get(kind) if limit is None else None
+        # Only full builds with HoYoWiki may drop undated records it does not list.
+        names = official.names.get(kind) if limit is None and official.names else None
         report = gate(records, now, blocklist, official_names=names)
+        if kind == "characters":
+            kept_characters = report.kept
         _write_jsonl(out / f"{kind}.jsonl", report.kept)
         for record in report.kept:
             docs.extend(renderers[kind](record))
         dropped += report.dropped
         unverified += report.unverified
         counts[kind] = {"fetched": len(records), "kept": len(report.kept)}
-    counts["announced"] = [c.name for c in official.announced]
-    counts["videos"] = len(official.videos)
+    if official.names:
+        counts["announced"] = [c.name for c in official.announced]
+        counts["videos"] = len(official.videos)
+
+    if "kqm" in sources:
+        kqm = KqmSource(cache_dir=cache)
+        try:
+            sha = kqm.fetch()
+            log.info("KQM TCL commit: %s", sha)
+            pages = list(take(kqm.pages(now, blocklist)))
+        finally:
+            kqm.close()
+        # KQM pages carry no release data: only serve character pages for characters
+        # that are *released* according to official data in this same build.
+        released = (
+            {c.id for c in kept_characters if c.release.status == ReleaseStatus.RELEASED}
+            if "yatta" in sources and not limit
+            else None
+        )
+        kqm_docs, linked_drops, linked_unverified = gate_linked_docs(
+            [d for _, page in pages for d in page.docs], released
+        )
+        docs += kqm_docs
+        dropped += [drop for _, page in pages for drop in page.dropped] + linked_drops
+        unverified += linked_unverified
+        counts["kqm"] = {"pages": len(pages), "docs": len(kqm_docs)}
+        source_info["kqm"] = {"game_version": sha, "license": "CC BY-NC-SA 4.0"}
+
     check_unique_ids(docs)
     _write_jsonl(out / "docs.jsonl", docs)
     _write_jsonl(out / "videos.jsonl", official.videos)
@@ -142,10 +189,7 @@ def build(out: Path, cache: Path | None, limit: int | None, blocklist: set[str])
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "built_at": now.isoformat(),
-        "sources": {
-            "yatta": {"game_version": version},
-            "hoyowiki": {"official_names": {k: len(v) for k, v in official.names.items()}},
-        },
+        "sources": source_info,
         "counts": counts,
         "docs": len(docs),
         "doc_hashes": {d.doc_id: d.content_hash for d in docs},
@@ -168,6 +212,12 @@ def main() -> None:
     )
     parser.add_argument("--limit", type=int, default=None, help="max items per type (dev)")
     parser.add_argument("--blocklist", type=Path, default=Path("config/blocklist.txt"))
+    parser.add_argument(
+        "--sources",
+        type=lambda s: tuple(x.strip() for x in s.split(",") if x.strip()),
+        default=SOURCES,
+        help=f"comma-separated subset of {','.join(SOURCES)} (default: all)",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -178,7 +228,9 @@ def main() -> None:
             for line in args.blocklist.read_text(encoding="utf-8").splitlines()
             if line.strip() and not line.startswith("#")
         }
-    manifest = build(args.out, args.cache, args.limit, blocklist)
+    if unknown := set(args.sources) - set(SOURCES):
+        parser.error(f"unknown sources: {', '.join(sorted(unknown))}")
+    manifest = build(args.out, args.cache, args.limit, blocklist, args.sources)
     log.info(
         "counts=%s docs=%d dropped=%d unverified=%d",
         manifest["counts"],

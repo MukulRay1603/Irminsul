@@ -51,6 +51,32 @@ def check(record: Gated, now: datetime, blocklist: set[str]) -> str | None:
     return f"unhandled status {status}"
 
 
+def gate_linked_docs(
+    docs: Iterable, released_characters: set[str] | None
+) -> tuple[list, list[tuple[str, str]], list[str]]:
+    """Drop guide docs that are linked to a character who is not released in the live game.
+
+    Third-party guides (e.g. KQM) carry no release data of their own, so a doc linked to
+    `character/<slug>` is only served if that character passed the gate from official data.
+    Returns (kept, dropped, unverified); without official data every linked doc is unverified.
+    """
+    kept, dropped, unverified = [], [], []
+    for doc in docs:
+        eid = doc.entity_id or ""
+        if not eid.startswith("character/"):
+            kept.append(doc)
+            continue
+        if released_characters is None:
+            unverified.append(doc.doc_id)
+            kept.append(doc)
+            continue
+        if eid in released_characters:
+            kept.append(doc)
+        else:
+            dropped.append((doc.doc_id, f"linked character {eid} is not released"))
+    return kept, dropped, unverified
+
+
 def gate(
     records: Iterable[Gated],
     now: datetime,
