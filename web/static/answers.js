@@ -17,8 +17,11 @@ function inline(s) {
 
 /* Markdown subset the AI is asked to use: a bold lead sentence, bullets, numbered steps,
    ### headings, tables and > callouts. Input is escaped first, so nothing in it is ever HTML. */
+// Some models cite as 【3】 or 【3†source】; show every citation the same way, as [3].
+const normaliseCitations = text => String(text ?? "").replace(/【\s*(\d+)[^】]*】/g, "[$1]");
+
 function renderMarkdown(text) {
-  const lines = escHTML(text).split("\n");
+  const lines = escHTML(normaliseCitations(text)).split("\n");
   let html = "", list = null, table = null, para = [];
   const flushPara = () => {
     if (!para.length) return;
