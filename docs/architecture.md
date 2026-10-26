@@ -1,108 +1,75 @@
-# Irminsul v1 architecture
+# How Irminsul works
 
-## 1. Data model: provenance on every record
-Every record carries where it came from, how much to trust it, which game version it describes
-and whether it's released (`src/irminsul/schema.py`).
+A concept-level tour. The diagrams are in the [README](../README.md#how-it-works).
 
-| Field | Example | Used for |
-|---|---|---|
-| `source.url` | `https://gi.yatta.moe/en/archive/avatar/Raiden Shogun` | citations |
-| `source.tier` | `official` / `rayy_verified` / `kqm` / `community` | ranking, labels in answers |
-| `source.game_version` | `71F2` (live 7.1), a KQM commit SHA | freshness, changelogs |
-| `release.status` | `released` / `announced` / `unknown` | the leak gate |
-| `doc_id` | `character/raiden-shogun#overview` | stable upsert key, eval gold labels |
+## 1. Provenance on every record
+Every record says where it came from, how much to trust it, which game version it describes and
+whether it's released. That one idea powers citations, ranking, freshness and the leak gate.
 
-**Entities** (characters, weapons, artifact sets) hold exact facts:
-- Lv90 stats, computed as base × growth curve + the ascension bonus for the phase reached
-- talent scaling tables
-- constellations
-- R1–R5 passives
-- set bonuses
-
-**Docs** are the retrievable text rendered from entities and guides.
+**Entities** (characters, weapons, artifact sets) hold exact facts: level 90 stats, talent
+scaling, constellations, refinement passives and set bonuses. **Documents** are the searchable
+text written from those entities and from guides.
 
 ## 2. Sources and trust
-| Tier | Source | Notes |
-|---|---|---|
-| official | Yatta API (live client text) | characters have official release timestamps |
-| official | HoYoWiki (HoYoverse) | official name lists, announced characters, official videos |
-| rayy_verified | team research notes (local only) | allowlisted files, claim-level tags, never published without approval |
-| kqm | KQM Theorycrafting Library | CC BY-NC-SA 4.0, pinned to a commit |
+| Trust tier | Source |
+|---|---|
+| Official | the live game's own text, and HoYoverse's official wiki |
+| Team-verified | fact-checked research notes, published only with approval |
+| Community | the KQM Theorycrafting Library (CC BY-NC-SA 4.0) |
 
-## 3. The leak gate (`pipeline/gate.py`)
-"Fail closed": when release status can't be proven, the record is dropped.
-- `unknown` → dropped. A future release date → dropped.
-- `announced` → allowed **only** from an official source. Only an overview doc is created
-  (element, region, official description); kit modules are never ingested pre-release.
-- Undated records (weapons, artifact sets) must appear in HoYoWiki's official lists. On Oct 26
-  all 252 weapons and 63 sets matched the live data exactly.
-- Third-party guides inherit release status from the official entity they're linked to: a KQM
-  page about a character that isn't released is dropped.
-- A manual `config/blocklist.txt` handles takedowns.
+Answers label every source with its tier.
 
-## 4. Corpus operations (`.github/workflows/corpus-update.yml`)
-Weekly (or on patch day):
-1. build
-2. diff against the published manifest → changelog
-3. **guards**: >10% record loss, any unverified record, or a big drop in docs fails the run
-4. rebuild the index and **gate on retrieval hit@8 ≥ 0.90**
-5. stage on a dated HF Dataset branch
-6. open a review PR
+## 3. The leak gate
+It **fails closed**: when release status can't be proven, the record is dropped.
+- Anything with an unknown or future release is dropped.
+- Officially announced characters get an overview only (element, region, official description).
+  Their kits are never ingested before release.
+- Items without release dates must appear in HoYoverse's official lists.
+- Community guides inherit the release status of the official entity they're about.
+- A manual blocklist handles takedowns.
 
-Merging the PR promotes the staged build. Every failure opens an issue.
+## 4. Weekly data updates
+Each week, or on patch day, the data is rebuilt and compared with what's live. The run stops if
+records go missing, anything is unverified, or search accuracy drops. A passing build is staged
+for review and only published once approved, so a bad build never reaches players and rollback
+is easy.
 
-## 5. Retrieval (`retrieval/`)
-- **Chunks:** ≤300 words, 40-word overlap. Each keeps its doc title and provenance.
-- **Index:**
-  - a folder: `chunks.jsonl`, `vectors.npy` (bge-small-en-v1.5, 384-d, ONNX) and a BM25 index
-  - no vector DB: at ~3k chunks a dense query is a sub-millisecond matrix product
-  - shipped with the dataset so the app never re-embeds on boot
-- **Search:** BM25 + dense, fused with Reciprocal Rank Fusion (k=60), then a cross-encoder
-  re-ranker (ms-marco-MiniLM-L-6-v2) over 20 candidates, reading the first 80 words of each.
-  - That window was chosen by measurement: same hit@8 as full-chunk re-ranking at ~1/8 of the
-    latency.
+## 5. Search
+Keyword search and meaning-based search find different things, so both run and their results
+are fused, then a re-ranker reads the best candidates closely. Each step was kept only if it
+measurably helped (see [`reports/`](../reports/)). The index is small enough to ship with the
+data, so there's no separate vector database to run or pay for.
 
-## 6. Answer engine (`engine/`)
+## 6. The answer engine
 Cheapest and safest first:
 
 | Step | What | Cost |
 |---|---|---|
-| Guards | injection, leak words, versions beyond the announced one, other games, off-topic | free, deterministic |
-| Cache | normalised question → answer | free |
-| Exact | one named entity + stat/constellation/passive/set intent → answer from entity data | free, ~0.1 ms |
-| Announced | named announced character → official overview only | free |
-| RAG | hybrid search + re-rank → LLM with numbered sources, must cite `[n]` | LLM tokens |
+| Guards | leaks, unannounced versions, prompt injection, other games, off-topic | free, rule-based |
+| Cache | the same question answered before | free |
+| Exact | a named character, weapon or set plus a factual question → an interactive card | free, instant |
+| Announced | an officially announced character → official overview only | free |
+| Search + AI | an AI writes from the retrieved sources and must cite them | free tiers |
 
-**LLM router** (`engine/llm.py`):
-- OpenAI-compatible client over free-tier providers
-- a provider with no key is skipped; our own daily cap per provider stays below its free tier
-- 429/5xx → cooldown and failover; all busy → a polite "busy" answer
+After an AI answer, every sentence that cites a source is checked against that source's text,
+and anything that doesn't match is flagged in the app. Every answer also carries a trace (route,
+sources, timing) that powers the "Why this answer?" view.
 
-**Trace:** route, retrieved doc ids and scores, provider/model, tokens, latency. It powers a
-"why this answer?" view.
+## 7. Fair use
+No accounts, so fairness comes from limits: each player has an AI-answer allowance that refills
+one at a time, and a shared pool refills steadily through the day. Game-data answers never
+count. When AI answers are unavailable, everything else keeps working.
 
-## 7. API (`api/`)
-- `POST /ask`, `GET /health`. There are no admin endpoints.
-- **Limits:**
-  - per client: 6/min and 60/day, using X-Forwarded-For behind the Spaces proxy
-  - a **global daily LLM budget**: when it's spent, free routes keep working and LLM questions
-    get "busy"
-- **Image:** python:3.12-slim + uv, no torch, ONNX models baked in, uid 1000. It loads the
-  published corpus and index from the HF Dataset at boot.
-
-## 8. Evaluation (`evals/`, `reports/`)
-- **Golden set:** 107 items across 9 categories, with expectations as groups of acceptable
-  phrasings. Every expected value is verified to appear in its gold doc.
-- **Retrieval:** hit@k, recall@k, MRR, p50/p95, per category.
-- **Answers:** route correctness, expected content, forbidden content, and **a gold doc must
-  be cited**.
+## 8. Evaluation
+A golden set of hand-checked questions scores search and answers on every change: the right
+facts, nothing forbidden, the right route (answered or refused), and the right source cited.
+Results are published on the app's [/results](https://mukulray-irminsul.hf.space/results) page.
 
 ## 9. Key decisions
 | Decision | Why |
 |---|---|
-| Embedded index instead of a hosted vector DB | small corpus; zero cost and no account; versioned with the data |
-| Exact answers before the LLM | correct by construction, instant, free; 85% of the golden set needs no LLM |
-| Deterministic guards before the LLM | can't be prompt-engineered away; costs nothing |
-| Own small LLM router instead of a framework | four providers share one API; a small surface and fully testable |
-| Stage → review PR → promote for data | a bad build never reaches users, and rollback is easy |
-| Local-only team notes | private documents stay off the public dataset unless the owner approves |
+| Exact answers before any AI | correct by construction, instant and free; most questions never need an AI |
+| Rule-based guards before any AI | can't be prompt-engineered away, and cost nothing |
+| A small embedded index instead of a hosted vector database | small corpus; no cost, no account, versioned with the data |
+| Stage, review, then publish data | a bad build never reaches players |
+| Team notes stay private by default | nothing is published without the owner's approval |
