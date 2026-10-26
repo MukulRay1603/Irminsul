@@ -227,7 +227,7 @@ fetch("/health").then(r => r.json()).then(h => {
   const v = h.corpus.game_version || "", live = v.length >= 2 ? `${v[0]}.${v[1]}` : "?";
   const keys = h.llm_providers.filter(p => p.configured).length;
   $("#dataChip").innerHTML = `Game data <b>${esc(live)}</b>` + (keys ? "" : ", AI answers off");
-  $("#fVersion").textContent = live; $("#fDocs").textContent = (h.corpus.docs || 0).toLocaleString();
+  $("#fVersion").textContent = live; gameVersion = live; $("#fDocs").textContent = (h.corpus.docs || 0).toLocaleString();
   $("#facts").hidden = false;
 }).catch(() => $("#dataChip").textContent = "Offline");
 
@@ -271,23 +271,12 @@ $("#gallery").onclick = e => {
 };
 
 /* ---------- Conversation ---------- */
-function md(text) {
-  const lines = esc(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\[(\d+)\]/g, '<sup class="cite"><a href="#src-$1">$1</a></sup>').split("\n");
-  let html = "", inList = false;
-  for (const l of lines) {
-    const item = l.match(/^\s*[-·*]\s+(.*)/);
-    if (item) { if (!inList) { html += "<ul>"; inList = true; } html += `<li>${item[1]}</li>`; continue; }
-    if (inList) { html += "</ul>"; inList = false; }
-    if (l.trim()) html += `<p>${l}</p>`;
-  }
-  return html + (inList ? "</ul>" : "");
-}
+const md = text => renderMarkdown(text);
 function setRoute(el, route) {
   const [label, cls] = ROUTES[route] || [route, ""];
   const r = $(".route", el); r.className = `route ${cls}`; r.lastElementChild.textContent = label;
 }
-let busy = false;
+let busy = false, gameVersion = "";
 async function ask(q) {
   q = q.trim(); if (!q || busy) return;
   busy = true; document.querySelectorAll(".ask button").forEach(b => b.disabled = true);
@@ -296,7 +285,7 @@ async function ask(q) {
   thread.insertAdjacentHTML("beforeend", `<div class="q">${esc(q)}</div>`);
   const el = document.createElement("div"); el.className = "a";
   el.classList.add("streaming");
-  el.innerHTML = `<div class="route"><i></i><span>Searching the branches…</span></div><div class="body typing"></div>`;
+  el.innerHTML = `<div class="route"><i></i><span>Searching the branches…</span></div><div class="body typing" aria-live="polite"></div>`;
   thread.append(el);
   $("#ask").scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
   const body = $(".body", el); let text = "", done = null;
@@ -321,7 +310,15 @@ async function ask(q) {
   busy = false; document.querySelectorAll(".ask button").forEach(b => b.disabled = false);
   if (!done) return;
   quotaUI.set(done.quota);
-  setRoute(el, done.route);
+  $(".route", el).outerHTML = answerHeader(done.route, gameVersion, done.citations?.length || 0);
+  const cardEl = done.card && renderCard(done.card);
+  if (cardEl) { body.replaceChildren(cardEl); body.classList.add("has-card"); }
+  const copy = $(".copy", el);
+  copy.onclick = async () => {
+    try { await navigator.clipboard.writeText(text.replace(/\s*\[\d+\]/g, "")); copy.textContent = "Copied"; }
+    catch { copy.textContent = "Copy failed"; }
+    setTimeout(() => copy.textContent = "Copy", 1600);
+  };
   if (done.route === "refuse_leak") body.insertAdjacentHTML("beforebegin",
     `<div class="redacted" aria-hidden="true"><span></span><span></span><span></span><div class="stamp"><b>Hidden by the leak filter</b></div></div>`);
   if (done.citations?.length) el.insertAdjacentHTML("beforeend", `<div class="sources">${done.citations.map(c =>

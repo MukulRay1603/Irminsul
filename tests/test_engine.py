@@ -276,3 +276,18 @@ def test_talent_descriptions_are_exact_but_opinions_are_not():
     assert burst.route == "exact" and burst.trace["intent"] == "talent:burst"
     assert burst.citations[0].doc_id.startswith("character/raiden-shogun#talent-burst-")
     assert engine.ask("Is Raiden Shogun's burst good?").route == "rag"
+
+
+def test_exact_answers_carry_structured_cards():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    stats = engine.ask("What are Raiden Shogun's base stats?").card
+    assert stats["type"] == "stats" and stats["stats"][1] == {"label": "Base ATK", "value": "337"}
+    burst = engine.ask("What does Raiden Shogun's Elemental Burst do?").card
+    assert burst["type"] == "talents" and burst["selected"] == "burst"
+    assert {t["key"] for t in burst["tabs"]} >= {"normal_attack", "skill", "burst"}
+    sword = engine.ask("What does Sacrificial Sword's passive do at R3?").card
+    assert sword["type"] == "weapon" and sword["selected"] == 3 and len(sword["refinements"]) == 5
+    again = engine.ask("What does Sacrificial Sword's passive do at R3?")
+    assert again.trace.get("cache") == "hit" and again.card == sword  # cache keeps the card
+    mitya = engine.ask("Is Mitya playable yet?").card
+    assert mitya["type"] == "announced" and "talents" not in mitya  # overview only

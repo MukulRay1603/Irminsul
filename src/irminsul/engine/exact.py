@@ -6,6 +6,7 @@ here; anything else (comparisons, "is X good", builds) goes to retrieval + LLM.
 
 import re
 
+from irminsul.engine import cards
 from irminsul.engine.entities import EntityStore, Match, released
 from irminsul.engine.types import Answer, Citation
 from irminsul.schema import ReleaseStatus, slugify
@@ -51,7 +52,11 @@ def announced_answer(m: Match) -> Answer:
         f"not official yet, so I won't guess or share leaked information. [1]"
     )
     return Answer(
-        text, "announced", [_cite(m, "overview")], {"entity": c.id, "status": "announced"}
+        text,
+        "announced",
+        [_cite(m, "overview")],
+        {"entity": c.id, "status": "announced"},
+        card=cards.announced_card(c),
     )
 
 
@@ -74,6 +79,7 @@ def character_answer(m: Match, q: str) -> Answer | None:
                 "exact",
                 [_cite(m, "constellations")],
                 {"entity": c.id, "intent": "const"},
+                card=cards.constellations_card(c, level),
             )
     if _STATS.search(q) and c.base_stats:
         s = c.base_stats
@@ -82,7 +88,13 @@ def character_answer(m: Match, q: str) -> Answer | None:
             f"base HP {s.hp:.0f}, base ATK {s.atk:.0f}, base DEF {s.defense:.0f}. "
             f"Ascension stat: {s.bonus_stat} {_pct(s.bonus_value, s.bonus_stat)}. [1]"
         )
-        return Answer(text, "exact", [_cite(m, "overview")], {"entity": c.id, "intent": "stats"})
+        return Answer(
+            text,
+            "exact",
+            [_cite(m, "overview")],
+            {"entity": c.id, "intent": "stats"},
+            card=cards.stats_card(c),
+        )
     if (talent := _TALENT.search(q)) and _DESCRIBE.search(q) and c.talents:
         kind = talent.lastgroup
         chosen = [t for t in c.talents if t.kind == kind]
@@ -93,6 +105,7 @@ def character_answer(m: Match, q: str) -> Answer | None:
                 "exact",
                 [_cite(m, f"talent-{kind}-{slugify(chosen[0].name)}")],
                 {"entity": c.id, "intent": f"talent:{kind}"},
+                card=cards.talents_card(c, kind),
             )
     if _KIND.search(q):
         text = (
@@ -116,15 +129,16 @@ def weapon_answer(m: Match, q: str) -> Answer | None:
         f"**{w.name}** ({w.rarity}★ {w.weapon_type}): base ATK {w.base_atk:.0f}{sub} "
         f"at max level. [1]"
     ]
+    r = re.search(r"\br([1-5])\b", q, re.I)
+    level = int(r.group(1)) if r else 1
     if w.passive_name and w.passive_by_refinement:
-        r = re.search(r"\br([1-5])\b", q, re.I)
-        level = int(r.group(1)) if r else 1
         lines.append(f"\n**{w.passive_name} (R{level}):** {w.passive_by_refinement[level - 1]} [1]")
     return Answer(
         "\n".join(lines),
         "exact",
         [_cite(m, "main")],
         {"entity": w.id, "intent": "passive" if wants_passive else "stats"},
+        card=cards.weapon_card(w, level),
     )
 
 
@@ -134,7 +148,11 @@ def artifact_answer(m: Match, q: str) -> Answer | None:
         return None
     lines = [f"**{a.name}**"] + [f"- **{n}-Piece:** {t}" for n, t in sorted(a.bonuses.items())]
     return Answer(
-        "\n".join(lines) + " [1]", "exact", [_cite(m, "main")], {"entity": a.id, "intent": "set"}
+        "\n".join(lines) + " [1]",
+        "exact",
+        [_cite(m, "main")],
+        {"entity": a.id, "intent": "set"},
+        card=cards.set_card(a),
     )
 
 
