@@ -84,6 +84,7 @@ class AskResponse(BaseModel):
     citations: list[CitationOut]
     trace: dict
     follow_ups: list[FollowUp] = []
+    card: dict | None = None  # structured view of an exact answer (stats, talents, ...)
 
 
 def client_id(request: Request, trusted_hops: int = 0) -> str:
@@ -347,6 +348,7 @@ def create_app(
             citations=[CitationOut(**asdict(c)) for c in answer.citations],
             trace=answer.trace,
             follow_ups=[FollowUp(**f) for f in answer.follow_ups],
+            card=answer.card,
         )
 
     return app

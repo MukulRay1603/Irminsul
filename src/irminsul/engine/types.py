@@ -19,3 +19,4 @@ class Answer:
     citations: list[Citation] = field(default_factory=list)
     trace: dict = field(default_factory=dict)  # explainability: what happened and why
     follow_ups: list[dict] = field(default_factory=list)  # [{"question", "free"}], see followups
+    card: dict | None = None  # structured view of an exact answer, see cards
