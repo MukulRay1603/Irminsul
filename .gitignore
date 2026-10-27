@@ -27,3 +27,7 @@ Thumbs.db
 # Local agent files
 .claude/
 CLAUDE.md
+
+# Curated team files: kept in the private HF dataset (curated/), fetched by the build
+config/team_facts.md
+config/team_builds.md

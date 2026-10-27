@@ -61,6 +61,12 @@ jobs:
             cp corpus/manifest.json prev/manifest.json
           fi
 
+      # The team's facts and build recommendations are kept out of the public repo: they come
+      # from the private dataset. Missing files fail the run instead of publishing without them.
+      - name: Curated team files (private dataset)
+        if: env.HF_TOKEN != ''
+        run: uv run irminsul-publish fetch-curated --repo "$HF_DATASET" --out config
+
       - name: Build corpus (Yatta + HoYoWiki + KQM, leak-gated)
         run: uv run irminsul-build --out data/build
 

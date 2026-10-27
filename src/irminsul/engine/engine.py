@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
 from irminsul import story
-from irminsul.engine import grounding, guards
+from irminsul.engine import grounding, guards, language
 from irminsul.engine.cards import pct
 from irminsul.engine.entities import EntityStore, Match
 from irminsul.engine.exact import answer_exact
@@ -174,9 +174,14 @@ class Engine:
         the entity the previous answer was about (for "is she good?")."""
         start = time.perf_counter()
         point = story.point(story_until)
-        question = self.with_context(question.strip(), context)
-        answer = self._ask(question, allow_llm, out_of_allowance, point)
-        answer.follow_ups = self._follow_ups(question, answer)
+        original = self.with_context(question.strip(), context)
+        question, lang = self._in_english(original, allow_llm and not out_of_allowance)
+        if lang and (sensitive := self._sensitive(original)):
+            answer = sensitive
+        else:
+            answer = self._ask(question, allow_llm, out_of_allowance, point, lang)
+        self._mark_language(answer, lang, question)
+        answer.follow_ups = [] if lang else self._follow_ups(question, answer)
         _mark_filter(answer, point)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         return answer
@@ -196,6 +201,32 @@ class Engine:
             return question
         return f"{question} ({match.entity.name})"
 
+    def _in_english(self, question: str, model_allowed: bool) -> tuple[str, str | None]:
+        """(English question, the player's language) for a non-English question, when a model
+        can translate it; otherwise the question as asked and None."""
+        if self.llm is None or not model_allowed or not language.looks_foreign(question):
+            return question, None
+        tr = language.translate(self.llm, question)
+        return (tr.english, tr.language) if tr else (question, None)
+
+    def _sensitive(self, original: str) -> Answer | None:
+        """Personal data and self-harm checks on the words the player actually typed."""
+        refusal = guards.check(original, self.store, self.guard_cfg)
+        return refusal if refusal and refusal.route in guards.SENSITIVE_ROUTES else None
+
+    def _localized(self, answer: Answer, lang: str | None) -> Answer:
+        """A free answer (game data, refusal) in the player's language; RAG answers are
+        already written in it."""
+        if lang and answer.route != "rag" and self.llm is not None:
+            answer.text = language.localize(self.llm, answer.text, lang)
+        return answer
+
+    @staticmethod
+    def _mark_language(answer: Answer, lang: str | None, english: str) -> None:
+        if lang:
+            answer.trace["language"] = lang
+            answer.trace["english_question"] = english
+
     def _follow_ups(self, question: str, answer: Answer) -> list[dict]:
         # Suggestions about a character past the story point would spoil it all over again.
         return [] if answer.route == "spoiler" else follow_ups(self.store, question, answer)
@@ -206,10 +237,11 @@ class Engine:
         allow_llm: bool,
         out_of_allowance: bool,
         point: story.StoryPoint | None = None,
+        lang: str | None = None,
     ) -> Answer:
         answer = self._before_llm(question, point)
         if answer is None:
-            prepared = self._prepare_rag(question, allow_llm, out_of_allowance, point)
+            prepared = self._prepare_rag(question, allow_llm, out_of_allowance, point, lang)
             if isinstance(prepared, Answer):
                 answer = prepared
             else:
@@ -218,6 +250,8 @@ class Engine:
                 except AllProvidersBusy:
                     return Answer(BUSY_REPLY, "busy", trace=prepared.trace)
                 answer = self._finish_rag(prepared, completion)
+        if lang:  # the cache is keyed on English questions: keep translated answers out of it
+            return self._localized(answer, lang)
         self._remember(question, answer, point)
         return answer
 
@@ -235,11 +269,14 @@ class Engine:
         token by token; the final "done" event carries the citations the answer actually used.
         """
         start = time.perf_counter()
-        question = self.with_context(question.strip(), context)
+        original = self.with_context(question.strip(), context)
+        question, lang = self._in_english(original, allow_llm and not out_of_allowance)
         point = story.point(story_until)
-        answer = self._before_llm(question, point)
+        answer = (self._sensitive(original) if lang else None) or self._before_llm(question, point)
         prepared = (
-            None if answer else self._prepare_rag(question, allow_llm, out_of_allowance, point)
+            None
+            if answer
+            else self._prepare_rag(question, allow_llm, out_of_allowance, point, lang)
         )
         if isinstance(prepared, Answer):
             answer = prepared
@@ -257,15 +294,20 @@ class Engine:
                 yield "delta", {"text": BUSY_REPLY}
             if completion is not None:
                 answer = self._finish_rag(prepared, completion)
-                self._remember(question, answer, point)
+                if not lang:  # the cache is keyed on English questions
+                    self._remember(question, answer, point)
         else:
-            self._remember(question, answer, point)
+            if lang:
+                answer = self._localized(answer, lang)
+            else:
+                self._remember(question, answer, point)
             yield (
                 "meta",
                 {"route": answer.route, "citations": [asdict(c) for c in answer.citations]},
             )
             yield "delta", {"text": answer.text}
         _mark_filter(answer, point)
+        self._mark_language(answer, lang, question)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         yield (
             "done",
@@ -273,7 +315,8 @@ class Engine:
                 "route": answer.route,
                 "citations": [asdict(c) for c in answer.citations],
                 "trace": answer.trace,
-                "follow_ups": self._follow_ups(question, answer),
+                # Suggestions are English templates: none for a question in another language
+                "follow_ups": [] if lang else self._follow_ups(question, answer),
                 "card": answer.card,
                 # When the output guard changed a streamed answer, the page re-renders it
                 "text": answer.text if answer.trace.get("output_guard") else None,
@@ -285,6 +328,8 @@ class Engine:
     ) -> bool:
         """Will this be answered without the AI (refusal, cache or game data)? No side effects."""
         question = self.with_context(question.strip(), context)
+        if self.llm is not None and language.looks_foreign(question):
+            return False  # translating it uses the model
         return self._before_llm(question, story.point(story_until)) is not None
 
     def _before_llm(self, question: str, point: story.StoryPoint | None = None) -> Answer | None:
@@ -373,6 +418,7 @@ class Engine:
         allow_llm: bool,
         out_of_allowance: bool = False,
         point: story.StoryPoint | None = None,
+        lang: str | None = None,
     ) -> "Answer | _Prepared":
         if self.index is None:
             return Answer(NO_SOURCES_REPLY, "no_index")
@@ -422,7 +468,9 @@ class Engine:
             {
                 "role": "user",
                 "content": f"Sources:\n{sources}\n\nToday's date (UTC): "
-                f"{datetime.now(UTC).date().isoformat()}\n\nQuestion: {question}",
+                f"{datetime.now(UTC).date().isoformat()}\n\nQuestion: {question}"
+                # The player asked in another language: answer in it (citations unchanged)
+                + (f"\n\nWrite the whole answer in {lang}." if lang else ""),
             },
         ]
         if self.llm is not None and out_of_allowance:  # this player's AI answers are used up
