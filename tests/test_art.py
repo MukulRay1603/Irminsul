@@ -235,3 +235,20 @@ def test_serve_picks_the_art_mode(tmp_path, monkeypatch):
     monkeypatch.setenv("IRMINSUL_ART", str(tmp_path))
     art = make_art(store())
     assert isinstance(art, LocalArt) and art.library == tmp_path
+
+
+def test_warm_prepares_cards_and_splashes_before_anyone_asks(tmp_path):
+    upstream = everything()
+    _, art = make(tmp_path, upstream)
+    ready = art.warm()
+    assert ready >= 3  # Raiden's card and splash, and the Electro icon
+    fetched = len(upstream.calls)
+    # A visitor now gets them from the cache: nothing more goes upstream
+    c, _ = make(tmp_path, upstream)
+    for url in (
+        "/art/c/raiden-shogun/card?w=256",
+        "/art/c/raiden-shogun/splash?w=900",
+        "/art/e/Electro?w=64",
+    ):
+        assert c.get(url).status_code == 200, url
+    assert len(upstream.calls) == fetched
