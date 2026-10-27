@@ -5,6 +5,7 @@ Data comes from local folders, or is downloaded once at boot from the public HF 
     IRMINSUL_HF_DATASET=MukulRay/irminsul-corpus uv run irminsul-serve   # e.g. on a Space
 LLM keys (GROQ_API_KEY, ...) are read from the environment; without any, the API still
 serves exact answers and refusals, and LLM questions get a "busy" reply.
+YOUTUBE_API_KEY turns on community build guides in the patch notes (api/community.py).
 IRMINSUL_KQM=off keeps KQM-derived chunks out of every answer (see kqm_enabled).
 Character art (api/art.py): IRMINSUL_ART=<folder> serves a local art library; without it,
 official images are fetched and cached under IRMINSUL_CACHE/art unless IRMINSUL_ART_REMOTE=off.
@@ -29,6 +30,7 @@ import uvicorn
 
 from irminsul.api.app import cors_origins, create_app, trusted_proxy_hops
 from irminsul.api.art import LocalArt, RemoteArt
+from irminsul.api.community import CommunityVideos, add_community
 from irminsul.api.feedback import add_feedback
 from irminsul.api.limits import Limits
 from irminsul.api.patches import add_patches, load_patch_history
@@ -138,7 +140,12 @@ def build_app():
         # in the background: the site serves at once, images get ready in a minute or two
         threading.Thread(target=art.warm, name="art-warm", daemon=True).start()
     add_planner(app, engine.store, data)
+    # Community build guides (YouTube), only with a key; the page offers the group only then
+    key = os.environ.get("YOUTUBE_API_KEY", "").strip()
+    community = CommunityVideos(engine.store, key, live) if key else None
+    patch_notes["community_videos"] = community is not None
     add_patches(app, patch_notes)
+    add_community(app, community, patch_notes)
     add_feedback(app, trusted_hops=trusted_proxy_hops())
     return app
 

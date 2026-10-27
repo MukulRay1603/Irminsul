@@ -105,8 +105,8 @@
       h("iframe", { src: `https://www.youtube-nocookie.com/embed/${v.youtube_id}?autoplay=1`, allow: "autoplay; encrypted-media; picture-in-picture", allowfullscreen: true, title: title }))));
     return h("li", {}, btn);
   }
-  // Each group folds behind its heading so a big patch doesn't push the page down. Only new
-  // characters start open; the rest show their count until opened.
+  // Each group folds behind its heading so a big patch doesn't push the page down. New
+  // characters and official videos start open; the rest show their count until opened.
   function group(title, items, make, cls = "", open = false) {
     if (!items.length) return null;
     return h("details", { class: `pn-group ${cls}`, open },
@@ -114,6 +114,46 @@
         h("span", { class: "pn-count", text: String(items.length) }),
         h("span", { class: "pn-chev", "aria-hidden": "true" })),
       h("ul", { class: `pn-list ${cls}` }, items.map(make)));
+  }
+
+  // Popular community build guides for this version's characters (server: api/community.py).
+  // Closed by default and only fetched when opened, so nobody pays for what they don't look at.
+  const communityCache = new Map();
+  function communityVideo(v) {
+    const li = video({ youtube_id: v.youtube_id, title: v.title });
+    li.querySelector(".pn-video span")?.append(h("small", { class: "pn-chan",
+      text: `${v.channel} · ${new Intl.NumberFormat(undefined, { notation: "compact" }).format(v.views)} views` }));
+    return li;
+  }
+  function community(note, chars) {
+    if (!data.community_videos || !chars.length) return null;
+    const list = h("ul", { class: "pn-list pn-vids" });
+    const status = h("p", { class: "pn-note pn-comm-note", text: "Most-viewed build guides from YouTube creators, published after release. Community content, not checked by Irminsul." });
+    const box = h("details", { class: "pn-group pn-community" },
+      h("summary", {}, h("span", { class: "pn-gtitle", text: "Community build guides" }),
+        h("span", { class: "pn-chev", "aria-hidden": "true" })),
+      list, status);
+    const own = v => !mine || roster?.has(v.entity_id);
+    const fill = vs => {
+      const shown = vs.filter(own);
+      list.replaceChildren(...shown.map(communityVideo));
+      if (!shown.length) list.replaceChildren(h("li", { class: "pn-empty", text: "No community guides yet for this version." }));
+    };
+    box.addEventListener("toggle", async () => {
+      if (!box.open) return;
+      if (communityCache.has(note.version)) return fill(communityCache.get(note.version));
+      list.replaceChildren(h("li", { class: "placeholder", text: "Loading community guides…" }));
+      try {
+        const r = await fetch(`/api/community-videos?version=${encodeURIComponent(note.version)}`);
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const vs = (await r.json()).videos.filter(v => YT.test(v.youtube_id || ""));
+        communityCache.set(note.version, vs);
+        fill(vs);
+      } catch {
+        list.replaceChildren(h("li", { class: "pn-empty", text: "Community guides didn't load. Try again in a moment." }));
+      }
+    });
+    return box;
   }
 
   function render() {
@@ -139,7 +179,8 @@
       group("New weapons", weapons, entityCard, "pn-cards"),
       group("New artifact sets", sets, entityCard, "pn-cards"),
       group("Changes since the previous build", changes, change, "pn-changes"),
-      group("New official videos", videos, video, "pn-vids"));
+      group("New official videos", videos, video, "pn-vids", true),
+      community(note, chars));
     const empty = !chars.length && !weapons.length && !sets.length && !changes.length && !videos.length;
     if (empty) body.append(h("p", { class: "pn-empty", text: mine
       ? (roster?.size ? "Nothing in this version for the characters in your planner." : "Your planner is empty on this device. Add characters in the Daily planner to filter patch notes to them.")

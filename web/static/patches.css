@@ -125,3 +125,7 @@
 .pn-changed { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .pn-changed li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13.5px; color: var(--muted); }
 .xcard .xc-foot a { color: var(--leaf); }
+
+/* Community build guides: channel and views under the title, a quieter note below */
+.pn-chan { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
+.pn-community .pn-comm-note { margin: 0 0 14px; }
