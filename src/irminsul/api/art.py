@@ -279,6 +279,36 @@ class RemoteArt:
             _resize(src, out, w)
         return out
 
+    def warm(self) -> int:
+        """Fetch and resize the art most pages show, before anyone asks for it.
+
+        The cache lives on the Space's temporary disk, so every restart (each data publish)
+        starts it empty: without this, the first visitors wait ~0.5 s per character image.
+        Order: element icons and grid cards (the home page), then dossier splashes. Upstream
+        pacing is unchanged. Returns how many images are ready.
+        """
+        chars = sorted(
+            (
+                m.entity
+                for m in self.store.by_id.values()
+                if m.entity.id.startswith("character/")
+                and m.entity.release.status == ReleaseStatus.RELEASED
+            ),
+            key=lambda c: c.id,
+        )
+        keys = [(f"e/{el}", 64) for el in ELEMENT_ASSETS]
+        keys += [(f"c/{self._slug(c)}/card", 256) for c in chars]
+        keys += [(f"c/{self._slug(c)}/splash", 900) for c in chars]
+        ready = 0
+        for key, w in keys:
+            try:
+                self.file(key, w)
+                ready += 1
+            except HTTPException:
+                pass  # no art for this one: the page already copes
+        log.info("art cache warm: %d of %d images", ready, len(keys))
+        return ready
+
     def _lock(self, name: str) -> threading.Lock:
         with self._guard:
             return self._locks.setdefault(name, threading.Lock())

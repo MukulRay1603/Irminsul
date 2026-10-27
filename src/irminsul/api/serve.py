@@ -8,6 +8,8 @@ serves exact answers and refusals, and LLM questions get a "busy" reply.
 IRMINSUL_KQM=off keeps KQM-derived chunks out of every answer (see kqm_enabled).
 Character art (api/art.py): IRMINSUL_ART=<folder> serves a local art library; without it,
 official images are fetched and cached under IRMINSUL_CACHE/art unless IRMINSUL_ART_REMOTE=off.
+At boot the common ones (grid cards, splashes) are fetched in the background; IRMINSUL_ART_WARM=off
+skips that.
 Security settings (docs/security.md):
     IRMINSUL_TRUSTED_PROXY_HOPS=1    on HF Spaces, so limits key on the real client address
     IRMINSUL_CORS_ORIGINS=https://a.example,https://b.example   (default: no CORS)
@@ -20,6 +22,7 @@ only, turns on the 15-minute upload; without it feedback stays in memory.
 import json
 import logging
 import os
+import threading
 from pathlib import Path
 
 import uvicorn
@@ -129,7 +132,11 @@ def build_app():
         cors=cors_origins(),
         frame_ancestors=os.environ.get("IRMINSUL_FRAME_ANCESTORS", "'none'"),
     )
-    add_web(app, engine.store, videos, make_art(engine.store))
+    art = make_art(engine.store)
+    add_web(app, engine.store, videos, art)
+    if isinstance(art, RemoteArt) and _switch("IRMINSUL_ART_WARM"):
+        # in the background: the site serves at once, images get ready in a minute or two
+        threading.Thread(target=art.warm, name="art-warm", daemon=True).start()
     add_planner(app, engine.store, data)
     add_patches(app, patch_notes)
     add_feedback(app, trusted_hops=trusted_proxy_hops())
