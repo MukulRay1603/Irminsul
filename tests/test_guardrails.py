@@ -91,3 +91,17 @@ def test_named_entities_get_their_official_profile_as_a_source():
     titles = [c.title for c in answer.citations] + [h["doc_id"] for h in answer.trace["retrieval"]]
     assert any(t == "weapon/sacrificial-sword#main" for t in titles)
     assert any(t == "character/raiden-shogun#overview" for t in titles)
+
+
+@pytest.mark.parametrize(
+    "q",
+    [
+        "I am a brand-new account, who is the best free pick?",
+        "How do I unlock the free selector events, and when do they end?",
+        "Which characters are good for crystalfly and exploration?",
+        "Is it worth pulling on this banner or saving my pulls?",
+    ],
+)
+def test_real_player_questions_are_on_topic(q):
+    # From real viewer comments (via Recon): these were wrongly refused as off-topic
+    assert guards.on_topic(q, False)

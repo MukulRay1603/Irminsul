@@ -69,6 +69,7 @@ ALLOWANCE_REPLY = (
     "and answers straight from game data, like stats and passives, are always free."
 )
 SOURCE_WORDS = 180
+MAX_PROFILES = 8  # official profiles of named entities added to the sources (each ~40 words)
 SPOILER_REPLY = (
     "**{name}** comes after your story point (you've finished up to {label}), so I'm keeping "
     "this hidden to avoid spoilers. Choose **Show anyway** if you'd like the answer."
@@ -369,7 +370,8 @@ class Engine:
         # The basic facts of every character, weapon or set the question names, so the model
         # can connect them (e.g. that Skirk uses a sword) even when retrieval didn't surface
         # their overview.
-        for match in self.store.find(question)[:3]:
+        # Up to 8: team questions often list a whole roster ("Mona, Diona, Layla, ...").
+        for match in self.store.find(question)[:MAX_PROFILES]:
             profile = official_profile(match)
             if profile is None:
                 continue

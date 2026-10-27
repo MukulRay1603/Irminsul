@@ -16,3 +16,5 @@ Each item (`src/irminsul/evals.py`) has:
 **Rule:** a gold doc must literally contain each expected value. This was checked against the Oct 26 corpus build for all 107 items.
 
 v0 (Oct 26 2026): 107 items. 73 generated from official data, 34 hand-written. Real viewer questions (via Recon) are next.
+
+v1 (Oct 27 2026): 129 items, adding `golden_viewer.jsonl`: 10 anonymised questions from RAYY viewers' YouTube comments (via Recon). Live-event questions (free selectors, current codes, this month's Theater) are covered by unit tests rather than here, because the corpus has no source document for them yet.
