@@ -28,13 +28,42 @@ def test_page_and_assets_are_served_under_the_strict_csp(tmp_path):
         "<script>" not in page.text and " style=" not in page.text and "onclick=" not in page.text
     )
     assert c.get("/static/app.css").status_code == 200
-    for name in ("app.js", "planner.js", "answers.js", "patches.js", "story.js"):
+    for name in (
+        "app.js",
+        "planner.js",
+        "answers.js",
+        "patches.js",
+        "story.js",
+        "trust.js",
+        "feedback.js",
+        "about.js",
+        "results.js",
+    ):
         js = (WEB_DIR / "static" / name).read_text(encoding="utf-8")
         assert ' style="' not in js and "onerror=" not in js and "onclick=" not in js
     assert "/static/planner.js" in page.text and c.get("/static/planner.css").status_code == 200
     assert "/static/patches.js" in page.text and c.get("/static/patches.css").status_code == 200
     assert "/static/story.js" in page.text and "data-story-slot" in page.text
     assert c.get("/static/story.css").status_code == 200
+    assert "/static/feedback.js" in page.text and 'href="/about"' in page.text
+
+
+def test_about_page_is_served_under_the_strict_csp(tmp_path):
+    c = client(tmp_path)
+    page = c.get("/about")
+    assert page.status_code == 200 and page.headers["content-type"].startswith("text/html")
+    csp = page.headers["content-security-policy"]
+    assert "script-src 'self'" in csp and "unsafe-inline" not in csp
+    text = page.text
+    assert "<script>" not in text and " style=" not in text and "onclick=" not in text
+    assert "onsubmit=" not in text and "javascript:" not in text
+    for asset in ("/static/about.css", "/static/about.js", "/static/feedback.js"):
+        assert asset in text and c.get(asset).status_code == 200
+    assert c.get("/static/feedback.css").status_code == 200
+    # The essentials: credit to HoYoverse, the maker, the privacy promises and the form
+    assert "not affiliated with or endorsed by HoYoverse" in text
+    assert "https://github.com/MukulRay1603" in text and "data-feedback-form" in text
+    assert 'id="privacy"' in text and 'id="feedback"' in text
 
 
 def test_gallery_lists_released_characters_only(tmp_path):

@@ -13,6 +13,8 @@ Security settings (docs/security.md):
     IRMINSUL_CORS_ORIGINS=https://a.example,https://b.example   (default: no CORS)
     IRMINSUL_FRAME_ANCESTORS="https://huggingface.co"   to allow the Space page to embed it
     IRMINSUL_MAX_CONCURRENCY=64      requests in flight before uvicorn answers 503
+Feedback (api/feedback.py): HF_FEEDBACK_TOKEN, a write token for the private feedback dataset
+only, turns on the 15-minute upload; without it feedback stays in memory.
 """
 
 import json
@@ -24,6 +26,7 @@ import uvicorn
 
 from irminsul.api.app import cors_origins, create_app, trusted_proxy_hops
 from irminsul.api.art import LocalArt, RemoteArt
+from irminsul.api.feedback import add_feedback
 from irminsul.api.limits import Limits
 from irminsul.api.patches import add_patches, load_patch_history
 from irminsul.api.planner import add_planner
@@ -129,6 +132,7 @@ def build_app():
     add_web(app, engine.store, videos, make_art(engine.store))
     add_planner(app, engine.store, data)
     add_patches(app, patch_notes)
+    add_feedback(app, trusted_hops=trusted_proxy_hops())
     return app
 
 

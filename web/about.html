@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en" data-mode="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>About Irminsul</title>
+<meta name="description" content="Irminsul is a free, unofficial Genshin Impact assistant that answers from official game data, shows its sources and never discusses leaks.">
+<meta name="theme-color" content="#0A1811">
+<meta name="color-scheme" content="dark light">
+<link rel="icon" type="image/png" sizes="32x32" href="/static/icons/favicon-32.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Saira:wdth,wght@75..125,300..700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/about.css">
+</head>
+<body class="about-page">
+
+<a class="skip" href="#main">Skip to content</a>
+<nav class="abar" aria-label="Site">
+  <a class="amark" href="/">IRMINSUL</a>
+  <a class="aback" href="/">Ask a question <span aria-hidden="true">→</span></a>
+</nav>
+
+<main class="amain" id="main">
+  <header class="ahead">
+    <p class="eyebrow">About</p>
+    <h1>A Genshin assistant that shows its work</h1>
+    <p class="lede">Irminsul is a free, unofficial Genshin Impact assistant. It answers from official game data,
+      shows the source behind every answer, never discusses leaks, and has a story-safe mode so lore answers
+      don't spoil quests you haven't played yet.</p>
+    <p class="version" id="version" role="status">Checking the live game data…</p>
+  </header>
+
+  <nav class="toc" aria-label="On this page">
+    <a href="#how">How it works</a>
+    <a href="#principles">Principles</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#fair-use">Fair use</a>
+    <a href="#credits">Credits</a>
+    <a href="#feedback">Feedback</a>
+  </nav>
+
+  <section class="panel apanel" id="how" aria-labelledby="howTitle">
+    <h2 id="howTitle">How it works</h2>
+    <ol class="steps">
+      <li><b>Game data first.</b> Stats, passives, constellations, set bonuses and other facts are answered
+        straight from official game data, instantly, with no AI involved.</li>
+      <li><b>AI only when needed.</b> For questions that need explaining, an AI model writes an answer using
+        only the official pages it was given, and has to cite them.</li>
+      <li><b>Every sentence checked.</b> Each sentence of an AI answer is compared with the source it cites.
+        Anything that can't be matched is marked, so you can see what to double-check.</li>
+      <li><b>A leak filter.</b> Unreleased characters and content stay out, both from the questions it will
+        take and from the data it answers with.</li>
+      <li><b>Guardrails.</b> Personal data, unsafe topics, cheats and attempts to trick the assistant are
+        politely refused.</li>
+    </ol>
+    <p class="fine">Curious how accurate it is? The <a href="/results">public test results</a> come from
+      automated tests anyone can rerun.</p>
+  </section>
+
+  <section class="panel apanel" id="principles" aria-labelledby="principlesTitle">
+    <h2 id="principlesTitle">Principles</h2>
+    <ul class="pills">
+      <li><b>Official data only</b><span>Answers come from the game's own data and official sources.</span></li>
+      <li><b>No leaks</b><span>Nothing unreleased, ever, however the question is asked.</span></li>
+      <li><b>Sources on every answer</b><span>Each answer names where it came from, so you can check it.</span></li>
+      <li><b>Family-friendly</b><span>Kind, safe and suitable for every Traveler.</span></li>
+      <li><b>Genshin only</b><span>It stays on topic and politely declines everything else.</span></li>
+    </ul>
+  </section>
+
+  <section class="panel apanel" id="privacy" aria-labelledby="privacyTitle">
+    <h2 id="privacyTitle">Privacy</h2>
+    <ul class="checks">
+      <li><b>No accounts and no tracking.</b> No sign-in, no ads, no analytics, no tracking cookies. (The
+        page's font is loaded from Google Fonts.)</li>
+      <li><b>Your planner and story point stay on your device.</b> They're saved in your browser, not on
+        our server. The story point goes along with a question only to filter spoilers, and isn't kept.</li>
+      <li><b>The AI-answer counter is in memory only.</b> It remembers your connection for a while so answers
+        are shared fairly, and is forgotten after that or whenever the server restarts.</li>
+      <li><b>Feedback is anonymous.</b> No name, email, IP address or ID is stored, times are rounded to the
+        hour, and messages with personal details are refused rather than saved.</li>
+      <li><b>Nothing is sold or shared.</b> Not now, not ever.</li>
+    </ul>
+  </section>
+
+  <section class="panel apanel" id="fair-use" aria-labelledby="fairTitle">
+    <h2 id="fairTitle">Fair use</h2>
+    <p>Irminsul is free and runs on free tiers with no budget behind it, so AI-written answers are shared
+      fairly:</p>
+    <ul class="checks">
+      <li><b>Your AI answers refill like stamina,</b> <span id="allowance">one at a time</span>, so there's
+        always more later.</li>
+      <li><b>A shared pool</b> refills steadily all day instead of at midnight, so players in every time zone
+        get a turn.</li>
+      <li><b>Answers from game data are always free:</b> stats, passives, constellations, set bonuses and
+        repeat questions never count.</li>
+      <li><b>A gentle speed limit</b> stops automated spam. Normal play never comes close.</li>
+    </ul>
+  </section>
+
+  <section class="panel apanel" id="credits" aria-labelledby="creditsTitle">
+    <h2 id="creditsTitle">Data sources and credits</h2>
+    <ul class="checks">
+      <li><b>Genshin Impact and all of its content belong to HoYoverse.</b> Irminsul is an unofficial fan
+        project and is not affiliated with or endorsed by HoYoverse.</li>
+      <li><b>Official game data</b> via <a href="https://gi.yatta.moe/" rel="noopener noreferrer">Yatta</a>,
+        which reads the game's own data, and <a href="https://wiki.hoyolab.com/pc/genshin/" rel="noopener noreferrer">HoYoWiki</a>.</li>
+      <li><b>Builds and mechanics</b> from the <a href="https://library.keqingmains.com/" rel="noopener noreferrer">KQM
+        Theorycrafting Library</a> by the KeqingMains community, used under
+        <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="noopener noreferrer">CC BY-NC-SA 4.0</a>
+        and credited on every answer that uses it.</li>
+    </ul>
+  </section>
+
+  <section class="panel apanel maker" aria-labelledby="makerTitle">
+    <h2 id="makerTitle">Who made it</h2>
+    <p>Built by <a href="https://github.com/MukulRay1603" rel="noopener noreferrer">Mukul Rayana</a>.</p>
+    <ul class="links">
+      <li><a href="https://github.com/MukulRay1603" rel="noopener noreferrer">GitHub</a></li>
+      <!-- TODO(Ray): add your LinkedIn profile URL here, e.g.
+           <li><a href="https://www.linkedin.com/in/YOUR-HANDLE/" rel="noopener noreferrer">LinkedIn</a></li> -->
+    </ul>
+  </section>
+
+  <section class="panel apanel" id="feedback" aria-labelledby="feedbackTitle">
+    <h2 id="feedbackTitle">Send feedback</h2>
+    <p>Found a wrong answer, missing something, or have an idea? Tell us here. You can also use 👍 and 👎 under
+      any answer.</p>
+    <div data-feedback-form><noscript><p class="fine">The feedback form needs JavaScript.</p></noscript></div>
+  </section>
+</main>
+
+<footer>
+  <span>Unofficial fan project. Genshin Impact, its characters and art belong to HoYoverse.</span>
+  <a href="/results">Public test results</a>
+  <a href="/">Back to Irminsul</a>
+</footer>
+
+<script src="/static/about.js" defer></script>
+<script src="/static/feedback.js" defer></script>
+</body>
+</html>

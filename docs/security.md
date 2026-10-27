@@ -24,6 +24,7 @@ unless noted.
 | 11 | Counters raced across worker threads | Low | Fixed |
 | 12 | Rendering answers in a browser UI | Info | Guidance for the UI |
 | 13 | Base images pinned by tag, not digest | Low | Accepted |
+| 14 | Feedback endpoint (added after the audit): abuse, personal data, write token | Medium | Designed in, tests in `tests/test_feedback.py` |
 
 ### 1. Spoofable client id (High, fixed)
 `client_id()` used the first `X-Forwarded-For` entry, which the client writes itself. Any
@@ -131,3 +132,16 @@ HTML (escape or sanitize) and keep the CSP above; links should get `rel="noopene
 `python:3.12-slim` and `ghcr.io/astral-sh/uv:0.9.18` are pinned by tag, not digest, so a
 rebuild can pick up a different patch image. Accepted for now: rebuilds are rare and on HF;
 pinning digests (with Dependabot to bump them) is a follow-up.
+
+### 14. Feedback endpoint (Medium, designed in)
+`POST /feedback` (`api/feedback.py`) is the only endpoint that stores anything a player writes.
+- Abuse: strict pydantic models (unknown fields refused, 500-character comment, at most 12
+  doc ids of a fixed pattern) under the same raw body cap, and 10 posts per hour per client
+  (`limits.Window`, keyed on the same `client_id`).
+- Personal data: comments and questions go through `guards.has_personal_data`; on a hit the
+  request is refused and nothing is stored. No IP, client id or cookie is kept, timestamps are
+  rounded to the hour and each flushed file is shuffled.
+- Secrets: uploads use a dedicated `HF_FEEDBACK_TOKEN`, a fine-grained token with write access
+  to the private `MukulRay/irminsul-feedback` dataset only, never the read-only `HF_TOKEN`.
+  Without it, feedback stays in a 200-record in-memory ring buffer. A failed upload keeps the
+  records (capped at 5000) for the next flush and logs no request content.

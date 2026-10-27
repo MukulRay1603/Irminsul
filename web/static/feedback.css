@@ -1,0 +1,53 @@
+/* Anonymous feedback (feedback.js): the 👍/👎 pair in each answer's action row, the small
+   "what went wrong?" form, and the general form on the about page. Tokens from app.css. */
+
+.fb { display: inline-flex; align-items: center; gap: 4px; }
+.fb-vote {
+  display: inline-grid; place-items: center; width: 28px; height: 24px; padding: 0; font-size: 13px; line-height: 1;
+  background: none; border: 1px solid var(--line); border-radius: 999px; filter: grayscale(.35); opacity: .9;
+  transition: border-color .15s, filter .15s, opacity .15s;
+}
+.fb-vote:hover:not(:disabled), .fb-vote[aria-expanded="true"] { border-color: var(--leaf); filter: none; opacity: 1; }
+.fb-vote[aria-pressed="true"] { border-color: var(--leaf); background: color-mix(in srgb, var(--leaf) 16%, transparent); filter: none; opacity: 1; }
+.fb-vote:disabled { cursor: default; }
+.fb-vote:disabled:not([aria-pressed="true"]) { opacity: .35; }
+.fb-thanks { font-size: 12px; color: var(--leaf); }
+.fb-thanks:focus { outline: none; }
+.fb-thanks[hidden], .fb-form[hidden], .fb-error[hidden], .fb-done[hidden] { display: none; }
+
+.fb-form {
+  display: grid; gap: 10px; margin: -2px 0 12px; padding: 12px 14px; border-radius: 14px;
+  border: 1px solid var(--line); background: var(--surface-2);
+}
+.fb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fb-chip {
+  font-size: 12.5px; padding: 3px 11px; border-radius: 999px; color: var(--muted);
+  background: none; border: 1px solid var(--line);
+}
+.fb-chip:hover { color: var(--text); border-color: var(--leaf); }
+.fb-chip[aria-pressed="true"] { color: var(--text); border-color: var(--leaf); background: color-mix(in srgb, var(--leaf) 16%, transparent); }
+
+.fb-field { display: grid; gap: 4px; }
+.fb-field label { font-size: 13px; color: var(--muted); }
+.fb-field textarea {
+  width: 100%; resize: vertical; min-height: 64px; padding: 8px 10px; border-radius: 10px;
+  font: inherit; font-size: 14px; color: var(--text); background: var(--bg-2); border: 1px solid var(--line);
+}
+.fb-field textarea:focus-visible { outline: 2px solid var(--leaf); outline-offset: 1px; }
+.fb-count { justify-self: end; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.fb-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.fb-send {
+  font-size: 13.5px; font-weight: 600; padding: 5px 16px; border-radius: 999px; border: 0;
+  color: var(--bg); background: var(--leaf);
+}
+.fb-send:disabled { opacity: .6; cursor: progress; }
+.fb-cancel { font-size: 13px; padding: 4px 12px; border-radius: 999px; background: none; border: 1px solid var(--line); color: var(--muted); }
+.fb-cancel:hover { color: var(--text); border-color: var(--line-2); }
+.fb-note { font-size: 12px; color: var(--muted); }
+.fb-error { margin: 0; font-size: 13px; color: var(--danger); }
+.fb-done { margin: 0; color: var(--leaf); font-weight: 500; }
+
+.fb-general { margin: 0; padding: 16px; background: var(--surface); }
+
+@media (prefers-reduced-motion: reduce) { .fb-vote { transition: none; } }
