@@ -51,6 +51,12 @@ _OPINION = re.compile(
     re.I,
 )
 _COMPARE_MAX = 3
+# Asking for help or a plan, not a description: always goes to retrieval
+_ADVICE = re.compile(
+    r"\bhow (?:do|can|should|would) i\b|\bclear\w*\b|\bfloor\b|\babyss\b|\btheat(?:er|re)\b"
+    r"|\bbeat\b|\bstuck\b|\bhelp\b|\bunder-?level\w*\b|\bworth\b|\bshould\b",
+    re.I,
+)
 # "What changed in 7.1?", "What's new this patch?", "New characters in 6.0": patch notes, when
 # the question is about a version (or is just "what's new?") and asks for no opinion.
 _PATCH_ASK = re.compile(
@@ -106,7 +112,8 @@ _TALENT_LABEL = {
 
 def character_answer(m: Match, q: str) -> Answer | None:
     c = m.entity
-    if (con := _CONST.search(q)) and c.constellations:
+    # "What does Mizuki C2 do?" is a lookup; "How do I clear Floor 12 with Mizuki C2?" is not
+    if (con := _CONST.search(q)) and c.constellations and not _ADVICE.search(q):
         level = int(con.group(1) or con.group(2))
         cons = next((x for x in c.constellations if x.level == level), None)
         if cons:

@@ -401,3 +401,16 @@ def test_repeated_searches_reuse_results():
     engine.ask("How much ER does Raiden need?")
     engine.ask("how much ER does Raiden need")
     assert len(calls) == 1
+
+
+def test_a_constellation_named_in_an_advice_question_is_not_a_lookup():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    assert engine.ask("What does Raiden Shogun C2 do?").route == "exact"
+    q = "How do I clear Floor 12 when my main DPS (Raiden Shogun C2 at level 70) is under-levelled?"
+    assert engine.ask(q).route == "rag"
+
+
+def test_team_questions_get_the_profile_of_every_named_character():
+    from irminsul.engine.engine import MAX_PROFILES
+
+    assert MAX_PROFILES >= 6  # "Skirk with Mona, Charlotte, Diona, Layla or Dahlia?"

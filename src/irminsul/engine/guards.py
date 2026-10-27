@@ -100,14 +100,16 @@ GENSHIN_STRONG = re.compile(
     r"|starglitter|stardust|intertwined|acquaint|fates?\b|adventure rank|commissions?"
     r"|talent books?|weekly boss|teapot|serenitea|genius invokation|\btcg\b|wish(es)?\b"
     r"|banners?|pity|[45][- ]?stars?|\bc[0-6]\b|\br[1-5]\b|redeem|redemption code"
-    r"|livestream|dmg\b|damage (formula|calculation)|elemental",
+    r"|livestream|dmg\b|damage (formula|calculation)|elemental"
+    r"|selectors?|crystalfl\w*|ocul(?:i|us)|spiral abyss|free (?:5|4|five|four)[- ]?star",
     re.I,
 )
 # Common words that suggest Genshin only when nothing says otherwise.
 GENSHIN_WEAK = re.compile(
     r"artifacts?|weapons?|talents?|builds?|teams?|rotations?|\bdps\b|support|healer|shield\w*"
     r"|reactions?|crit|energy recharge|\ber\b|\bem\b|elemental mastery|f2p|co-op|boss\w*"
-    r"|domains?|quests?|map|skill|burst|game|meta|tier list|characters?|lore|story|damage",
+    r"|domains?|quests?|map|skill|burst|game|meta|tier list|characters?|lore|story|damage"
+    r"|pulls?|pulling|free pick|new account|events?|exploration|floor 1[0-2]",
     re.I,
 )
 # Clear signs a question is about something else entirely.
