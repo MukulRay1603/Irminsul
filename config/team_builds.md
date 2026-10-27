@@ -13,6 +13,8 @@
 - KQM lists Escoffier + Skirk + Furina + Vodyanitsa (or Shenhe or Yelan) as a Freeze team. | https://keqingmains.com/q/escoffier-quickguide/ | 2026-10-26 | 7.1
 - Game8 names Furina as her Hydro partner in Freeze, with Skirk or Vodyanitsa as the best additions. | https://game8.co/games/Genshin-Impact/archives/385307 | 2026-10-26 | 7.1
 - KQM also lists Escoffier + Ayaka + Furina + Shenhe (or Rosaria) as a Freeze team. | https://keqingmains.com/q/escoffier-quickguide/ | 2026-10-26 | 7.1
+- KQM lists Lohen + Escoffier + Furina (or Vodyanitsa) + Mona as a Freeze team. | https://keqingmains.com/q/escoffier-quickguide/ | 2026-10-26 | 7.1
+- KQM lists Escoffier + Sandrone + Yae Miko (or Alyosha) + Odette as a Stellar-Conduct team. | https://keqingmains.com/q/escoffier-quickguide/ | 2026-10-26 | 7.1
 
 ## Skirk
 - KQM rates Azurelight (5★, her signature) as her best weapon, about 18-22% ahead of the next options. | https://keqingmains.com/q/skirk-quickguide/ | 2026-10-26 | 5.7
@@ -130,3 +132,31 @@
 - Game8 gives the priority as HP% > flat HP > ER and targets 65,000+ HP, with ER only needed if she uses her Burst in rotation. | https://game8.co/games/Genshin-Impact/archives/606400 | 2026-10-26 | 7.1 (page updated 2026-10-13)
 - KQM lists Vodyanitsa + Skirk + Escoffier + Furina as a team. | https://keqingmains.com/q/vodyanitsa-quickguide/ | 2026-10-26 | 7.1
 - Game8 lists Vodyanitsa + Skirk + Escoffier + Furina (Freeze) and Vodyanitsa + Vesna + Cryo Traveler + Odette (Stellar-Swirl) as teams. | https://game8.co/games/Genshin-Impact/archives/606400 | 2026-10-26 | 7.1 (page updated 2026-10-13)
+- KQM lists Vodyanitsa + Lohen + Mona + Escoffier as a team. | https://keqingmains.com/q/vodyanitsa-quickguide/ | 2026-10-26 | 7.1
+- KQM lists Vodyanitsa + Sandrone + Odette + Alyosha as a team. | https://keqingmains.com/q/vodyanitsa-quickguide/ | 2026-10-26 | 7.1
+
+## Sandrone
+- KQM rates A Teaspoon of Transcendence (5★) her best-in-slot Claymore, with A Thousand Blazing Suns (5★) second. | https://keqingmains.com/q/sandrone-quickguide/ | 2026-10-26 | 7.1
+- KQM names R5 Tidal Shadow (4★, blueprint from Fontaine) the best 4★ with a healer, R5 Blade of Atonement (4★, craftable) strong when she triggers Stellar-Conduct, and Forged by the Golden Melody (4★, Battle Pass) best at higher refinements. | https://keqingmains.com/q/sandrone-quickguide/ | 2026-10-26 | 7.1
+- Game8 ranks A Teaspoon of Transcendence first, then A Thousand Blazing Suns and Redhorn Stonethresher, with Mailed Flower (event), Tidal Shadow (craftable) and Lithic Blade as F2P picks. | https://game8.co/games/Genshin-Impact/archives/382107 | 2026-10-26 | 7.1 (page updated 2026-10-08)
+- KQM rates 4pc Disenchantment in Deep Shadows her best set by far for on-field Stellar-Conduct, with 4pc Gilded Dreams next. | https://keqingmains.com/q/sandrone-quickguide/ | 2026-10-26 | 7.1
+- Game8 lists 4pc Disenchantment in Deep Shadows as best-in-slot and Gilded Dreams as the alternative. | https://game8.co/games/Genshin-Impact/archives/382107 | 2026-10-26 | 7.1 (page updated 2026-10-08)
+- KQM recommends an ATK% sands, an ATK% goblet (Cryo DMG does not boost Stellar-Conduct) and a CRIT circlet. | https://keqingmains.com/q/sandrone-quickguide/ | 2026-10-26 | 7.1
+- Game8 recommends ATK% (or EM) sands and goblet, ATK% preferred and Cryo DMG not recommended, with a CRIT circlet. | https://game8.co/games/Genshin-Impact/archives/382107 | 2026-10-26 | 7.1 (page updated 2026-10-08)
+- KQM gives the priority as ER until the requirement, then CRIT, then ATK%, then EM, with 120-165% ER if she bursts every rotation (100% if every other rotation). | https://keqingmains.com/q/sandrone-quickguide/ | 2026-10-26 | 7.1
+- Game8 gives the priority as ER > CRIT DMG > CRIT Rate ≥ ATK > EM, targeting 2000+ ATK, 125-145% ER and 180%+ CRIT DMG. | https://game8.co/games/Genshin-Impact/archives/382107 | 2026-10-26 | 7.1 (page updated 2026-10-08)
+- KQM calls Sandrone + Yae Miko + Odette + Escoffier (or C6 Qiqi, C6 Alyosha, Sucrose) one of her best teams. | https://keqingmains.com/q/sandrone-quickguide/ | 2026-10-26 | 7.1
+- Game8's F2P team is Sandrone + Beidou + Sucrose + Qiqi. | https://game8.co/games/Genshin-Impact/archives/382107 | 2026-10-26 | 7.1 (page updated 2026-10-08)
+
+## Lohen
+- KQM rates Disaster and Remorse (5★) his best-in-slot Polearm, with Primordial Jade Winged-Spear and Crimson Moon's Semblance as runner-ups. | https://keqingmains.com/q/lohen-quickguide/ | 2026-10-26 | 7.1
+- KQM names Deathmatch the default and best overall 4★, Sacrificer's Staff similar at equal refinement, and R5 White Tassel (3★, Liyue chests) the best permanently free option. | https://keqingmains.com/q/lohen-quickguide/ | 2026-10-26 | 7.1
+- Game8 lists Disaster and Remorse as best-in-slot, Staff of Homa and Fractured Halo as alternatives, Sacrificer's Staff as the 4★ pick and White Tassel as F2P. | https://game8.co/games/Genshin-Impact/archives/580697 | 2026-10-26 | 7.1 (page updated 2026-10-20)
+- KQM recommends 4pc A Day Carved From Rising Winds as best-in-slot in almost all playstyles, with 4pc Shimenawa's Reminiscence as runner-up if already owned. | https://keqingmains.com/q/lohen-quickguide/ | 2026-10-26 | 7.1
+- Game8 lists 4pc A Day Carved From Rising Winds as best-in-slot, with Blizzard Strayer for Freeze and Shimenawa's Reminiscence as alternatives. | https://game8.co/games/Genshin-Impact/archives/580697 | 2026-10-26 | 7.1 (page updated 2026-10-20)
+- KQM recommends an ATK% sands (EM can compete in Burnmelt/Reverse Melt), a Cryo DMG goblet (almost always beats ATK%) and a CRIT circlet. | https://keqingmains.com/q/lohen-quickguide/ | 2026-10-26 | 7.1
+- Game8 recommends an ATK% sands, a Cryo DMG or ATK% goblet and a CRIT circlet. | https://game8.co/games/Genshin-Impact/archives/580697 | 2026-10-26 | 7.1 (page updated 2026-10-20)
+- KQM gives the priority as ER until the requirement, then CRIT, then ATK% ≥ EM, but says his Burst does not justify building ER, so ER targets are optional. | https://keqingmains.com/q/lohen-quickguide/ | 2026-10-26 | 7.1
+- Game8 gives the priority as CRIT DMG > CRIT Rate > ATK > ER, targeting 2000+ ATK, 175%+ CRIT DMG, 50-60% CRIT Rate and 100-130% ER. | https://game8.co/games/Genshin-Impact/archives/580697 | 2026-10-26 | 7.1 (page updated 2026-10-20)
+- KQM calls Lohen + Durin + Nicole + Citlali (or Xilonen, Sucrose) typically his best team. | https://keqingmains.com/q/lohen-quickguide/ | 2026-10-26 | 7.1
+- KQM lists Lohen + Escoffier + Furina + Skirk as a Freeze team, and Lohen + Xiangling + Bennett + Kaeya or Rosaria for limited rosters. | https://keqingmains.com/q/lohen-quickguide/ | 2026-10-26 | 7.1
