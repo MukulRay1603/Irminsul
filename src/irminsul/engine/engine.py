@@ -69,7 +69,13 @@ ALLOWANCE_REPLY = (
     "and answers straight from game data, like stats and passives, are always free."
 )
 SOURCE_WORDS = 180
-MAX_PROFILES = 8  # official profiles of named entities added to the sources (each ~40 words)
+MAX_PROFILES = 8
+# A follow-up that points back at the previous answer's subject
+_REFERS_BACK = re.compile(
+    r"\b(?:she|he|her|him|his|hers|it|its|they|them|their|this|that|these|those)\b"
+    r"|^\W*(?:and|what about|how about|also)\b",
+    re.I,
+)  # official profiles of named entities added to the sources (each ~40 words)
 SPOILER_REPLY = (
     "**{name}** comes after your story point (you've finished up to {label}), so I'm keeping "
     "this hidden to avoid spoilers. Choose **Show anyway** if you'd like the answer."
@@ -155,15 +161,33 @@ class Engine:
         allow_llm: bool = True,
         out_of_allowance: bool = False,
         story_until: str | None = None,
+        context: str | None = None,
     ) -> Answer:
-        """`story_until` (a key of story.STORY_POINTS) turns on story-safe mode."""
+        """`story_until` (a key of story.STORY_POINTS) turns on story-safe mode; `context` is
+        the entity the previous answer was about (for "is she good?")."""
         start = time.perf_counter()
         point = story.point(story_until)
-        answer = self._ask(question.strip(), allow_llm, out_of_allowance, point)
-        answer.follow_ups = self._follow_ups(question.strip(), answer)
+        question = self.with_context(question.strip(), context)
+        answer = self._ask(question, allow_llm, out_of_allowance, point)
+        answer.follow_ups = self._follow_ups(question, answer)
         _mark_filter(answer, point)
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         return answer
+
+    def with_context(self, question: str, context: str | None) -> str:
+        """'Is she good?' after an answer about Furina becomes 'Is she good? (Furina)'.
+
+        Only when the question names nothing itself and refers back to something (a pronoun or
+        a bare follow-up), and only for a released entity.
+        """
+        if not context or context not in self.store.by_id or self.store.find(question):
+            return question
+        match = self.store.by_id[context]
+        if match.entity.release.status != ReleaseStatus.RELEASED or not _REFERS_BACK.search(
+            question
+        ):
+            return question
+        return f"{question} ({match.entity.name})"
 
     def _follow_ups(self, question: str, answer: Answer) -> list[dict]:
         # Suggestions about a character past the story point would spoil it all over again.
@@ -196,6 +220,7 @@ class Engine:
         allow_llm: bool = True,
         out_of_allowance: bool = False,
         story_until: str | None = None,
+        context: str | None = None,
     ) -> Iterator[tuple[str, dict]]:
         """Yield ("meta" | "delta" | "done", payload) events for server-sent streaming.
 
@@ -203,7 +228,7 @@ class Engine:
         token by token; the final "done" event carries the citations the answer actually used.
         """
         start = time.perf_counter()
-        question = question.strip()
+        question = self.with_context(question.strip(), context)
         point = story.point(story_until)
         answer = self._before_llm(question, point)
         prepared = (
@@ -248,9 +273,12 @@ class Engine:
             },
         )
 
-    def is_free(self, question: str, story_until: str | None = None) -> bool:
+    def is_free(
+        self, question: str, story_until: str | None = None, context: str | None = None
+    ) -> bool:
         """Will this be answered without the AI (refusal, cache or game data)? No side effects."""
-        return self._before_llm(question.strip(), story.point(story_until)) is not None
+        question = self.with_context(question.strip(), context)
+        return self._before_llm(question, story.point(story_until)) is not None
 
     def _before_llm(self, question: str, point: story.StoryPoint | None = None) -> Answer | None:
         """Guards, cache, the story-point check and exact answers: everything with no model."""

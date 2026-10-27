@@ -145,7 +145,7 @@ def build_app():
     community = CommunityVideos(engine.store, key, live) if key else None
     patch_notes["community_videos"] = community is not None
     add_patches(app, patch_notes)
-    add_community(app, community, patch_notes)
+    add_community(app, community, patch_notes, trusted_hops=trusted_proxy_hops())
     add_feedback(app, trusted_hops=trusted_proxy_hops())
     return app
 

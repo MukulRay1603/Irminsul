@@ -89,6 +89,7 @@ STORY_POINTS: tuple[StoryPoint, ...] = (
     StoryPoint("fontaine", "Fontaine", "Chapter IV", "4.8"),
     StoryPoint("natlan", "Natlan", "Chapter V", "5.7"),
     StoryPoint("nod-krai", "Nod-Krai", "Song of the Welkin Moon", "6.7"),
+    StoryPoint("snezhnaya", "Snezhnaya", "Chapter VII: Act I", "7.0"),
 )
 BY_KEY = {p.key: p for p in STORY_POINTS}
 

@@ -118,3 +118,35 @@ def test_endpoint_lists_videos_for_a_versions_characters():
 
 def test_iso_durations():
     assert seconds("PT1H2M3S") == 3723 and seconds("PT45S") == 45 and seconds("bad") == 0
+
+
+def test_endpoint_only_serves_recent_versions_and_limits_each_client():
+    from irminsul.api.community import PER_CLIENT_PER_HOUR
+
+    yt = FakeYouTube({"a": "Raiden Shogun guide"})
+    notes = {
+        "versions": [
+            {"version": v, "characters": [{"id": RAIDEN}]} for v in ("7.1", "7.0", "6.8", "6.0")
+        ]
+    }
+    app = FastAPI()
+    add_community(app, make(yt), notes)
+    c = TestClient(app)
+    assert c.get("/api/community-videos", params={"version": "6.0"}).status_code == 404
+    codes = [
+        c.get("/api/community-videos", params={"version": "7.1"}).status_code
+        for _ in range(PER_CLIENT_PER_HOUR + 1)
+    ]
+    assert codes[:-1] == [200] * PER_CLIENT_PER_HOUR and codes[-1] == 429
+
+
+def test_a_failed_search_is_not_retried_at_once():
+    calls = []
+
+    def broken(endpoint, params):
+        calls.append(endpoint)
+        raise RuntimeError("quota exceeded")
+
+    c = make(broken)
+    assert c.for_character(RAIDEN) == [] and c.for_character(RAIDEN) == []
+    assert calls == ["search"]

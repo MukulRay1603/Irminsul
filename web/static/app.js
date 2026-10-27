@@ -348,12 +348,18 @@ async function ask(q, opts = {}) {
     el.append(box);
   }
   const ent = done.trace.entity || done.citations?.map(c => c.doc_id || "").find(d => /^(character|weapon|artifact)\//.test(d))?.split("#")[0];
-  if (ent) showEntity(ent);
+  if (ent) { showEntity(ent); lastEntity = ent; }
+  // Keyboard and screen-reader users land on the new answer, not back at the page top
+  el.tabIndex = -1; el.focus({ preventScroll: true });
 }
 // Story-safe mode (story.js): the player's story point rides along unless "Show anyway" said not to
+// The character, weapon or set the last answer was about, so "is she good?" can follow up
+let lastEntity = null;
 function askBody(q, opts) {
   const story = opts.story ?? window.story?.value();
-  return story ? { question: q, story_until: story } : { question: q };
+  const body = story ? { question: q, story_until: story } : { question: q };
+  if (lastEntity) body.context = lastEntity;
+  return body;
 }
 for (const id of ["heroForm", "dockForm"]) $("#" + id).addEventListener("submit", e => {
   e.preventDefault(); const inp = $("input", e.target); ask(inp.value); inp.value = "";

@@ -46,6 +46,13 @@ STARTERS = [
     "What are Raiden Shogun's base stats at level 90?",
     "What does Sacrificial Sword's passive do?",
 ]
+# Questions about wishing get wishing suggestions, not a random character's stats
+GACHA = re.compile(r"\bwish\w*|\bpulls?\b|\bpity\b|\bbanners?\b|\bprimo\w*|\bfates?\b|50/50", re.I)
+GACHA_STARTERS = [
+    "How does pity work on the character event banner?",
+    "What happens if I lose the 50/50?",
+    "How many Primogems do 10 wishes cost?",
+]
 MAX = 3
 
 
@@ -60,8 +67,8 @@ def _entity(store: EntityStore, question: str, answer: Answer) -> Match | None:
 
 def follow_ups(store: EntityStore, question: str, answer: Answer) -> list[dict]:
     """Up to three next questions as {"question", "free"}; empty for nothing useful."""
-    if answer.route in ("busy", "no_allowance"):
-        return []  # don't invite more AI questions when they can't be answered right now
+    if answer.route in ("busy", "no_allowance") or answer.route.startswith("refuse"):
+        return []  # no more AI questions when they can't be answered, nothing after a refusal
     asked = question.casefold()
     match = None if answer.route.startswith("refuse") else _entity(store, question, answer)
     if match is not None and released(match):
@@ -72,7 +79,7 @@ def follow_ups(store: EntityStore, question: str, answer: Answer) -> list[dict]:
             if not re.search(TOPICS[topic], asked, re.I)
         ]
     else:
-        candidates = list(STARTERS)
+        candidates = list(GACHA_STARTERS if GACHA.search(asked) else STARTERS)
     out = []
     for q in candidates:
         if q.casefold() == asked:

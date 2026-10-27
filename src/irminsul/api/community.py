@@ -24,8 +24,10 @@ from collections.abc import Callable
 from datetime import datetime
 
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 
+from irminsul.api.app import client_id
+from irminsul.api.limits import Window
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import _ADULT
 from irminsul.pipeline.safety import LEAK_LANGUAGE
@@ -35,6 +37,9 @@ log = logging.getLogger("irminsul.community")
 
 API = "https://www.googleapis.com/youtube/v3"
 TTL_S = 24 * 3600
+FAILED_TTL_S = 600
+RECENT_VERSIONS = 3  # the live version and the two before it; older ones: official videos only
+PER_CLIENT_PER_HOUR = 30
 PER_CHARACTER = 3
 MIN_SECONDS = 120
 SEARCHES_PER_DAY = 60  # 6,000 of the 10,000 free units, leaving room for the rest
@@ -72,7 +77,8 @@ class CommunityVideos:
         self.live = live
         self._fetch = fetch or self._http
         self._clock = clock
-        self._cache: dict[str, tuple[float, list[dict]]] = {}
+        self._cache: dict[str, tuple[float, list[dict], bool]] = {}  # when, videos, succeeded
+        self._flights: dict[str, threading.Lock] = {}
         self._lock = threading.Lock()
         self._day = ""
         self._searches = 0
@@ -117,10 +123,19 @@ class CommunityVideos:
             return []
         with self._lock:
             hit = self._cache.get(entity_id)
-            if hit and self._clock() - hit[0] < TTL_S:
+            if hit and self._clock() - hit[0] < (TTL_S if hit[1] or hit[2] else FAILED_TTL_S):
                 return hit[1]
-            if not self._budget():
-                return hit[1] if hit else []
+            flight = self._flights.setdefault(entity_id, threading.Lock())
+        with flight:  # two players opening the same version: one search, not two
+            with self._lock:
+                hit = self._cache.get(entity_id)
+                if hit and self._clock() - hit[0] < (TTL_S if hit[1] or hit[2] else FAILED_TTL_S):
+                    return hit[1]
+                if not self._budget():
+                    return hit[1] if hit else []
+            return self._search(entity_id, c, released)
+
+    def _search(self, entity_id: str, c, released: datetime) -> list[dict]:
         try:
             found = self._fetch(
                 "search",
@@ -149,6 +164,8 @@ class CommunityVideos:
                 stats = {d["id"]: d for d in details.get("items", [])}
         except Exception as e:  # quota, network, bad key: no community videos, never a 500
             log.warning("community videos for %s failed: %s", entity_id, e)
+            with self._lock:  # don't retry on every open: wait FAILED_TTL_S
+                self._cache[entity_id] = (self._clock(), [], False)
             return []
         kept = []
         for i in items:
@@ -170,18 +187,25 @@ class CommunityVideos:
         kept.sort(key=lambda v: v["views"], reverse=True)
         kept = kept[:PER_CHARACTER]
         with self._lock:
-            self._cache[entity_id] = (self._clock(), kept)
+            self._cache[entity_id] = (self._clock(), kept, True)
         return kept
 
 
-def add_community(app: FastAPI, community: CommunityVideos | None, notes: dict) -> None:
-    by_version = {n["version"]: [c["id"] for c in n["characters"]] for n in notes["versions"]}
+def add_community(
+    app: FastAPI, community: CommunityVideos | None, notes: dict, trusted_hops: int = 0
+) -> None:
+    # Newest first in the notes: only recent versions can spend search quota
+    recent = notes["versions"][:RECENT_VERSIONS]
+    by_version = {n["version"]: [c["id"] for c in n["characters"]] for n in recent}
+    window = Window(limit=PER_CLIENT_PER_HOUR, seconds=3600)
 
     @app.get("/api/community-videos")
-    def community_videos(version: str) -> dict:
+    def community_videos(version: str, request: Request) -> dict:
         if community is None:
             raise HTTPException(404)
         if version not in by_version:
             raise HTTPException(404)
+        if not window.allow(client_id(request, trusted_hops)):
+            raise HTTPException(429, "Too many requests. Try again later.")
         videos = [v for cid in by_version[version] for v in community.for_character(cid)]
         return {"version": version, "videos": videos}
