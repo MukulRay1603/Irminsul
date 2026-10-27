@@ -67,9 +67,15 @@ def _problem(fact: str, url: str, version: str, live: tuple[int, int] | None) ->
 
 
 def parse_facts(
-    text: str, fetched_at: datetime, live: tuple[int, int] | None = None
+    text: str,
+    fetched_at: datetime,
+    live: tuple[int, int] | None = None,
+    prefix: str = "team",
+    what: str = "facts",
 ) -> FactsResult:
+    """`prefix` keeps doc ids apart between files; `what` names their content ("builds")."""
     result = FactsResult()
+    label = "" if what == "facts" else f" {what}"
     groups: dict[tuple[str, str], list[str]] = {}
     versions: dict[tuple[str, str], str] = {}
     section = None
@@ -101,11 +107,11 @@ def parse_facts(
         newest = newest_version(versions[(section, url)])
         result.docs.append(
             Doc(
-                doc_id=f"team/{slug}#{seen[slug]}",
+                doc_id=f"{prefix}/{slug}#{seen[slug]}",
                 entity_id=None,
-                kind="team_facts",
-                title=f"{section} (team-checked, {host})",
-                text=f"# {section}: team-checked facts\nSource: {url}\n" + "\n".join(lines),
+                kind=f"team_{what}",
+                title=f"{section}{label} (team-checked, {host})",
+                text=f"# {section}: team-checked {what}\nSource: {url}\n" + "\n".join(lines),
                 release=Release(status=ReleaseStatus.RELEASED),
                 source=SourceRef(
                     source="team_facts",
