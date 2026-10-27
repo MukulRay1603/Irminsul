@@ -67,6 +67,11 @@ class AskRequest(BaseModel):
     # Story-safe mode: the player's Archon Quest progress, a key of story.STORY_POINTS
     # ("inazuma"). Omitted or null: everything released, no spoiler filter.
     story_until: str | None = Field(default=None, max_length=32)
+    # The entity the previous answer was about ("character/furina"), for follow-ups like
+    # "is she good?". Only used when the question names nothing itself.
+    context: str | None = Field(
+        default=None, max_length=80, pattern=r"^(character|weapon|artifact)/[a-z0-9-]+$"
+    )
 
     @field_validator("story_until")
     @classmethod
@@ -231,6 +236,7 @@ def sse_events(
     allow_llm: bool,
     out_of_allowance: bool,
     story_until: str | None = None,
+    context: str | None = None,
 ) -> Iterator[str]:
     """The /ask/stream body. A fresh RAG answer is paid for even if the client hangs up
     before the `done` event: the LLM call already happened, so leaving early is not free."""
@@ -241,6 +247,7 @@ def sse_events(
             allow_llm=allow_llm,
             out_of_allowance=out_of_allowance,
             story_until=story_until,
+            context=context,
         ):
             if kind == "meta":
                 pending = payload["route"] == "rag"
@@ -335,7 +342,9 @@ def create_app(
         """Server-sent events: `meta` (route + candidate citations), `delta` (text chunks),
         `done` (final route, the citations actually used, trace, and the caller's quota)."""
         cid = cid_of(request)
-        if reason := limits.allow(cid, free=engine.is_free(body.question, body.story_until)):
+        if reason := limits.allow(
+            cid, free=engine.is_free(body.question, body.story_until, body.context)
+        ):
             return JSONResponse(status_code=429, content={"detail": reason})
         return StreamingResponse(
             sse_events(
@@ -346,6 +355,7 @@ def create_app(
                 allow_llm=limits.llm_budget_left(),
                 out_of_allowance=not limits.has_allowance(cid),
                 story_until=body.story_until,
+                context=body.context,
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -354,7 +364,9 @@ def create_app(
     @app.post("/ask", response_model=AskResponse)
     def ask(body: AskRequest, request: Request):
         cid = cid_of(request)
-        if reason := limits.allow(cid, free=engine.is_free(body.question, body.story_until)):
+        if reason := limits.allow(
+            cid, free=engine.is_free(body.question, body.story_until, body.context)
+        ):
             return JSONResponse(status_code=429, content={"detail": reason})
         # Once the shared pool or the player's allowance is spent, free routes still work
         # and LLM questions get a polite reply instead.
@@ -364,6 +376,7 @@ def create_app(
             allow_llm=allow_llm,
             out_of_allowance=not limits.has_allowance(cid),
             story_until=body.story_until,
+            context=body.context,
         )
         _spend(limits, cid, answer.route, answer.trace)
         return AskResponse(

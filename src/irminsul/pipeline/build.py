@@ -43,14 +43,17 @@ from irminsul.schema import (
 from irminsul.sources import hoyowiki
 from irminsul.sources.http import PoliteClient
 from irminsul.sources.kqm import KqmSource
+from irminsul.sources.notices import NoticesSource, fetch_notices
 from irminsul.sources.team_facts import parse_facts
 from irminsul.sources.yatta import SITE, YattaSource
 from irminsul.story import Changelog, MentionDater, character_revealed_in, later
 
 log = logging.getLogger("irminsul.build")
 
-SOURCES = ("yatta", "hoyowiki", "kqm", "lore", "team_facts")
+SOURCES = ("yatta", "hoyowiki", "kqm", "lore", "team_facts", "notices")
 TEAM_FACTS = Path("config/team_facts.md")  # public team facts, approved by Ray (Oct 2026)
+# Build recommendations (weapons, sets, stats, teams), each line attributed to its guide
+TEAM_BUILDS = Path("config/team_builds.md")
 # In-game books: ~600 books and ~2,000 volume texts, one request each, so opt-in for now.
 OPTIONAL_SOURCES = ("books",)
 
@@ -389,6 +392,27 @@ def build(
         docs += facts.docs
         dropped += [(f"team_facts:{line}", reason) for line, reason in facts.dropped]
         counts["team_facts"] = {"lines": facts.kept_lines, "docs": len(facts.docs)}
+    if "team_facts" in sources and TEAM_BUILDS.exists():
+        builds = parse_facts(
+            TEAM_BUILDS.read_text(encoding="utf-8"),
+            now,
+            version_from_manifest(source_info.get("yatta", {}).get("game_version")),
+            prefix="team-builds",
+            what="builds",
+        )
+        docs += builds.docs
+        dropped += [(f"team_builds:{line}", reason) for line, reason in builds.dropped]
+        counts["team_builds"] = {"lines": builds.kept_lines, "docs": len(builds.docs)}
+
+    if "notices" in sources:
+        # Never from the dev HTTP cache: news is only useful fresh
+        news_client = PoliteClient(cache_dir=None)
+        try:
+            notices = fetch_notices(NoticesSource(news_client), now, live)
+        finally:
+            news_client.close()
+        docs += notices
+        counts["notices"] = len(notices)
 
     # Newer reactions are defined across many kits: compile each into one guide (no model).
     guides = reaction_guides(docs, now)

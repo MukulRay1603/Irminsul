@@ -9,7 +9,10 @@ ENV PYTHONUNBUFFERED=1 \
     IRMINSUL_MODEL_CACHE=/app/.models \
     IRMINSUL_CACHE=/tmp/irminsul \
     HOST=0.0.0.0 \
-    PORT=7860
+    PORT=7860 \
+    # HF Spaces put one proxy in front: rate limits key on the real player, not the proxy.
+    # Run the image without a proxy in front? Set this to 0.
+    IRMINSUL_TRUSTED_PROXY_HOPS=1
 
 COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /usr/local/bin/uv
 WORKDIR /app

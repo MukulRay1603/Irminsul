@@ -67,3 +67,12 @@ def test_the_published_file_parses_cleanly():
     r = parse_facts(text, NOW, LIVE)
     assert r.kept_lines >= 70 and not r.dropped
     assert len({d.doc_id for d in r.docs}) == len(r.docs)
+
+
+def test_the_published_builds_file_parses_into_its_own_docs():
+    text = Path(__file__).parents[1].joinpath("config/team_builds.md").read_text(encoding="utf-8")
+    r = parse_facts(text, NOW, LIVE, prefix="team-builds", what="builds")
+    assert r.kept_lines >= 100 and not r.dropped
+    assert all(d.doc_id.startswith("team-builds/") and d.kind == "team_builds" for d in r.docs)
+    assert any(d.title.startswith("Escoffier builds") for d in r.docs)
+    assert {d.source.tier for d in r.docs} <= {Tier.KQM, Tier.COMMUNITY}

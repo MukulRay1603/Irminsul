@@ -24,7 +24,10 @@
   }
   const pref = { get() { try { return localStorage.getItem(PREF) === "1"; } catch { return false; } },
                  set(v) { try { localStorage.setItem(PREF, v ? "1" : "0"); } catch {} } };
-  const longDate = iso => new Date(`${iso.slice(0, 10)}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  // One formatter for every date: building one per call was the page's slowest step on phones
+  const DATES = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  const COMPACT = new Intl.NumberFormat(undefined, { notation: "compact" });
+  const longDate = iso => DATES.format(new Date(`${iso.slice(0, 10)}T00:00:00Z`));
   const httpUrl = u => /^https:\/\//.test(u || "") ? u : null;
 
   /* ---------- the planner roster, read-only from this device ---------- */
@@ -107,13 +110,18 @@
   }
   // Each group folds behind its heading so a big patch doesn't push the page down. New
   // characters and official videos start open; the rest show their count until opened.
+  // A closed group's items are built the first time it opens: most are never opened.
   function group(title, items, make, cls = "", open = false) {
     if (!items.length) return null;
-    return h("details", { class: `pn-group ${cls}`, open },
+    const list = h("ul", { class: `pn-list ${cls}` });
+    const box = h("details", { class: `pn-group ${cls}`, open },
       h("summary", {}, h("span", { class: "pn-gtitle", text: title }),
         h("span", { class: "pn-count", text: String(items.length) }),
         h("span", { class: "pn-chev", "aria-hidden": "true" })),
-      h("ul", { class: `pn-list ${cls}` }, items.map(make)));
+      list);
+    const fill = () => { if (!list.childElementCount) list.append(...items.map(make)); };
+    if (open) fill(); else box.addEventListener("toggle", () => box.open && fill());
+    return box;
   }
 
   // Popular community build guides for this version's characters (server: api/community.py).
@@ -122,7 +130,7 @@
   function communityVideo(v) {
     const li = video({ youtube_id: v.youtube_id, title: v.title });
     li.querySelector(".pn-video span")?.append(h("small", { class: "pn-chan",
-      text: `${v.channel} · ${new Intl.NumberFormat(undefined, { notation: "compact" }).format(v.views)} views` }));
+      text: `${v.channel} · ${COMPACT.format(v.views)} views` }));
     return li;
   }
   function community(note, chars) {
@@ -236,11 +244,13 @@
     })();
   }
 
-  // Load when the section comes near the screen, or when a chat card links to a version.
+  // Load once the page is idle (or when it comes near the screen, if that's sooner), so the
+  // section fills in below the fold instead of pushing content the player is looking at.
   if ("IntersectionObserver" in self) {
     const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { io.disconnect(); load(); } }, { rootMargin: "600px" });
     io.observe(root);
-  } else load();
+  }
+  (self.requestIdleCallback || (f => setTimeout(f, 1200)))(() => load(), { timeout: 2500 });
   document.addEventListener("click", async e => {
     const a = e.target.closest("a[data-patch]"); if (!a) return;
     selected = a.dataset.patch;

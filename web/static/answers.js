@@ -189,7 +189,8 @@ const CARDS = {
     <p class="xc-foot">${c.videos ? `${c.videos} new official video${c.videos === 1 ? "" : "s"}. ` : ""}${!c.tracked && c.tracking_since ? `Weapons, sets and balance changes are tracked from ${escHTML(patchDate(c.tracking_since))}. ` : ""}<a href="#patches" data-patch="${escHTML(c.version)}">Open the full patch notes</a></p>`,
 };
 
-const patchDate = iso => new Date(`${iso}T00:00:00Z`).toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const PATCH_DATES = new Intl.DateTimeFormat(undefined, { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+const patchDate = iso => PATCH_DATES.format(new Date(`${iso}T00:00:00Z`));
 const patchChip = x => `<button type="button" class="pn-chip" data-entity="${escHTML(x.id)}" data-kind="${escHTML(x.kind)}" data-el="${escHTML(x.element || "")}"><i></i>${escHTML(x.name)}${x.rarity ? `<span class="pn-r">${x.rarity}★</span>` : ""}</button>`;
 
 /* Talent scaling with a level slider. The data only has some levels (1, 6, 9, 10, 13), so the

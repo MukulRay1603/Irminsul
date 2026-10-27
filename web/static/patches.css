@@ -129,3 +129,7 @@
 /* Community build guides: channel and views under the title, a quieter note below */
 .pn-chan { display: block; margin-top: 4px; font-size: 12px; color: var(--muted); }
 .pn-community .pn-comm-note { margin: 0 0 14px; }
+
+/* Reserve room while patch notes load, so nothing below jumps when they arrive */
+#patchesApp { min-height: 420px; }
+@media (max-width: 640px) { #patchesApp { min-height: 640px; } }

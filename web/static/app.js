@@ -296,7 +296,9 @@ async function ask(q, opts = {}) {
   el.innerHTML = `<div class="route"><i></i><span>Searching the branches…</span></div><div class="body typing"></div>`;
   thread.append(el); thread.setAttribute("aria-busy", "true");
   $("#ask").scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
-  const body = $(".body", el); let text = "", done = null;
+  const body = $(".body", el); let text = "", done = null, painting = 0;
+  // Re-render the streamed markdown at most once a frame, not once per token
+  const paint = () => { painting ||= requestAnimationFrame(() => { painting = 0; body.innerHTML = md(text); }); };
   try {
     const res = await fetch("/ask/stream", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(askBody(q, opts)) });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(typeof e.detail === "string" ? e.detail : `Error ${res.status}`); }
@@ -309,11 +311,12 @@ async function ask(q, opts = {}) {
         const block = buf.slice(0, i); buf = buf.slice(i + 2);
         const kind = block.match(/^event: (.*)$/m)?.[1], data = JSON.parse(block.match(/^data: (.*)$/m)?.[1] || "{}");
         if (kind === "meta") setRoute(el, data.route);
-        if (kind === "delta") { text += data.text; body.innerHTML = md(text); }
+        if (kind === "delta") { text += data.text; paint(); }
         if (kind === "done") done = data;
       }
     }
   } catch (err) { setRoute(el, "busy"); body.innerHTML = `<p>${esc(err.message)}</p>`; }
+  if (painting) { cancelAnimationFrame(painting); painting = 0; body.innerHTML = md(text); }
   body.classList.remove("typing"); el.classList.remove("streaming"); thread.removeAttribute("aria-busy");
   busy = false; document.querySelectorAll(".ask button").forEach(b => b.disabled = false);
   if (!done) return;
@@ -348,12 +351,19 @@ async function ask(q, opts = {}) {
     el.append(box);
   }
   const ent = done.trace.entity || done.citations?.map(c => c.doc_id || "").find(d => /^(character|weapon|artifact)\//.test(d))?.split("#")[0];
-  if (ent) showEntity(ent);
+  // The dossier (big art, talents) renders after the answer has painted
+  if (ent) { lastEntity = ent; setTimeout(() => showEntity(ent), 0); }
+  // Keyboard and screen-reader users land on the new answer, not back at the page top
+  el.tabIndex = -1; el.focus({ preventScroll: true });
 }
 // Story-safe mode (story.js): the player's story point rides along unless "Show anyway" said not to
+// The character, weapon or set the last answer was about, so "is she good?" can follow up
+let lastEntity = null;
 function askBody(q, opts) {
   const story = opts.story ?? window.story?.value();
-  return story ? { question: q, story_until: story } : { question: q };
+  const body = story ? { question: q, story_until: story } : { question: q };
+  if (lastEntity) body.context = lastEntity;
+  return body;
 }
 for (const id of ["heroForm", "dockForm"]) $("#" + id).addEventListener("submit", e => {
   e.preventDefault(); const inp = $("input", e.target); ask(inp.value); inp.value = "";
