@@ -54,6 +54,7 @@
 - Imaginarium Theater officially requires Adventure Rank 35 or above and completion of the World Quest "Unbegun, Unending Story". | https://genshin.hoyoverse.com/en/news/detail/123975 | 2026-10-26 | 7.1 (rule from 4.7)
 - Character and weapon ascension phases 1 to 6 need Adventure Rank 15, 25, 30, 35, 40 and 50, which raise the level cap to 40, 50, 60, 70, 80 and 90. | https://genshin-impact.fandom.com/wiki/Adventure_Rank | 2026-10-26 | 7.1
 - Since Version 4.7, the Abyssal Moon Spire (Spiral Abyss Floors 9 to 12) resets on the 16th of every month, and earning 9 stars on a floor gives 200 Primogems. | https://genshin.hoyoverse.com/en/news/detail/123975 | 2026-10-26 | 7.1 (since 4.7)
+- The Snezhnaya Archon Quest (Chapter VII: Act I "Everwinter Without Mercy") needs Adventure Rank 18 or above and completion of Prologue: Act III "Song of the Dragon and Freedom", with no need to finish earlier chapters such as "Song of the Welkin Moon". | https://genshin.hoyoverse.com/en/news/detail/165655 | 2026-10-26 | 7.1 (since 7.0)
 
 ## 3. Primogems
 
@@ -78,6 +79,7 @@
 - Each Oculus Resonance Stone (for example, the Anemoculus Resonance Stone) detects one Oculus of its type that you have not collected yet. | https://wiki.hoyolab.com/pc/genshin/entry/766 | 2026-10-26 | 7.1
 - The official Teyvat Interactive Map on HoYoLAB has pin categories for Local Specialties, Enemies, Level-Up Materials, Chests and other collectibles, and lets you search materials by character. | https://act.hoyolab.com/ys/app/interactive-map/index.html | 2026-10-26 | 7.1
 - In the in-game Adventurer Handbook, the Enemies tab (including Boss Enemies) has a Navigate button that marks some spawn points, and the Domains tab can pin a domain's location on the map. | https://genshin-impact.fandom.com/wiki/Adventurer_Handbook | 2026-10-26 | 7.1
+- The in-game map holds up to 350 custom pins, after Version 7.0 raised the limit from 300 to 350. | https://genshin.hoyoverse.com/en/news/detail/165655 | 2026-10-26 | 7.1 (since 7.0)
 
 ## 5. Energy Recharge (KQM)
 
