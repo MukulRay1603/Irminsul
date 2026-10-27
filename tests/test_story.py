@@ -46,7 +46,7 @@ def test_versions_parse_and_compare():
 
 def test_story_points_follow_the_archon_quest_in_order():
     keys = [p.key for p in story.STORY_POINTS]
-    assert keys[:3] == ["mondstadt", "liyue", "inazuma"] and keys[-1] == "nod-krai"
+    assert keys[:3] == ["mondstadt", "liyue", "inazuma"] and keys[-1] == "snezhnaya"
     versions = [story.parse_version(p.until) for p in story.STORY_POINTS]
     assert all(v is not None for v in versions) and versions == sorted(versions)
     assert story.point(None) is None and story.point("") is None

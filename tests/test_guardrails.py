@@ -105,3 +105,11 @@ def test_named_entities_get_their_official_profile_as_a_source():
 def test_real_player_questions_are_on_topic(q):
     # From real viewer comments (via Recon): these were wrongly refused as off-topic
     assert guards.on_topic(q, False)
+
+
+def test_homework_is_refused_even_when_genshin_is_mentioned():
+    assert not guards.on_topic("I need help with my homework, Genshin is my excuse", False)
+
+
+def test_questions_in_chinese_count_as_genshin():
+    assert guards.on_topic("胡桃的最佳武器是什么？", False)

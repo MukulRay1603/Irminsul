@@ -1,5 +1,7 @@
 """Engine tests: guards, exact answers, RAG with a fake index and fake LLM, router failover."""
 
+import re
+
 from conftest import FETCHED_AT, load_yatta
 
 from irminsul.engine import guards
@@ -257,7 +259,6 @@ def test_kqm_switch_reads_the_environment(monkeypatch):
 
 
 def test_follow_ups_come_from_game_data_and_mark_free_ones():
-    from irminsul.engine.followups import STARTERS
 
     engine = Engine(store(), FakeIndex(), FakeLLM())
     answer = engine.ask("What are Raiden Shogun's base stats?")
@@ -266,7 +267,7 @@ def test_follow_ups_come_from_game_data_and_mark_free_ones():
     assert not any("base stats" in f["question"] for f in ups)  # already asked
     assert any(f["free"] for f in ups) and ups[0]["free"]  # free (game-data) questions first
     leak = engine.ask("Who are the leaked 7.3 characters?")
-    assert {f["question"] for f in leak.follow_ups} == set(STARTERS)
+    assert leak.follow_ups == []  # nothing is suggested after a refusal
     assert all("Mitya" not in f["question"] for f in engine.ask("Is Mitya playable?").follow_ups)
 
 
@@ -414,3 +415,53 @@ def test_team_questions_get_the_profile_of_every_named_character():
     from irminsul.engine.engine import MAX_PROFILES
 
     assert MAX_PROFILES >= 6  # "Skirk with Mona, Charlotte, Diona, Layla or Dahlia?"
+
+
+def test_stats_in_an_advice_question_is_not_the_base_stats_card():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    assert engine.ask("What are Raiden Shogun's base stats at level 90?").route == "exact"
+    for q in (
+        "What's Raiden Shogun's best artifact set and main stats?",
+        "Should I level Raiden Shogun's stats or talents first?",
+        "Is Raiden Shogun good? what are her stats",
+    ):
+        assert engine.ask(q).route == "rag", q
+
+
+def test_wish_cost_is_a_free_exact_answer():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    a = engine.ask("How many primogems for 10 pulls?")
+    assert a.route == "exact" and "1,600 Primogems" in a.text
+    assert "160 Primogems" in engine.ask("how many primos is one wish?").text
+
+
+def test_typos_and_nicknames_find_the_character():
+    s = store()
+    assert [m.entity.id for m in s.find("raidne shogun base stats")] == ["character/raiden-shogun"]
+    assert [m.entity.id for m in s.find("ei build")] == ["character/raiden-shogun"]
+    assert s.find("how does electro resonance work") == []  # an element, not the Traveler
+    assert s.find("any events this patch?") == []
+
+
+def test_follow_ups_use_the_previous_answers_subject():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    assert engine.with_context("is she good?", "character/raiden-shogun") == (
+        "is she good? (Raiden Shogun)"
+    )
+    # Names something itself, or doesn't refer back: left alone
+    assert (
+        engine.with_context("is Yae Miko good?", "character/raiden-shogun") == "is Yae Miko good?"
+    )
+    assert engine.with_context("how does pity work?", "character/raiden-shogun") == (
+        "how does pity work?"
+    )
+    assert engine.with_context("is she good?", "character/unknown") == "is she good?"
+    a = engine.ask("what are her base stats?", context="character/raiden-shogun")
+    assert a.route == "exact" and "Raiden Shogun" in a.text
+
+
+def test_no_follow_ups_after_a_refusal_and_wish_questions_get_wish_ones():
+    engine = Engine(store(), FakeIndex(), FakeLLM())
+    assert engine.ask("Who won the last presidential election?").follow_ups == []
+    ups = [f["question"] for f in engine.ask("How many primogems for 10 pulls?").follow_ups]
+    assert ups and all(re.search(r"pity|50/50|wish", u, re.I) for u in ups)

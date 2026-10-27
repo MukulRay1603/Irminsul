@@ -10,7 +10,7 @@ import re
 from irminsul.engine import cards
 from irminsul.engine.entities import EntityStore, Match, released
 from irminsul.engine.types import Answer, Citation
-from irminsul.schema import ReleaseStatus, slugify
+from irminsul.schema import ReleaseStatus, Tier, slugify
 
 _STATS = re.compile(
     r"\bbase (atk|attack|hp|def|defen[cs]e|stats?)\b|\blevel 90\b|\blv\.? ?90\b|\bascension\b"
@@ -51,6 +51,11 @@ _OPINION = re.compile(
     re.I,
 )
 _COMPARE_MAX = 3
+_NOT_BASE_STATS = re.compile(
+    r"\bmain ?stats?\b|\bsub ?stats?\b|\bartifacts?\b|\bsands\b|\bgoblet\b|\bcirclet\b"
+    r"|\bfirst\b|" + _OPINION.pattern,
+    re.I,
+)
 # Asking for help or a plan, not a description: always goes to retrieval
 _ADVICE = re.compile(
     r"\bhow (?:do|can|should|would) i\b|\bclear\w*\b|\bfloor\b|\babyss\b|\btheat(?:er|re)\b"
@@ -136,7 +141,8 @@ def character_answer(m: Match, q: str) -> Answer | None:
             {"entity": c.id, "intent": "const_all"},
             card=cards.constellations_card(c, 1),
         )
-    if _STATS.search(q) and c.base_stats:
+    # "Best artifact set and main stats?" and "is she good? her stats" are advice, not lookups
+    if _STATS.search(q) and c.base_stats and not _NOT_BASE_STATS.search(q):
         s = c.base_stats
         text = (
             f"**{c.name}** ({c.rarity}★ {c.element} {c.weapon_type}) at Lv. {s.level}: "
@@ -368,8 +374,45 @@ def patch_answer(notes: dict | None, question: str) -> Answer | None:
     )
 
 
+_WISH_COST = re.compile(
+    r"\bhow (?:many|much)\b.*\b(?:primo\w*|gems?)\b.*?\b(?:(?P<n>\d{1,4})|a|an|one|single|ten)"
+    r"[ -]?(?:pulls?|wish(?:es)?|rolls?)\b"
+    r"|\b(?P<n2>\d{1,4})[ -]?(?:pulls?|wish(?:es)?|rolls?)\b.*\bhow (?:many|much)\b.*\bprimo\w*",
+    re.I,
+)
+WISH_PRICE = 160  # Primogems per Intertwined or Acquaint Fate (one wish)
+
+
+def wish_cost_answer(question: str) -> Answer | None:
+    """'How many Primogems for 10 pulls?': arithmetic on the one fixed price."""
+    m = _WISH_COST.search(question)
+    if not m:
+        return None
+    raw = m.group("n") or m.group("n2")
+    n = int(raw) if raw else (10 if re.search(r"\bten\b", m.group(0), re.I) else 1)
+    if not 1 <= n <= 1000:
+        return None
+    wishes = f"{n} wish" + ("" if n == 1 else "es")
+    verb = "costs" if n == 1 else "cost"
+    text = (
+        f"**{wishes} {verb} {n * WISH_PRICE:,} Primogems.** One wish uses one Intertwined Fate "
+        f"(event wishes) or one Acquaint Fate (Standard Wish), and each Fate costs "
+        f"{WISH_PRICE} Primogems. [1]"
+    )
+    cite = Citation(
+        1,
+        "Wishes (team-checked)",
+        "https://genshin-impact.fandom.com/wiki/Wish",
+        Tier.COMMUNITY,
+        "team/wishes#2",
+    )
+    return Answer(text, "exact", [cite], {"intent": "wish_cost", "wishes": n})
+
+
 def answer_exact(store: EntityStore, question: str, patches: dict | None = None) -> Answer | None:
     matches = store.find(question)
+    if not matches and (cost := wish_cost_answer(question)):
+        return cost
     if not matches and is_patch_question(question):
         return patch_answer(patches, question)
     if not matches:

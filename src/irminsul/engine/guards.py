@@ -123,6 +123,18 @@ OFFTOPIC_SIGNS = re.compile(
     re.I,
 )
 
+# Requests for someone's own work, refused even when "Genshin" is mentioned
+OFFTOPIC_TASKS = re.compile(
+    r"\bhomework\b|\bessay\b|\bassignment\b|\bresume\b|\bcover letter\b|\bjob interview\b"
+    r"|\bmy (?:thesis|dissertation|exam)\b",
+    re.I,
+)
+# Genshin's name in other languages (zh/ja 原神, ko 원신) and common Chinese game words:
+# until answers are translated, a question in another language still counts as Genshin.
+GENSHIN_OTHER_LANGUAGES = re.compile(
+    r"原神|원신|げんしん|武器|圣遗物|聖遺物|命之座|天赋|祈愿|角色|队伍|配队"
+)
+
 # ---------------------------------------------------------------- replies
 PRIVACY_REPLY = (
     "Please don't share personal details here: emails, phone or account numbers, passwords, "
@@ -220,10 +232,16 @@ def check(question: str, store: EntityStore | None, cfg: GuardConfig) -> Answer 
 
 def on_topic(question: str, names_an_entity: bool) -> bool:
     """Genshin unless it names another game, or shows clear signs of another subject."""
-    strong = bool(GENSHIN_STRONG.search(question)) or names_an_entity
+    strong = (
+        bool(GENSHIN_STRONG.search(question))
+        or bool(GENSHIN_OTHER_LANGUAGES.search(question))
+        or names_an_entity
+    )
     if OTHER_GAMES.search(question) and not re.search(r"genshin", question, re.I):
         return False
     if OFFTOPIC_SIGNS.search(question) and not strong:
+        return False
+    if OFFTOPIC_TASKS.search(question):  # "help with my homework, Genshin is my excuse"
         return False
     return strong or bool(GENSHIN_WEAK.search(question))
 
