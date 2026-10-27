@@ -84,6 +84,7 @@ def build_app():
         from irminsul.retrieval.index import HybridIndex
 
         index = HybridIndex.load(index_dir)
+        index.warm()  # models load at boot, not on the first visitor's question
     else:
         log.warning("no index at %s: only exact answers and refusals will work", index_dir)
 

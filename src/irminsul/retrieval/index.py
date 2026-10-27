@@ -26,7 +26,9 @@ from irminsul.story import later
 EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 RERANK_MODEL = "Xenova/ms-marco-MiniLM-L-6-v2"
 RRF_K = 60
-RERANK_WORDS = 80  # the cross-encoder reads only the start of each chunk: cost grows with length
+# The cross-encoder reads only the start of each chunk: cost grows with length.
+# 48 words scored the same hit@8 as 80 on the golden set (0.989), about 20% faster.
+RERANK_WORDS = 48
 MODEL_CACHE = os.environ.get("IRMINSUL_MODEL_CACHE")  # e.g. a folder on D:, not C:
 
 
@@ -64,6 +66,10 @@ class HybridIndex:
         self._embed = None
         self._rerank = None
         self._rerank_model = RERANK_MODEL
+
+    def warm(self) -> None:
+        """Load the embedding and rerank models now, so the first question doesn't wait."""
+        self.search("warm up", k=1, mode="hybrid", rerank=True)
 
     # ---- build / save / load -------------------------------------------------------
     @classmethod
