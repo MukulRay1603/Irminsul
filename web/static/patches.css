@@ -47,8 +47,21 @@
 .pn-announced { margin: 0 0 14px; padding: 10px 12px; border-radius: 12px; font-size: 14px; border: 1px solid var(--line-2); background: color-mix(in srgb, var(--gold) 7%, transparent); }
 .pn-announced b { color: var(--gold); font-weight: 600; }
 .pn-announced a { color: inherit; }
-.pn-group + .pn-group { margin-top: 18px; }
-.pn-group h4 { margin: 0 0 8px; font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+/* Collapsible groups: the heading row is the toggle, the chevron turns when open */
+.pn-group { border-top: 1px solid var(--line); }
+.pn-group > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px;
+  padding: 12px 4px; font-size: 15px; font-weight: 600; border-radius: 8px;
+}
+.pn-group > summary::-webkit-details-marker { display: none; }
+.pn-group > summary:hover .pn-gtitle { color: var(--leaf); }
+.pn-group > summary:focus-visible { outline: 2px solid var(--leaf); outline-offset: 2px; }
+.pn-chev {
+  margin-left: auto; width: 9px; height: 9px; border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+  transform: rotate(45deg) translate(-2px, -2px); transition: transform .2s ease;
+}
+.pn-group[open] > summary .pn-chev { transform: rotate(-135deg) translate(-2px, -2px); }
+.pn-group > .pn-list { padding-bottom: 14px; }
 .pn-count { font-size: 12px; font-weight: 600; min-width: 22px; text-align: center; padding: 0 7px; border-radius: 999px; background: var(--bg-2); color: var(--muted); border: 1px solid var(--line); }
 .pn-list { list-style: none; margin: 0; padding: 0; }
 .pn-list.pn-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
@@ -97,7 +110,7 @@
   .pn-mine { width: 100%; justify-content: flex-end; }
 }
 @keyframes pn-in { from { opacity: 0; transform: translateY(6px); } }
-@media (prefers-reduced-motion: reduce) { .pn-body { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .pn-body { animation: none; } .pn-chev { transition: none; } }
 
 /* Patch card in the conversation (answers.js) */
 .pn-chips { display: flex; flex-wrap: wrap; gap: 6px; }

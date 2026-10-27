@@ -105,10 +105,14 @@
       h("iframe", { src: `https://www.youtube-nocookie.com/embed/${v.youtube_id}?autoplay=1`, allow: "autoplay; encrypted-media; picture-in-picture", allowfullscreen: true, title: title }))));
     return h("li", {}, btn);
   }
-  function group(title, items, make, cls = "") {
+  // Each group folds behind its heading so a big patch doesn't push the page down. Only new
+  // characters start open; the rest show their count until opened.
+  function group(title, items, make, cls = "", open = false) {
     if (!items.length) return null;
-    return h("section", { class: `pn-group ${cls}` },
-      h("h4", {}, title, h("span", { class: "pn-count", text: String(items.length) })),
+    return h("details", { class: `pn-group ${cls}`, open },
+      h("summary", {}, h("span", { class: "pn-gtitle", text: title }),
+        h("span", { class: "pn-count", text: String(items.length) }),
+        h("span", { class: "pn-chev", "aria-hidden": "true" })),
       h("ul", { class: `pn-list ${cls}` }, items.map(make)));
   }
 
@@ -131,7 +135,7 @@
         h("b", { text: "Officially announced, not playable yet: " }),
         data.announced.map((a, i) => [i ? ", " : "", h("a", { href: httpUrl(a.source) || "#", target: "_blank", rel: "noopener noreferrer", text: a.name }), ` (${[a.element, a.region].filter(Boolean).join(", ")})`]),
         ". Kit details appear here once they're released.") : null,
-      group("New characters", chars, entityCard, "pn-cards"),
+      group("New characters", chars, entityCard, "pn-cards", true),
       group("New weapons", weapons, entityCard, "pn-cards"),
       group("New artifact sets", sets, entityCard, "pn-cards"),
       group("Changes since the previous build", changes, change, "pn-changes"),
