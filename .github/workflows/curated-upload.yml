@@ -1,0 +1,68 @@
+# Upload the curated team files (facts, build recommendations) to the private dataset.
+# They are not kept in this public repo. Run by hand with the git ref that holds them, e.g.
+#   gh workflow run curated-upload.yml -f ref=some-branch -f path=config
+# then delete that branch. The next daily corpus check builds with the new files.
+name: Upload curated team files
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch or commit that holds the files
+        required: true
+      path:
+        description: Folder inside that ref with team_facts.md / team_builds.md
+        required: true
+        default: config
+
+permissions:
+  contents: read
+
+env:
+  HF_DATASET: MukulRay/irminsul-corpus
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Files from the given ref
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ inputs.ref }}
+          path: curated-src
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked --python 3.12
+
+      - name: Check and upload
+        env:
+          SRC_PATH: ${{ inputs.path }}
+        run: |
+          case "$SRC_PATH" in *..*|/*) echo "bad path"; exit 1;; esac
+          # The same line guards as the build: nothing malformed, leaky or personal goes up
+          uv run python -c "
+          import sys
+          from datetime import UTC, datetime
+          from pathlib import Path
+          from irminsul.sources.team_facts import parse_facts
+          bad = 0
+          for name, kw in (('team_facts.md', {}), ('team_builds.md', {'prefix': 'team-builds', 'what': 'builds'})):
+              p = Path('curated-src') / sys.argv[1] / name
+              if p.exists():
+                  r = parse_facts(p.read_text(encoding='utf-8'), datetime.now(UTC), None, **kw)
+                  print(name, 'kept', r.kept_lines, 'dropped', len(r.dropped))
+                  bad += len(r.dropped)
+          sys.exit(1 if bad else 0)
+          " "$SRC_PATH"
+          uv run irminsul-publish upload-curated --repo "$HF_DATASET" --dir "curated-src/$SRC_PATH"

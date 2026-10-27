@@ -62,17 +62,32 @@ def test_unsafe_lines_are_dropped():
     ]
 
 
-def test_the_published_file_parses_cleanly():
-    text = Path(__file__).parents[1].joinpath("config/team_facts.md").read_text(encoding="utf-8")
-    r = parse_facts(text, NOW, LIVE)
-    assert r.kept_lines >= 70 and not r.dropped
+FIXTURES = Path(__file__).parent / "fixtures"
+CONFIG = Path(__file__).parents[1] / "config"
+
+
+def _curated(name: str) -> str:
+    """The real file if this checkout has it (fetched from the private dataset), else the sample."""
+    real = CONFIG / name
+    return (real if real.exists() else FIXTURES / name.replace(".md", "_sample.md")).read_text(
+        encoding="utf-8"
+    )
+
+
+def test_the_curated_facts_file_parses_cleanly():
+    r = parse_facts(_curated("team_facts.md"), NOW, LIVE)
+    assert r.kept_lines >= 10 and not r.dropped
     assert len({d.doc_id for d in r.docs}) == len(r.docs)
 
 
-def test_the_published_builds_file_parses_into_its_own_docs():
-    text = Path(__file__).parents[1].joinpath("config/team_builds.md").read_text(encoding="utf-8")
-    r = parse_facts(text, NOW, LIVE, prefix="team-builds", what="builds")
-    assert r.kept_lines >= 100 and not r.dropped
+def test_the_curated_builds_file_parses_into_its_own_docs():
+    r = parse_facts(_curated("team_builds.md"), NOW, LIVE, prefix="team-builds", what="builds")
+    assert r.kept_lines >= 10 and not r.dropped
     assert all(d.doc_id.startswith("team-builds/") and d.kind == "team_builds" for d in r.docs)
     assert any(d.title.startswith("Escoffier builds") for d in r.docs)
     assert {d.source.tier for d in r.docs} <= {Tier.KQM, Tier.COMMUNITY}
+
+
+def test_curated_files_are_not_in_the_public_repo():
+    ignored = (Path(__file__).parents[1] / ".gitignore").read_text(encoding="utf-8")
+    assert "config/team_facts.md" in ignored and "config/team_builds.md" in ignored

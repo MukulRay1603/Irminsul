@@ -126,6 +126,46 @@ def promote(repo: str, branch: str) -> None:
         )
 
 
+# Curated team files (facts and build recommendations) live only in the private dataset, under
+# curated/, not in the public repo: the build fetches them, publishing never deletes them.
+CURATED_FILES = ("team_facts.md", "team_builds.md")
+
+
+def upload_curated(repo: str, folder: Path) -> list[str]:
+    files = [name for name in CURATED_FILES if (folder / name).exists()]
+    if not files:
+        sys.exit(f"no curated files in {folder}")
+    _api().upload_folder(
+        folder_path=folder,
+        path_in_repo="curated",
+        repo_id=repo,
+        repo_type="dataset",
+        revision="main",
+        allow_patterns=files,
+        commit_message="Update curated team files: " + ", ".join(files),
+    )
+    return files
+
+
+def fetch_curated(repo: str, out: Path) -> list[str]:
+    """Download the curated files into `out` (config/ for the build). Fails if any is missing:
+    a build without them would quietly publish without the team's facts and builds."""
+    api = _api()
+    out.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory() as tmp:
+        local = Path(
+            api.snapshot_download(
+                repo, repo_type="dataset", allow_patterns=["curated/*.md"], local_dir=tmp
+            )
+        )
+        missing = [name for name in CURATED_FILES if not (local / "curated" / name).exists()]
+        if missing:
+            sys.exit(f"curated files missing from {repo}: {', '.join(missing)}")
+        for name in CURATED_FILES:
+            (out / name).write_bytes((local / "curated" / name).read_bytes())
+    return list(CURATED_FILES)
+
+
 def restart_space(space: str) -> None:
     """The Space loads the dataset at boot, so a restart is what makes a new build live."""
     _api().restart_space(space)
@@ -147,9 +187,19 @@ def main() -> None:
     p.add_argument("--branch", required=True)
     r = sub.add_parser("restart-space")
     r.add_argument("--space", required=True)
+    u = sub.add_parser("upload-curated")
+    u.add_argument("--repo", required=True)
+    u.add_argument("--dir", type=Path, required=True)
+    c = sub.add_parser("fetch-curated")
+    c.add_argument("--repo", required=True)
+    c.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
     if args.cmd == "fetch-manifest":
         print("found" if fetch_manifest(args.repo, args.out) else "no previous manifest")
+    elif args.cmd == "upload-curated":
+        print("uploaded", ", ".join(upload_curated(args.repo, args.dir)))
+    elif args.cmd == "fetch-curated":
+        print("fetched", ", ".join(fetch_curated(args.repo, args.out)))
     elif args.cmd == "stage":
         stage(args.repo, args.build, args.branch, args.index)
     elif args.cmd == "restart-space":
