@@ -5,217 +5,99 @@
 </picture>
 
 <p align="center">
-  <a href="https://mukulray-irminsul.hf.space"><img alt="Live demo (beta)" src="https://img.shields.io/badge/live%20demo-beta-A9D86E?style=flat-square&labelColor=0A1811"></a>
-  <a href="https://mukulray-irminsul.hf.space/results"><img alt="Test results: 91 of 91 scored questions pass" src="https://img.shields.io/badge/test%20results-91%2F91%20pass-D6B25E?style=flat-square&labelColor=0A1811"></a>
-  <a href="LICENSE"><img alt="Licence: source-available" src="https://img.shields.io/badge/licence-source--available-7FE3D2?style=flat-square&labelColor=0A1811"></a>
-</p>
-
-**Irminsul is a free Genshin Impact assistant that answers from official game data and shows
-where every answer came from.** Ask about a character's stats, a weapon's passive at R5 or how
-two characters compare, and you get an exact, interactive answer straight from the live game
-data, with no AI involved. Harder questions are answered by an AI that may only use cited,
-official or community-verified sources, and each sentence is checked against them. Leaks,
-datamines and unannounced content are refused before anything is searched. It runs for $0, needs
-no account and tracks no one.
-
-<p align="center">
-  <a href="https://mukulray-irminsul.hf.space"><b>Try the beta →</b></a>
+  <a href="https://mukulray-irminsul.hf.space"><b>Live demo</b></a>
   &nbsp;·&nbsp;
-  <a href="https://mukulray-irminsul.hf.space/results">Public test results</a>
+  <a href="https://mukulray-irminsul.hf.space/results">Test results</a>
   &nbsp;·&nbsp;
   <a href="#how-it-works">How it works</a>
 </p>
 
-<p align="center">
-  <img alt="Irminsul's home screen: a glowing tree behind the IRMINSUL wordmark, a question box and suggested questions" src="docs/images/hero.webp" width="100%">
-</p>
-
-## What it does
-
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <img alt="A stats card for Raiden Shogun with the 'From game data · No AI used' badge" src="docs/images/stats-card.webp" width="100%"><br>
-      <b>Exact answers, no AI.</b> Stats, constellations, passives and set bonuses come straight from official game data, instantly, marked <i>From game data · No AI used</i>.
-    </td>
-    <td width="50%" valign="top">
-      <img alt="A side-by-side comparison of Raiden Shogun and Furina's level 90 base stats" src="docs/images/compare-card.webp" width="100%"><br>
-      <b>Side-by-side comparisons.</b> Two characters, one table, the higher value in gold. Official numbers, not a tier list.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img alt="A talent card for Xiangling's Elemental Burst with the talent level slider at level 13" src="docs/images/talent-slider.webp" width="100%"><br>
-      <b>Talents with a level slider.</b> Drag from level 1 to 13 and every scaling value updates in place, with no new question.
-    </td>
-    <td width="50%" valign="top">
-      <img alt="A weapon card for Engulfing Lightning with the R5 refinement selected" src="docs/images/weapon-refinement.webp" width="100%"><br>
-      <b>Weapon refinements.</b> Switch R1 to R5 and the passive's numbers change on the spot.
-      <br><br>
-      <img alt="Suggested follow-up questions, with free ones marked" src="docs/images/follow-ups.webp" width="100%"><br>
-      <b>Follow-up chips.</b> Each answer suggests the natural next questions. The ones marked <i>free</i> are answered from game data and never use an AI answer.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <img alt="A refused question about leaked characters, stamped 'Hidden by the leak filter'" src="docs/images/leak-filter.webp" width="100%"><br>
-      <b>Never leaks.</b> Questions about leaks, betas or unannounced versions are stopped before any search, and nothing unreleased is in the data to begin with.
-    </td>
-    <td width="50%" valign="top">
-      <img alt="The same comparison card in light mode" src="docs/images/compare-light.webp" width="100%"><br>
-      <b>Light or dark.</b> Calm greens and gold either way.
-    </td>
-  </tr>
-</table>
+**Irminsul is a free AI assistant for Genshin Impact that cites a source for every answer and never leaks.**
+Stats, talents, constellations and weapon passives come straight from the live game data, with
+no AI involved. Questions that need explaining, such as builds, teams, mechanics, events and lore, are
+answered by a model that may only use cited sources, and each sentence is checked against them.
+Unreleased content is kept out of the data entirely. Irminsul answers in the player's own language,
+can keep lore free of story spoilers, needs no account, and runs at no cost.
 
 <p align="center">
-  <img alt="The conversation view: an answer on the left and the character's official dossier on the right" src="docs/images/conversation.webp" width="100%"><br>
-  <sub>Every answer opens the character's official dossier beside it: stats, talents, constellations and official videos.</sub>
+  <img alt="An answer with numbered sources on the left and the character's official dossier on the right" src="docs/images/conversation.webp" width="100%">
 </p>
 
-<table>
-  <tr>
-    <td width="66%" valign="top">
-      <img alt="The daily planner showing today's open talent domain and a plan of five characters and weapons" src="docs/images/planner.webp" width="100%"><br>
-      <b>Daily planner.</b> Add who you're building and it shows which domains are open today on your server, what each character still needs, and a short daily checklist. Saved on your device only.
-      <br><br>
-      <img alt="The public test results page: 100% stat accuracy, 5/5 leak probes refused, 6/6 injection and off-topic refused, $0 per answer" src="docs/images/results.webp" width="100%"><br>
-      <b>Public test results.</b> <a href="https://mukulray-irminsul.hf.space/results">/results</a> shows how accurate it is, measured by automated tests, not hand-picked examples.
-    </td>
-    <td width="34%" valign="top">
-      <img alt="Irminsul's home screen on a phone" src="docs/images/phone-hero.webp" width="100%"><br>
-      <img alt="A weapon answer on a phone" src="docs/images/phone-answer.webp" width="100%"><br>
-      <b>Made for phones too,</b> and installable as an app.
-    </td>
-  </tr>
-</table>
+## Highlights
+
+- **Answers you can check.** Every answer links its sources. Answers from game data are marked *No AI used*.
+- **Leak-free by construction.** A release gate drops anything that can't be proven released before it is indexed. Leak and datamine questions are refused before any search.
+- **Builds for every released character.** 129 characters' weapons, artifacts, stats and teams, each line credited to its guide (KQM, Game8, Icy Veins) and checked against that guide's page.
+- **Live game news.** Banners, events and redemption codes from HoYoverse's official notices, with expired codes and events called out as expired.
+- **Spoiler-safe lore.** Story answers stop at the player's Archon Quest progress.
+- **Any language.** Questions in Chinese, Japanese, Korean, Spanish, Portuguese and more are answered in that language, with the same sources and guards.
+- **More than chat:**
+  - interactive stat, talent and comparison cards
+  - patch notes by version
+  - a daily farming planner saved only on the player's device
 
 ## How it works
 
-### Cheapest and safest first
-
-Every question takes the cheapest path that can answer it correctly. Most never reach an AI at
-all.
-
-```mermaid
-flowchart TD
-    Q([Your question]) --> G{Guards}
-    G -- leak, injection<br/>or off-topic --> R([Polite refusal<br/>nothing searched])
-    G --> C{Asked<br/>before?}
-    C -- yes --> A1([Same answer, instantly])
-    C --> E{Exact fact in<br/>game data?}
-    E -- yes --> A2([Interactive card<br/>no AI used])
-    E -- no --> S[Hybrid search<br/>keywords + meaning,<br/>then re-ranked]
-    S --> L[AI writes the answer<br/>citing numbered sources]
-    L --> V[Each sentence checked<br/>against its source]
-    V --> A3([Cited answer])
-
-    classDef free fill:#A9D86E,stroke:#2F7A5C,color:#0A1811
-    classDef ai fill:#D6B25E,stroke:#8A6A1E,color:#0A1811
-    class R,A1,A2 free
-    class L,V,A3 ai
-```
-
-- **Guards first.** They are plain rules, not a model, so they can't be talked out of the leak policy.
-- **Exact answers** cover stats, talents, constellations, passives, set bonuses and comparisons, about 80% of the test questions.
-- **The AI is the last resort.** It sees only the sources that search found and must cite them. A sentence whose numbers or wording don't match its source is flagged in the app.
-
-### Fresh data every week, never a leak
+Every question takes the cheapest path that answers it correctly. Most never reach a model.
 
 ```mermaid
 flowchart LR
-    O[Official game data<br/>and HoYoverse's wiki] --> G{Leak gate}
-    K[KQM theorycrafting<br/>library] --> G
-    G -- not provably<br/>released --> X([Dropped])
-    G --> B[Build cited,<br/>versioned records]
-    B --> T{Checks:<br/>nothing lost,<br/>nothing unverified,<br/>search still accurate}
-    T -- fail --> I([Stopped, flagged<br/>for review])
-    T --> P[Reviewed, then<br/>published]
+    Q([Question]) --> G{Guards}
+    G -- leak, injection,<br/>off-topic, personal data --> R([Refusal])
+    G --> E{Exact fact in<br/>game data?}
+    E -- yes --> A1([Interactive card<br/>no AI, ~50 ms])
+    E -- no --> S[Hybrid search<br/>BM25 + embeddings,<br/>re-ranked]
+    S --> L[Model answers<br/>from cited sources only]
+    L --> V[Each sentence checked<br/>against its source]
+    V --> A2([Cited answer])
 
-    classDef ok fill:#A9D86E,stroke:#2F7A5C,color:#0A1811
-    classDef stop fill:#E8A87C,stroke:#9A4F25,color:#0A1811
-    class P ok
-    class X,I stop
+    classDef free fill:#A9D86E,stroke:#2F7A5C,color:#0A1811
+    classDef ai fill:#D6B25E,stroke:#8A6A1E,color:#0A1811
+    class R,A1 free
+    class L,V,A2 ai
 ```
 
-The leak gate **fails closed**: if a record can't be proven released, it is dropped.
-Officially announced characters get an overview only, and community guides inherit the release
-status of the character they describe.
-
-### Fair use, at $0
-
-AI answers run on free tiers, so they are shared fairly without accounts.
-
-```mermaid
-flowchart TD
-    Q([AI question]) --> P{Your allowance<br/>has an answer?}
-    P -- no --> W([Refills one at a time,<br/>like stamina])
-    P -- yes --> S{Shared pool<br/>has room?}
-    S -- no --> B([Busy for a moment,<br/>game-data answers still work])
-    S -- yes --> A([Answered])
-    R[[Pool refills steadily<br/>all day, every time zone]] -.-> S
-    F([Game-data answers]) --> Z([Always free, never counted])
-
-    classDef ok fill:#A9D86E,stroke:#2F7A5C,color:#0A1811
-    class A,Z ok
-```
+- **The data refreshes itself.** A daily job rebuilds the corpus from official sources and runs three gates: leaks, search quality, and safety. Routine changes publish and redeploy automatically, and riskier changes wait for a person to review them.
+- **Guards are rules, not a model,** so they can't be argued out of the leak policy. A second check filters the model's output.
+- **Fair use without accounts.** Each player gets a refilling allowance of AI answers. Answers from game data are always free.
 
 ## Measured, not claimed
 
-Every change is scored against a golden set of 114 hand-checked questions. These numbers are
-from the latest run (game version 7.1, October 2026); the full breakdown is on the
-[results page](https://mukulray-irminsul.hf.space/results).
-
-| What | Result |
+| | |
 |---|---|
-| Right source in the top 3 search results | **0.875**, up from 0.490 in v0 |
-| Right source in the top 8 | **0.979**, up from 0.677 in v0 |
-| Exact stat answers | **49 / 49** correct, no AI |
-| Passives, set bonuses, constellations | **28 / 28** correct, no AI |
-| Leak probes refused before any search | **5 / 5** |
-| Prompt-injection and off-topic refused | **6 / 6** |
-| Scored questions passing overall | **91 / 91** |
-| Questions that need no AI at all | **~80%** |
-| Cost per answer | **$0** today (about $0.0008 per AI answer at paid prices) |
+| Live site, full test set with the real model | **113 / 118** scored (95.8%), with all 19 leak, injection, privacy, safety and off-topic probes handled correctly |
+| Offline test set (guards, exact answers, refusals) | **101 / 101** |
+| Story leaks past the player's progress, in spoiler-safe mode | **0** |
+| Right source in the top 8 search results | **0.946** on 93 questions |
+| 50 concurrent users | **210 req/s**, p95 **0.45 s**, zero errors |
+| Mobile layout shift (CLS) | **0.04** (down from 0.92) |
+| Build recommendations checked against their sources | **1,022 lines**, none unsupported |
+| Running cost | **$0** (free model tiers) |
 
-<sub>Search figures compare v0's approach and v1's on the same data and the same 96 questions,
-so the gain is the search itself. More in [`reports/`](reports/).</sub>
+The full breakdown, updated on every change, is on the [results page](https://mukulray-irminsul.hf.space/results).
 
-## Principles
+## Built with
 
-- **Official data only.** Game facts come from the live game data and HoYoverse's own wiki; theorycrafting from the KQM library.
-- **Never leaks.** Nothing unreleased gets into the data, and leak questions are refused before any search.
-- **Sources on every answer.** Every answer says where it came from and links to it.
-- **Game-data answers cost no AI.** Exact answers are instant, free and correct by construction.
-- **No accounts, no tracking.** No sign-in, no cookies, no analytics.
-- **Your planner stays yours.** It is saved on your device; nothing is sent to the server.
+Python · FastAPI · hybrid retrieval (BM25, `bge-small-en-v1.5`, cross-encoder re-ranking on ONNX) ·
+free LLM tiers with failover · Hugging Face Spaces and Datasets · GitHub Actions ·
+a vanilla-JS front end under a strict Content Security Policy
 
-## Status and roadmap
+## Status
 
-**Beta.** The app is live and tested; AI answers are capped while it runs on free tiers.
+Live beta for Genshin Impact 7.1. It started as [v0](https://github.com/MukulRay1603/Irminsul/releases/tag/v0),
+a fine-tuned model with basic retrieval.
 
-Next up:
-- **Spoiler-safe lore mode:** story answers that stop where you are in the story.
-- **Patch-change notes:** what changed for your characters in each update.
-- **Multilingual answers.**
+## Licence and credits
 
-Where it started: [v0](https://github.com/MukulRay1603/Irminsul/releases/tag/v0), a fine-tuned
-model with basic retrieval.
+**Source-available, all rights reserved.** You're welcome to read and review the code. Please ask
+before reusing it. See [LICENSE](LICENSE). Versions up to tag `v0` remain MIT-licensed.
 
-## Licence and legal
+Irminsul is an **unofficial fan project**, not affiliated with or endorsed by HoYoverse. Genshin
+Impact and its characters, art and other content are trademarks and copyrights of HoYoverse.
 
-**Source-available, all rights reserved.** You're welcome to read and review the code; please
-ask before reusing it. See [LICENSE](LICENSE). Versions up to tag `v0` remain MIT-licensed.
+- Game data via the [Yatta API](https://gi.yatta.moe) and HoYoverse's [HoYoWiki](https://wiki.hoyolab.com) and news.
+- Theorycrafting from the [KQM Theorycrafting Library](https://github.com/KQM-git/TCL)
+  ([CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)). Build recommendations credit
+  KQM, Game8 or Icy Veins and link the page each came from.
 
-Irminsul is an **unofficial fan project**, not affiliated with or endorsed by HoYoverse.
-Genshin Impact, its characters, art and other content are trademarks and copyrights of
-HoYoverse. The banner and app icons are original artwork.
-
-- Game data via the [Yatta API](https://gi.yatta.moe) and HoYoverse's [HoYoWiki](https://wiki.hoyolab.com).
-- Theorycrafting is derived from the [KQM Theorycrafting Library](https://github.com/KQM-git/TCL)
-  by the KQM community, licensed
-  [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/). Each KQM-based answer
-  links to its source page; derived KQM text keeps that licence and isn't used commercially.
-
-Security: see [SECURITY.md](SECURITY.md) to report a problem, and
-[docs/security.md](docs/security.md) for the audit.
+Security issues: see [SECURITY.md](SECURITY.md).
