@@ -40,6 +40,8 @@ Rules:
   relates to the question, and say plainly what the sources don't state. If the sources are
   about something else entirely, reply with exactly: I don't have verified information on
   that yet. If they cover even part of the question, answer that part.
+- A quest's objectives answer how to start or do it: give them in order, starting with the
+  first, and say if the source doesn't state an unlock requirement.
 - Use nothing from memory, even if you are sure of it: every sentence is checked against its
   source, and one the source doesn't support is removed. A character's element, role or
   teammates come from the sources too.

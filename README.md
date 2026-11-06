@@ -1,7 +1,7 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/banner-dark.png">
   <source media="(prefers-color-scheme: light)" srcset="docs/images/banner-light.png">
-  <img alt="Irminsul: Genshin answers from official game data, with sources. No leaks." src="docs/images/banner-dark.png" width="100%">
+  <img alt="Irminsul: Genshin answers with sources. No leaks." src="docs/images/banner-dark.png" width="100%">
 </picture>
 
 <p align="center">
@@ -12,11 +12,11 @@
   <a href="#how-it-works">How it works</a>
 </p>
 
-**Irminsul is a free AI assistant for Genshin Impact that cites a source for every answer and never leaks.**
-Stats, talents, constellations and weapon passives come straight from the live game data, with
+**Irminsul is a free, unofficial AI assistant for Genshin Impact that cites its sources and refuses leaks.**
+Stats, talents, constellations and weapon passives come straight from game data, with
 no AI involved. Questions that need explaining, such as builds, teams, mechanics, events and lore, are
-answered by a model that may only use cited sources, and each sentence is checked against them.
-Unreleased content is kept out of the data entirely. Irminsul answers in the player's own language,
+answered by a model that may only use cited sources. Each sentence is checked against them, and
+sentences that fail are removed. A release gate keeps unreleased content out of the data. Irminsul answers in the player's own language,
 can keep lore free of story spoilers, needs no account, and runs at no cost.
 
 <p align="center">
@@ -26,8 +26,9 @@ can keep lore free of story spoilers, needs no account, and runs at no cost.
 ## Highlights
 
 - **Answers you can check.** Every answer links its sources. Answers from game data are marked *No AI used*.
-- **Leak-free by construction.** A release gate drops anything that can't be proven released before it is indexed. Leak and datamine questions are refused before any search.
-- **Builds for every released character.** 129 characters' weapons, artifacts, stats and teams, each line credited to its guide (KQM, Game8, Icy Veins) and checked against that guide's page.
+- **Leak-gated.** A release gate drops anything that can't be proven released before it is indexed. Leak and datamine questions are refused before any search.
+- **Builds, each line credited.** Team-checked weapons, artifacts, stats and teams for 129 characters, credited to their guides. Newer characters use KQM's quick guide once it exists, or say plainly that no checked build exists yet.
+- **Quests and lore.** Archon, Story and World Quest objectives and in-game books, dated so story-safe mode can hide them.
 - **Live game news.** Banners, events and redemption codes from HoYoverse's official notices, with expired codes and events called out as expired.
 - **Spoiler-safe lore.** Story answers stop at the player's Archon Quest progress.
 - **Any language.** Questions in Chinese, Japanese, Korean, Spanish, Portuguese and more are answered in that language, with the same sources and guards.
@@ -57,11 +58,13 @@ flowchart LR
     class L,V,A2 ai
 ```
 
-- **The data refreshes itself.** A daily job rebuilds the corpus from official sources and runs three gates: leaks, search quality, and safety. Routine changes publish and redeploy automatically, and riskier changes wait for a person to review them.
+- **The data refreshes itself.** A daily job rebuilds the corpus and runs three gates, and deeper refreshes run weekly and on the game's own calendar dates. The gates are: leaks, search quality, and safety. Routine changes publish and redeploy automatically, and riskier changes wait for a person to review them.
 - **Guards are rules, not a model,** so they can't be argued out of the leak policy. A second check filters the model's output.
 - **Fair use without accounts.** Each player gets a refilling allowance of AI answers. Answers from game data are always free.
 
 ## Measured, not claimed
+
+Measured on 5 November 2026, before the corpus grew to 6,800 documents and before sentence removal shipped.
 
 | | |
 |---|---|
@@ -71,7 +74,7 @@ flowchart LR
 | Right source in the top 8 search results | **0.946** on 93 questions |
 | 50 concurrent users | **210 req/s**, p95 **0.45 s**, zero errors |
 | Mobile layout shift (CLS) | **0.04** (down from 0.92) |
-| Build recommendations checked against their sources | **1,022 lines**, none unsupported |
+| Build recommendations checked against their sources | **1,045 lines** after corrections |
 | Running cost | **$0** (free model tiers) |
 
 The full breakdown, updated on every change, is on the [results page](https://mukulray-irminsul.hf.space/results).
