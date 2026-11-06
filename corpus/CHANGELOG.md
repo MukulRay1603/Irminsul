@@ -1,3 +1,47 @@
+## Corpus update 2026-11-06
+
+| Records | Before | After |
+|---|---|---|
+| characters | 131 | 131 |
+| weapons | 252 | 253 |
+| artifact_sets | 63 | 63 |
+| kqm | 1429 | 1429 |
+
+**Added docs (2740)**
+- `auto-builds/kaedehara-kazuha#1`
+- `auto-builds/kazuha#1`
+- `auto-builds/vesna#1`
+- `auto-builds/vodyanitsa#1`
+- `book/1#the-fox-in-the-dandelion-sea-i`
+- `book/1#the-fox-in-the-dandelion-sea-ii`
+- `book/1#the-fox-in-the-dandelion-sea-iii`
+- `book/1#the-fox-in-the-dandelion-sea-iv`
+- `book/1#the-fox-in-the-dandelion-sea-ix`
+- `book/1#the-fox-in-the-dandelion-sea-v`
+- `book/1#the-fox-in-the-dandelion-sea-vi`
+- `book/1#the-fox-in-the-dandelion-sea-vii`
+- `book/1#the-fox-in-the-dandelion-sea-viii`
+- `book/1#the-fox-in-the-dandelion-sea-x`
+- `book/1#the-fox-in-the-dandelion-sea-xi`
+- `book/100181#along-with-divinity-prologue`
+- `book/100222#1000-years-of-loneliness`
+- `book/100242#letter-to-the-editor-in-chief-draft`
+- `book/100242#letter-to-the-treasure-hoarders`
+- `book/100246#draft-manuscript-of-hyakunin-ikki-the-greatest-battle`
+- `book/100247#fischl-dictionary-die-neuauflage-der-prinzessin`
+- `book/100248#the-origins-of-the-experiment`
+- `book/100249#notes-on-the-experimental-subjects`
+- `book/100348#godwin-s-letter`
+- `book/100350#klee-s-notebook`
+- ... and 2715 more
+
+**Changed docs (5)**
+- `character/vodyanitsa#constellations`
+- `character/vodyanitsa#talent-skill-rechitativ-sonorous-dawn`
+- `mechanic/stellar-swirl#guide`
+- `weapon/predator#main`
+- `weapon/sword-of-descension#main`
+
 ## Corpus update 2026-10-26
 
 | Records | Before | After |

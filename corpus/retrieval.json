@@ -1,5 +1,5 @@
 {
-  "questions": 90,
+  "questions": 93,
   "skipped_missing_gold": [
     "man-4star-guarantee",
     "man-4star-rate",
@@ -20,17 +20,17 @@
   "k": 8,
   "configs": {
     "hybrid+rerank": {
-      "hit@8": 0.967,
-      "recall@8": 0.959,
-      "mrr": 0.858,
-      "p50_ms": 593.8,
-      "p95_ms": 1175.8,
+      "hit@8": 0.903,
+      "recall@8": 0.903,
+      "mrr": 0.77,
+      "p50_ms": 219.3,
+      "p95_ms": 337.1,
       "hit_by_category": {
-        "build": 1,
+        "build": 0.4,
         "gacha": 1,
-        "passive": 0.968,
+        "passive": 0.903,
         "spoiler": 1,
-        "stat": 0.959,
+        "stat": 0.939,
         "upcoming": 1
       }
     }
