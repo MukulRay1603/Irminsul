@@ -72,6 +72,7 @@ def parse_facts(
     live: tuple[int, int] | None = None,
     prefix: str = "team",
     what: str = "facts",
+    checked_by: str = "team-checked",
 ) -> FactsResult:
     """`prefix` keeps doc ids apart between files; `what` names their content ("builds")."""
     result = FactsResult()
@@ -110,8 +111,8 @@ def parse_facts(
                 doc_id=f"{prefix}/{slug}#{seen[slug]}",
                 entity_id=None,
                 kind=f"team_{what}",
-                title=f"{section}{label} (team-checked, {host})",
-                text=f"# {section}: team-checked {what}\nSource: {url}\n" + "\n".join(lines),
+                title=f"{section}{label} ({checked_by}, {host})",
+                text=f"# {section}: {checked_by} {what}\nSource: {url}\n" + "\n".join(lines),
                 release=Release(status=ReleaseStatus.RELEASED),
                 source=SourceRef(
                     source="team_facts",

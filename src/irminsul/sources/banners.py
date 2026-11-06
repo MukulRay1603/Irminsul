@@ -129,6 +129,19 @@ def proven_live(feed: dict, now: datetime) -> dict[str, str]:
     return live
 
 
+def proven_weapons(feed: dict, now: datetime) -> dict[str, str]:
+    """Weapon -> the date its wish opened, for every weapon wish that has already started."""
+    today = now.date().isoformat()
+    live: dict[str, str] = {}
+    for b in feed.get("banners", []):
+        if b["kind"] != "weapon" or not b["start"] or b["start"] > today:
+            continue
+        for name in b["five_stars"] + b["four_stars"]:
+            if name not in live or b["start"] < live[name]:
+                live[name] = b["start"]
+    return live
+
+
 def active(feed: dict, today: date) -> list[dict]:
     day = today.isoformat()
     return [b for b in feed.get("banners", []) if b["start"] and b["start"] <= day <= b["end"]]

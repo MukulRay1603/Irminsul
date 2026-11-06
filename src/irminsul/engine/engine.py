@@ -72,6 +72,13 @@ BUSY_REPLY = (
     "moment. Please try again in a little while."
 )
 NO_SOURCES_REPLY = "I don't have verified information on that yet."
+BUILD_DOCS = ("team-builds/", "auto-builds/")
+_BUILD_ASK = re.compile(
+    r"\bbuilds?\b|\bbis\b|\bbest (?:weapons?|artifacts?|sets?)\b"
+    r"|\b(?:weapons?|artifacts?|sets?|main stats?) (?:for|on)\b"
+    r"|\bwhat (?:weapon|artifact|set)s? (?:should|does|do|to)\b",
+    re.I,
+)
 ALLOWANCE_REPLY = (
     "You've used your AI answers for now. They refill over time (see the counter below), "
     "and answers straight from game data, like stats and passives, are always free."
@@ -166,6 +173,7 @@ class Engine:
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
         self._search_slots = threading.BoundedSemaphore(max(1, search_slots))
+        self._build_owners: set[str] | None = None
         self._search_lock = threading.Lock()
         self._search_cache: OrderedDict[tuple, tuple[list, dict]] = OrderedDict()
 
@@ -467,6 +475,48 @@ class Engine:
                 self._search_cache.popitem(last=False)
         return hits, dict(report)
 
+    def _own_builds(self, question: str, hits: list) -> tuple[list, "Answer | None"]:
+        """A build question about one character only ever sees that character's build docs.
+
+        Otherwise a new character with no guide yet gets a neighbour's recommendation, cited
+        and confident. No build docs at all gets a plain "not yet" instead of a guess.
+        """
+        matches = self.store.find(question)
+        if not _BUILD_ASK.search(question) or len(matches) != 1:
+            return hits, None
+        match = matches[0]
+        if match.kind != "character":
+            return hits, None
+        slug = match.entity.id.split("/", 1)[1]
+
+        def owner(doc_id: str) -> str | None:
+            return doc_id.split("/", 1)[1].split("#")[0] if doc_id.startswith(BUILD_DOCS) else None
+
+        if self._build_owners is None:
+            self._build_owners = {
+                o for c in getattr(self.index, "chunks", []) if (o := owner(c.doc_id))
+            }
+        if not self._build_owners:  # an index with no build docs at all has nothing to say
+            return hits, None
+        # Sections use the name players know: "Ayaka" and "Kamisato Ayaka" are one person
+        words = set(slug.split("-"))
+        mine = {
+            o
+            for o in self._build_owners
+            if set(o.split("-")) <= words or words <= set(o.split("-"))
+        }
+        if not mine:
+            c = match.entity
+            return hits, Answer(
+                f"**I don't have a checked build for {c.name} yet.** Guides usually follow a "
+                "little after release, and this updates on its own as soon as one appears. "
+                f"Until then, {c.name}'s official kit is in the source below. [1]",
+                "no_build",
+                [Citation(1, c.name, c.source.url, c.source.tier, f"{c.id}#overview")],
+                {"entity": c.id},
+            )
+        return [h for h in hits if (o := owner(h.chunk.doc_id)) is None or o in mine], None
+
     def _prepare_rag(
         self,
         question: str,
@@ -485,6 +535,9 @@ class Engine:
             and h.chunk.tier not in self.exclude_tiers
             and not story.hides(point, getattr(h.chunk, "revealed_in", None))
         ]
+        hits, no_build = self._own_builds(question, hits)
+        if no_build is not None:
+            return no_build
         trace = {
             "retrieval": [
                 {"doc_id": h.chunk.doc_id, "score": round(h.score, 3), "tier": h.chunk.tier}

@@ -3,13 +3,16 @@
 Used for three things:
 - the official name lists that confirm undated Yatta weapons and artifact sets,
 - officially announced characters that are not playable yet (status ANNOUNCED),
-- official video collections (trailers, demos) for UI embeds.
+- official video collections (trailers, demos) for UI embeds,
+- playable characters and weapons the game-data mirrors haven't caught up with,
+- world quest pages: how a quest unlocks, where it starts and what it gives.
 
 Announced characters only ever get an overview: kit modules (talents, constellations,
 ascension) are not turned into docs, and pages flagged `beta` are skipped entirely.
 Parsing is kept in pure functions so it can be tested against saved fixtures.
 """
 
+import html
 import json
 import logging
 import re
@@ -28,6 +31,7 @@ from irminsul.schema import (
     Talent,
     Tier,
     Video,
+    Weapon,
     slugify,
 )
 from irminsul.sources.http import PoliteClient
@@ -42,12 +46,17 @@ HEADERS = {"x-rpc-language": "en-us", "Referer": "https://wiki.hoyolab.com/"}
 MENU_CHARACTERS = "2"
 MENU_WEAPONS = "4"
 MENU_ARTIFACTS = "5"
+MENU_QUESTS = "31"  # lists 165 world quests; Yatta has the full quest list
 
 KIT_MODULES = {"Talents", "Constellation", "Ascend"}
+# Rows of a weapon page's Attributes that aren't its passive
+WEAPON_FIELDS = {"Name", "Region", "Source", "Type", "Secondary Attributes", "Version Released"}
 # Hub pages that are not a playable character of their own.
 NOT_CHARACTERS = {"traveler"}
 _HTML_TAG = re.compile(r"<[^>]+>")
 _YOUTUBE_ID = re.compile(r"(?:v=|youtu\.be/|/embed/|/shorts/)([\w-]{11})")
+_REFINEMENT = re.compile(r"[\d.]+%?(?:/[\d.]+%?){4}")  # "24%/30%/36%/42%/48%", R1 to R5
+_LINKED_NAME = re.compile(r"<custom-entry[^>]*\bname=\"([^\"]*)\"[^>]*>(?:</custom-entry>)?")
 
 
 @dataclass
@@ -254,6 +263,73 @@ def released_character(
             "release": Release(status=ReleaseStatus.RELEASED, released_at=released_at),
         }
     )
+
+
+def _refinements(text: str) -> list[str]:
+    """One passive text with "a/b/c/d/e" values -> its R1 to R5 texts."""
+    if not _REFINEMENT.search(text):
+        return []
+    return [_REFINEMENT.sub(lambda m, i=i: m.group().split("/")[i], text) for i in range(5)]
+
+
+def released_weapon(
+    entry: OfficialEntry, page: dict[str, Any], fetched_at: datetime, released_at: datetime
+) -> Weapon | None:
+    """A weapon built from its official page, for when the mirrors haven't caught up. Only for
+    weapons an official wish notice proves are live. The page has no stat table, so base ATK
+    stays unknown until the mirrors have it; the passive is exact."""
+    if page.get("beta"):
+        return None
+    passive, texts = None, []
+    for row in _module(page, "Attributes", "baseInfo"):
+        if row.get("key") not in WEAPON_FIELDS and row.get("value"):
+            passive, texts = row, _refinements(_clean(row["value"][0]))
+            if texts:
+                break
+    if not texts:
+        return None
+    rarity = entry.first("weapon_rarity") or ""
+    return Weapon(
+        id=f"weapon/{slugify(entry.name)}",
+        game_id=f"hoyowiki:{entry.entry_id}",
+        name=entry.name,
+        rarity=int(m.group()) if (m := re.search(r"\d", rarity)) else 0,
+        weapon_type=entry.first("weapon_type") or "",
+        secondary_stat=_attribute(page, "Secondary Attributes"),
+        passive_name=passive["key"],
+        passive_by_refinement=texts,
+        description=_HTML_TAG.sub("", page.get("desc") or "").strip() or None,
+        release=Release(status=ReleaseStatus.RELEASED, released_at=released_at),
+        source=SourceRef(
+            source="hoyowiki",
+            url=PAGE_URL.format(entry.entry_id),
+            tier=Tier.OFFICIAL,
+            fetched_at=fetched_at,
+        ),
+    )
+
+
+def quest_page(page: dict[str, Any]) -> dict[str, str] | None:
+    """A world quest's official page: region, version and its quest information as text."""
+    if page.get("beta"):
+        return None
+    for module in page.get("modules") or []:
+        if module.get("name") != "Quest Information":
+            continue
+        for component in module.get("components") or []:
+            payload = _component_payload(component)
+            body = payload.get("data") if isinstance(payload, dict) else None
+            if not body:
+                continue
+            body = _LINKED_NAME.sub(r"\1", body)
+            body = re.sub(r"</(?:p|li|tr|h\d)>", "\n", body)
+            lines = (" ".join(line.split()) for line in _HTML_TAG.sub(" ", body).splitlines())
+            return {
+                "region": _attribute(page, "Region") or "",
+                "version": _attribute(page, "Version Released") or "",
+                "info": html.unescape("\n".join(line for line in lines if line)),
+            }
+    return None
 
 
 class HoYoWikiSource:

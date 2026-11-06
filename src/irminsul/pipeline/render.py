@@ -118,6 +118,8 @@ def weapon_docs(w: Weapon) -> list[Doc]:
             else ""
         )
         lines.append(f"Max level stats: Base ATK {w.base_atk:.0f}{sub}.")
+    elif w.secondary_stat:
+        lines.append(f"Secondary stat: {w.secondary_stat}.")
     if w.passive_name and w.passive_by_refinement:
         lines.append(f"\n## Passive: {w.passive_name}")
         lines += [f"R{i}: {text}" for i, text in enumerate(w.passive_by_refinement, 1)]
@@ -182,6 +184,50 @@ def story_docs(c: Character, stories: list[tuple[str, str]]) -> list[Doc]:
         )
         for title, text in stories
     ]
+
+
+def quest_doc(
+    quest: dict, kind: str, release: Release, source: SourceRef, revealed_in: str | None
+) -> Doc:
+    """A quest's official description and objectives, in order."""
+    info = quest["info"]
+    name = info.get("chapterTitle") or quest["parts"][0][0]
+    chapter = f"{info['chapterNum']}, " if info.get("chapterNum") else ""
+    lines = [f"# {name} ({kind})", f"{chapter}{kind}."]
+    for title, description, objectives in quest["parts"]:
+        if title and title != name or len(quest["parts"]) > 1:
+            lines.append(f"\n## {title}")
+        if description:
+            lines.append(description)
+        if objectives:
+            lines.append("Objectives: " + "; ".join(objectives) + ".")
+    return Doc(
+        doc_id=f"quest/{info['id']}#main",
+        entity_id=f"quest/{info['id']}",
+        kind="quest",
+        title=f"{name} ({kind})",
+        text="\n".join(lines),
+        release=release,
+        source=source,
+        revealed_in=revealed_in,
+    )
+
+
+def wiki_quest_doc(
+    entry_id: str, name: str, page: dict, release: Release, source: SourceRef
+) -> Doc:
+    """A world quest's official wiki page: how it unlocks, where it starts, what it gives."""
+    region = f" in {page['region']}" if page["region"] else ""
+    return Doc(
+        doc_id=f"quest/wiki-{entry_id}#guide",
+        entity_id=f"quest/wiki-{entry_id}",
+        kind="quest",
+        title=f"{name} (World Quest guide)",
+        text=f"# {name} (World Quest guide)\nWorld Quest{region}.\n\n{page['info']}",
+        release=release,
+        source=source,
+        revealed_in=page["version"] or None,
+    )
 
 
 def book_docs(
