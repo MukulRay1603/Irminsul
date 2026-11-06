@@ -130,8 +130,10 @@ def character_answer(m: Match, q: str) -> Answer | None:
     c = m.entity
     # A fact from the release record: left to a model, "no source says so" became "no"
     if _PLAYABLE.search(q) and not _OPINION.search(q):
+        # The version, not the date: mirrors' release times can run days ahead of the patch
         when = c.release.released_at
         since = f", since {_long_date(when.date().isoformat())}" if when else ""
+        since = f", since Version {c.revealed_in}" if c.revealed_in else since
         return Answer(
             f"**Yes, {c.name} is playable{since}.** [1]",
             "exact",

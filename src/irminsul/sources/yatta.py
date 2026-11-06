@@ -8,7 +8,7 @@ Parsing is kept in pure functions so it can be tested against saved fixtures.
 
 import logging
 import re
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from datetime import UTC, datetime
 from typing import Any
 
@@ -352,9 +352,14 @@ class YattaSource:
     def character_stories(self, game_id: str) -> list[tuple[str, str]]:
         return parse_stories(self._get(f"{self.lang}/avatarFetter/{game_id}"))
 
-    def quests(self) -> Iterator[dict[str, Any]]:
-        """Every Archon, Story and World Quest with its objectives. One request per quest."""
-        for quest_id, item in self._get(f"{self.lang}/quest")["items"].items():
+    def quests(self, newest: Iterable[str] = ()) -> Iterator[dict[str, Any]]:
+        """Every Archon, Story and World Quest with its objectives. One request per quest.
+
+        `newest` is the quests the changelog says the live version added. A deep run once got
+        a list without them, so each is asked for by id if the list leaves it out.
+        """
+        items = self._get(f"{self.lang}/quest")["items"]
+        for quest_id, item in items.items():
             if item.get("type") not in QUEST_TYPES:
                 continue
             if _NOT_A_QUEST.search(item.get("chapterTitle") or ""):
@@ -365,6 +370,21 @@ class YattaSource:
                 log.exception("failed to fetch quest %s", quest_id)
                 continue
             if quest:
+                yield quest
+        for quest_id in newest:
+            if quest_id in items:
+                continue
+            try:
+                quest = parse_quest(self._get(f"{self.lang}/quest/{quest_id}"))
+            except Exception:  # the changelog also lists sub-quests with no page of their own
+                continue
+            title = (quest or {}).get("info", {}).get("chapterTitle") or ""
+            if (
+                quest
+                and quest["info"].get("type") in QUEST_TYPES
+                and not _NOT_A_QUEST.search(title)
+            ):
+                log.info("quest %s was missing from the list: read by id", quest_id)
                 yield quest
 
     def books(self) -> Iterator[tuple[dict[str, Any], list[tuple[dict[str, Any], str]]]]:

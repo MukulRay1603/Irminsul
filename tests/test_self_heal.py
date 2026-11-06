@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from irminsul.engine.engine import Engine
-from irminsul.engine.exact import weapon_answer
+from irminsul.engine.exact import character_answer, weapon_answer
 from irminsul.engine.guards import BLOCKED_OUTPUT_REPLY, check_output
 from irminsul.pipeline import freshness
 from irminsul.pipeline.build import carried_docs, curated_guides, wiki_version
@@ -17,7 +17,7 @@ from irminsul.sources import hoyowiki
 from irminsul.sources.banners import proven_weapons
 from irminsul.sources.guides import guide_urls, read_guide
 from irminsul.sources.team_facts import parse_facts
-from irminsul.sources.yatta import parse_quest
+from irminsul.sources.yatta import YattaSource, parse_quest
 
 NOW = datetime(2026, 11, 6, 10, tzinfo=UTC)
 RELEASED = Release(status=ReleaseStatus.RELEASED)
@@ -409,3 +409,35 @@ def test_in_game_text_is_not_leak_talk():
     assert check_language(docs, {"book/1#a", "team/x#1"}, (7, 3)) == [
         "team/x#1: mentions 'beta tester'"
     ]
+
+
+class QuestSite(YattaSource):
+    def __init__(self):
+        self.lang = "en"
+
+    def _get(self, path):
+        if path == "en/quest":
+            return {"items": {"1": {"type": "aq", "chapterTitle": "Old"}}}
+        if path == "en/quest/9":
+            raise ValueError("no such page")
+        number = int(path.rsplit("/", 1)[1])
+        kind = "iq" if number == 3 else "aq"
+        return {**QUEST, "info": {"id": number, "type": kind, "chapterTitle": "Q"}}
+
+
+def test_newest_quests_missing_from_the_list_are_read_by_id():
+    ids = [q["info"]["id"] for q in QuestSite().quests(["1", "2", "3", "9"])]
+    assert ids == [1, 2]  # no repeat, no hidden type, no crash on a page that doesn't exist
+
+
+def test_playable_says_the_version_not_a_mirrors_date():
+    when = datetime(2026, 11, 2, 22, tzinfo=UTC)
+    c = SimpleNamespace(
+        id="character/mitya",
+        name="Mitya",
+        revealed_in="7.2",
+        release=SimpleNamespace(released_at=when),
+        source=SimpleNamespace(url="https://x.test", tier="official"),
+    )
+    answer = character_answer(SimpleNamespace(entity=c), "Is Mitya playable yet?")
+    assert "since Version 7.2" in answer.text and "November" not in answer.text
