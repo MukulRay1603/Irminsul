@@ -32,6 +32,7 @@
 <link rel="stylesheet" href="/static/app.css">
 <link rel="stylesheet" href="/static/planner.css">
 <link rel="stylesheet" href="/static/patches.css">
+<link rel="stylesheet" href="/static/wishes.css">
 </head>
 <body>
 
@@ -40,6 +41,7 @@
   <span class="spacer"></span>
   <a class="nav-link" href="#patches">Patches</a>
   <a class="nav-link" href="#planner">Planner</a>
+  <a class="nav-link" href="#wishes">Wishes</a>
   <a class="nav-link about-link" href="/about" aria-label="About"><span>About</span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg></a>
   <span class="chip" id="dataChip">Connecting…</span>
   <button class="icon-btn" id="soundBtn" type="button" aria-pressed="false" aria-label="Ambient sound" title="Ambient sound">
@@ -151,6 +153,14 @@
   <div id="plannerApp"><noscript><p class="placeholder">The planner needs JavaScript.</p></noscript></div>
 </section>
 
+<section class="block" id="wishes" aria-labelledby="wishesTitle">
+  <div class="block-head">
+    <h2 id="wishesTitle">Wish tracker</h2>
+    <p>Your pity, your odds and your savings. Saved on this device only: no login, no game link.</p>
+  </div>
+  <div id="wishesApp"><noscript><p class="placeholder">The wish tracker needs JavaScript.</p></noscript></div>
+</section>
+
 <footer>
   <span>Unofficial fan project. Genshin Impact, its characters and art belong to HoYoverse.</span>
   <span>Sources: in-game data (Yatta), HoYoWiki, KQM TCL (CC BY-NC-SA 4.0)</span>
@@ -166,6 +176,7 @@
 <script src="/static/app.js" defer></script>
 <script src="/static/planner.js" type="module"></script>
 <script src="/static/patches.js" defer></script>
+<script src="/static/wishes.js" defer></script>
 <script src="/static/pwa.js" defer></script>
 </body>
 </html>

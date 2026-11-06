@@ -21,7 +21,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
 from irminsul import story
-from irminsul.engine import grounding, guards, language
+from irminsul.engine import grounding, guards, language, pulls
 from irminsul.engine.cards import pct
 from irminsul.engine.entities import EntityStore, Match
 from irminsul.engine.exact import answer_exact
@@ -335,6 +335,14 @@ class Engine:
     def _before_llm(self, question: str, point: story.StoryPoint | None = None) -> Answer | None:
         """Guards, cache, the story-point check and exact answers: everything with no model."""
         if refusal := guards.check(question, self.store, self.guard_cfg):
+            if refusal.route == "refuse_leak" and (target := pulls.target_version(question)):
+                # No leak talk, but a savings estimate to that date is plain addition. It
+                # repeats nothing from the question except the version number.
+                estimate = pulls.income_text(datetime.now(UTC).date(), *target)
+                if estimate:
+                    refusal.text += (
+                        f"\n\nWhat I can do is a rough guess at your savings:\n\n{estimate}"
+                    )
             return refusal
         key = _cache_key(question, point)
         if key in self._cache:

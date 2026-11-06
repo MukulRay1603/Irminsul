@@ -6,8 +6,9 @@ comparison of 2-3 released entities of one kind, are answered here; anything els
 """
 
 import re
+from datetime import UTC, datetime
 
-from irminsul.engine import cards
+from irminsul.engine import cards, pulls
 from irminsul.engine.entities import EntityStore, Match, released
 from irminsul.engine.types import Answer, Citation
 from irminsul.schema import ReleaseStatus, Tier, slugify
@@ -409,7 +410,32 @@ def wish_cost_answer(question: str) -> Answer | None:
     return Answer(text, "exact", [cite], {"intent": "wish_cost", "wishes": n})
 
 
+def pull_answer(question: str) -> Answer | None:
+    """Wish odds from a player's numbers, or a free-Primogem estimate: sums, not a model."""
+    if pulls.is_odds_question(question):
+        stash = pulls.read_stash(question)
+        cite = Citation(
+            1, "Wish rates and pity", "https://www.hoyolab.com/article/497840", Tier.COMMUNITY
+        )
+        text = pulls.odds_text(stash) + " [1]"
+        return Answer(text, "exact", [cite], {"intent": "pull_odds", "wishes": stash.wishes})
+    if pulls.is_savings_question(question):
+        version, phase = pulls.target_version(question)
+        text = pulls.income_text(datetime.now(UTC).date(), version, phase)
+        if text:
+            cite = Citation(
+                1,
+                "Version update notice (official)",
+                "https://genshin.hoyoverse.com/en/news/detail/166383",
+                Tier.OFFICIAL,
+            )
+            return Answer(text + " [1]", "exact", [cite], {"intent": "savings"})
+    return None
+
+
 def answer_exact(store: EntityStore, question: str, patches: dict | None = None) -> Answer | None:
+    if planned := pull_answer(question):
+        return planned
     matches = store.find(question)
     if not matches and (cost := wish_cost_answer(question)):
         return cost

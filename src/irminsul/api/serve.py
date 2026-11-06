@@ -35,6 +35,7 @@ from irminsul.api.feedback import add_feedback
 from irminsul.api.limits import Limits
 from irminsul.api.patches import add_patches, load_patch_history
 from irminsul.api.planner import add_planner
+from irminsul.api.pulls import add_pulls
 from irminsul.api.web import add_web, load_videos
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
@@ -140,6 +141,7 @@ def build_app():
         # in the background: the site serves at once, images get ready in a minute or two
         threading.Thread(target=art.warm, name="art-warm", daemon=True).start()
     add_planner(app, engine.store, data)
+    add_pulls(app, trusted_hops=trusted_proxy_hops())
     # Community build guides (YouTube), only with a key; the page offers the group only then
     key = os.environ.get("YOUTUBE_API_KEY", "").strip()
     community = CommunityVideos(engine.store, key, live) if key else None
