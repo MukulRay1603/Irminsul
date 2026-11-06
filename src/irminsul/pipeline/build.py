@@ -41,6 +41,7 @@ from irminsul.schema import (
     slugify,
 )
 from irminsul.sources import hoyowiki
+from irminsul.sources.banners import parse_banners, proven_live
 from irminsul.sources.http import PoliteClient
 from irminsul.sources.kqm import KqmSource
 from irminsul.sources.notices import NoticesSource, fetch_notices
@@ -95,13 +96,20 @@ class Official:
 
 
 def fetch_official(
-    wiki: hoyowiki.HoYoWikiSource, live: list[Character], now: datetime, limit: int | None
+    wiki: hoyowiki.HoYoWikiSource,
+    live: list[Character],
+    now: datetime,
+    limit: int | None,
+    proven: dict[str, str] | None = None,
 ) -> Official:
     """Official name lists, announced characters and official videos from HoYoWiki.
 
     Announced = on HoYoWiki but not in the live game data. That comparison needs the full
-    live roster, so partial (--limit) builds skip it and only sample videos.
+    live roster, so partial (--limit) builds skip it and only sample videos. `proven` names
+    characters on an official wish that has started: they are playable, so they are built
+    from their official page instead of waiting for the game-data mirrors to catch up.
     """
+    proven = {normalise_name(k): v for k, v in (proven or {}).items()}
     entries = {
         "characters": wiki.entries(hoyowiki.MENU_CHARACTERS),
         "weapons": wiki.entries(hoyowiki.MENU_WEAPONS),
@@ -122,8 +130,12 @@ def fetch_official(
             if character is None:
                 official.skipped_beta.append(entry.name)
                 continue
-            if hoyowiki.page_has_kit(page):
-                log.info("%s: official kit modules present (not ingested yet)", entry.name)
+            if key in proven:
+                opened = datetime.fromisoformat(proven[key]).replace(tzinfo=UTC)
+                released = hoyowiki.released_character(entry, page, now, opened)
+                if released is not None:
+                    log.info("%s: on an official wish, built from the official page", entry.name)
+                    character = released
             official.announced.append(character)
             live_ids[key] = character.id
         entity_id = live_ids.get(key, f"character/{slugify(entry.name)}")
@@ -269,12 +281,27 @@ def build(
         finally:
             client.close()
 
+    # Official news first: its wish notices prove who is live for the steps below
+    notices: list[Doc] = []
+    if "notices" in sources:
+        # Never from the dev HTTP cache: news is only useful fresh
+        news_client = PoliteClient(cache_dir=None)
+        try:
+            notices = fetch_notices(NoticesSource(news_client), now, live)
+        finally:
+            news_client.close()
+    feed = parse_banners(notices)
+
     # HoYoWiki confirms Yatta's records, so it only runs alongside Yatta.
     if "hoyowiki" in sources and fetched:
         wiki_client = PoliteClient(cache_dir=cache, headers=hoyowiki.HEADERS)
         try:
             official = fetch_official(
-                hoyowiki.HoYoWikiSource(wiki_client), fetched["characters"], now, limit
+                hoyowiki.HoYoWikiSource(wiki_client),
+                fetched["characters"],
+                now,
+                limit,
+                proven_live(feed, now),
             )
         finally:
             wiki_client.close()
@@ -318,7 +345,9 @@ def build(
         unverified += report.unverified
         counts[kind] = {"fetched": len(records), "kept": len(report.kept)}
     if official.names:
-        counts["announced"] = [c.name for c in official.announced]
+        counts["announced"] = [
+            c.name for c in official.announced if c.release.status == ReleaseStatus.ANNOUNCED
+        ]
         counts["videos"] = len(official.videos)
 
     if "kqm" in sources:
@@ -404,15 +433,9 @@ def build(
         dropped += [(f"team_builds:{line}", reason) for line, reason in builds.dropped]
         counts["team_builds"] = {"lines": builds.kept_lines, "docs": len(builds.docs)}
 
-    if "notices" in sources:
-        # Never from the dev HTTP cache: news is only useful fresh
-        news_client = PoliteClient(cache_dir=None)
-        try:
-            notices = fetch_notices(NoticesSource(news_client), now, live)
-        finally:
-            news_client.close()
-        docs += notices
-        counts["notices"] = len(notices)
+    docs += notices
+    counts["notices"] = len(notices)
+    counts["banners"] = len(feed["banners"])
 
     # Newer reactions are defined across many kits: compile each into one guide (no model).
     guides = reaction_guides(docs, now)
@@ -424,6 +447,7 @@ def build(
     check_unique_ids(docs)
     _write_jsonl(out / "docs.jsonl", docs)
     _write_jsonl(out / "videos.jsonl", official.videos)
+    (out / "banners.json").write_text(json.dumps(feed, ensure_ascii=False), encoding="utf-8")
 
     manifest = {
         "schema_version": SCHEMA_VERSION,

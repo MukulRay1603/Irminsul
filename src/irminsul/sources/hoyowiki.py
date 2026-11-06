@@ -17,7 +17,19 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from irminsul.schema import Character, Release, ReleaseStatus, SourceRef, Tier, Video, slugify
+from irminsul.schema import (
+    BaseStats,
+    Character,
+    Constellation,
+    Release,
+    ReleaseStatus,
+    ScalingRow,
+    SourceRef,
+    Talent,
+    Tier,
+    Video,
+    slugify,
+)
 from irminsul.sources.http import PoliteClient
 
 log = logging.getLogger(__name__)
@@ -146,6 +158,101 @@ def announced_character(
             tier=Tier.OFFICIAL,
             fetched_at=fetched_at,
         ),
+    )
+
+
+def _module(page: dict[str, Any], name: str, component: str) -> list[dict[str, Any]]:
+    for module in page.get("modules") or []:
+        if module.get("name") == name:
+            for c in module.get("components") or []:
+                if c.get("component_id") == component:
+                    payload = _component_payload(c)
+                    return (payload or {}).get("list") or [] if isinstance(payload, dict) else []
+    return []
+
+
+def _clean(text: str) -> str:
+    text = re.sub(r"<br\s*/?>", "\n", text or "", flags=re.I)
+    return _HTML_TAG.sub("", text).strip()
+
+
+def _attribute(page: dict[str, Any], key: str) -> str | None:
+    for row in _module(page, "Attributes", "baseInfo"):
+        if row.get("key") == key and row.get("value"):
+            return _clean(row["value"][0]) or None
+    return None
+
+
+def _talents(page: dict[str, Any]) -> list[Talent]:
+    """HoYoWiki lists Normal Attack, Skill, Burst, then passives, in that order."""
+    kinds = ["normal_attack", "skill", "burst"]
+    talents = []
+    for i, raw in enumerate(_module(page, "Talents", "talent")):
+        rows = []
+        for attr in raw.get("attributes") or []:
+            if attr.get("key") == "Level":
+                continue
+            values = attr.get("values") or []
+            rows.append(ScalingRow(label=attr["key"], by_level=dict(enumerate(values, 1))))
+        talents.append(
+            Talent(
+                kind=kinds[i] if i < len(kinds) else "passive",
+                name=raw.get("title") or "",
+                description=_clean(raw.get("desc")),
+                scaling=rows,
+            )
+        )
+    return talents
+
+
+def _constellations(page: dict[str, Any]) -> list[Constellation]:
+    return [
+        Constellation(level=i, name=c.get("name") or "", description=_clean(c.get("desc")))
+        for i, c in enumerate(_module(page, "Constellation", "summaryList"), 1)
+    ]
+
+
+def _base_stats(page: dict[str, Any]) -> BaseStats | None:
+    rows = _module(page, "Ascend", "ascension")
+    top = next((r for r in rows if r.get("key") == "Lv.90"), None)
+    if top is None:
+        return None
+    stats = {}
+    for row in top.get("combatList") or []:
+        values = row.get("values") or []
+        if row.get("key") and values:
+            stats[row["key"]] = values[0]
+    try:
+        hp, atk, defense = (float(stats.pop(k)) for k in ("Base HP", "Base ATK", "Base DEF"))
+    except (KeyError, ValueError):
+        return None
+    bonus_stat, bonus_value = None, None
+    for key, value in stats.items():
+        bonus_stat = key.removesuffix(" Bonus").strip()
+        number = float(value.rstrip("%"))
+        bonus_value = number / 100 if value.endswith("%") else number
+    return BaseStats(
+        level=90, hp=hp, atk=atk, defense=defense, bonus_stat=bonus_stat, bonus_value=bonus_value
+    )
+
+
+def released_character(
+    entry: OfficialEntry, page: dict[str, Any], fetched_at: datetime, released_at: datetime
+) -> Character | None:
+    """A playable character built from their official page, for when the game-data mirrors
+    haven't caught up. Only for characters an official wish notice proves are live."""
+    base = announced_character(entry, page, fetched_at)
+    talents, constellations = _talents(page), _constellations(page)
+    if base is None or not talents or len(constellations) != 6:
+        return None
+    return base.model_copy(
+        update={
+            "title": _attribute(page, "Title"),
+            "base_stats": _base_stats(page),
+            "talents": talents,
+            "constellations": constellations,
+            "release": Release(status=ReleaseStatus.RELEASED, released_at=released_at),
+        }
     )
 
 

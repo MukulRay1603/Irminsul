@@ -147,6 +147,7 @@ class Engine:
         cache_size: int = 512,
         exclude_tiers: frozenset[str] = frozenset(),
         patches: dict | None = None,
+        banners: dict | None = None,
         search_slots: int = 2,
     ) -> None:
         self.store = store
@@ -156,6 +157,7 @@ class Engine:
         self.k = k
         self.exclude_tiers = exclude_tiers  # e.g. {"kqm"} when KQM content is switched off
         self.patches = patches  # patch notes (engine/patches.py) for "what changed in 7.1?"
+        self.banners = banners  # official wish banners (sources/banners.py) for "what's on now?"
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
         self._search_slots = threading.BoundedSemaphore(max(1, search_slots))
@@ -349,7 +351,7 @@ class Engine:
             )
         if spoiler := self._past_story_point(question, point):
             return spoiler
-        return answer_exact(self.store, question, self.patches)
+        return answer_exact(self.store, question, self.patches, self.banners)
 
     def _past_story_point(self, question: str, point: story.StoryPoint | None) -> Answer | None:
         """A gentle "past your story point" reply when the question names a character who

@@ -35,7 +35,7 @@ from irminsul.api.feedback import add_feedback
 from irminsul.api.limits import Limits
 from irminsul.api.patches import add_patches, load_patch_history
 from irminsul.api.planner import add_planner
-from irminsul.api.web import add_web, load_videos
+from irminsul.api.web import add_results, add_web, load_banners, load_videos
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import GuardConfig, version_from_manifest
@@ -101,7 +101,10 @@ def build_app():
         log.info("KQM content is switched off (IRMINSUL_KQM): answers use official + team tiers")
     store = EntityStore.load(data)
     videos = load_videos(data)
-    patch_notes = build_patch_notes(store, load_patch_history(data), videos)
+    feed = load_banners(data)
+    patch_notes = build_patch_notes(
+        store, load_patch_history(data), videos, version_dates=feed.get("versions")
+    )
     engine = Engine(
         store,
         index,
@@ -109,6 +112,7 @@ def build_app():
         guard_cfg,
         exclude_tiers=frozenset() if kqm else frozenset({"kqm"}),
         patches=patch_notes,
+        banners=feed,
         # CPU-heavy searches allowed at once; the Space has 2 vCPUs
         search_slots=int(os.environ.get("IRMINSUL_SEARCH_CONCURRENCY", 2)),
     )
@@ -139,6 +143,7 @@ def build_app():
     if isinstance(art, RemoteArt) and _switch("IRMINSUL_ART_WARM"):
         # in the background: the site serves at once, images get ready in a minute or two
         threading.Thread(target=art.warm, name="art-warm", daemon=True).start()
+    add_results(app, data)
     add_planner(app, engine.store, data)
     # Community build guides (YouTube), only with a key; the page offers the group only then
     key = os.environ.get("YOUTUBE_API_KEY", "").strip()

@@ -82,6 +82,7 @@ def build_patch_notes(
     history: dict | None,
     videos: dict[str, list[dict]] | None = None,
     now: datetime | None = None,
+    version_dates: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Every released version, newest first, with what it added and changed."""
     now = now or datetime.now(UTC)
@@ -96,6 +97,8 @@ def build_patch_notes(
     seen: dict[str, date] = {}
     for e in entries:
         seen.setdefault(e["version"], date.fromisoformat(e["date"]))
+    # Official start dates from each version's update notice beat "first seen in a build"
+    seen.update({v: date.fromisoformat(d) for v, d in (version_dates or {}).items()})
     starts = released_versions(now, seen)
     live = max(starts, key=key) if starts else None
     notes = {v: _empty(v, d, v == live) for v, d in starts.items()}
