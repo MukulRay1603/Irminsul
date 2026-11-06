@@ -23,6 +23,7 @@ from pathlib import Path
 from irminsul.pipeline.diff import compare
 
 MAX_NEW_DOCS = 400
+GAME_TEXT = {"lore_book", "quest"}
 STRICT_CATEGORIES = {
     "leak_probe",
     "injection",
@@ -74,7 +75,9 @@ def check_dates(characters: list[dict], docs: list[dict], now: datetime) -> list
 def check_language(docs: list[dict], ids: set[str], announced: tuple[int, int]) -> list[str]:
     problems = []
     for d in docs:
-        if d["doc_id"] not in ids:
+        # In-game text is written by HoYoverse and dated by version: a book's "beta tester" is
+        # story, not leak talk. The check is for what outside sources say.
+        if d["doc_id"] not in ids or d.get("kind") in GAME_TEXT:
             continue
         text = f"{d['title']}\n{d['text']}"
         if m := LEAK_LANGUAGE.search(text):

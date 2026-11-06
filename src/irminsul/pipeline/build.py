@@ -228,7 +228,8 @@ def fetch_lore(
     # the base id: it goes to the earliest-revealed element only.
     by_profile: dict[str, Character] = {}
     for c in characters:
-        if c.release.status != ReleaseStatus.RELEASED:
+        # Built from an official page: Yatta has no stories for them yet
+        if c.release.status != ReleaseStatus.RELEASED or c.game_id.startswith("hoyowiki:"):
             continue
         profile = c.game_id.split("-")[0]
         current = by_profile.get(profile)
@@ -362,6 +363,10 @@ def read_guides(
     known_sets = {normalise_name(a.name) for a in sets}
     watched = curated_guides(curated)
     covered = {normalise_name(s) for s in re.findall(r"^## (.+)$", curated, re.M)}
+
+    def has_team_build(c: Character) -> bool:  # the team writes "Kazuha", the game a full name
+        return bool({normalise_name(c.name), *map(normalise_name, c.name.split())} & covered)
+
     today = now.date().isoformat()
     lines: list[str] = []
     read: list[str] = []
@@ -375,7 +380,7 @@ def read_guides(
                 lines += [f"## {name}", *found]
                 read.append(name)
         for c in characters:
-            if c.release.status != ReleaseStatus.RELEASED or normalise_name(c.name) in covered:
+            if c.release.status != ReleaseStatus.RELEASED or has_team_build(c):
                 continue
             if "(" in c.name or c.name == "Traveler":
                 continue

@@ -11,6 +11,7 @@ from irminsul.pipeline import freshness
 from irminsul.pipeline.build import carried_docs, curated_guides, wiki_version
 from irminsul.pipeline.gamedays import decide, game_days
 from irminsul.pipeline.render import quest_doc, weapon_docs
+from irminsul.pipeline.safety import check_language
 from irminsul.schema import Doc, Release, ReleaseStatus, SourceRef, Tier
 from irminsul.sources import hoyowiki
 from irminsul.sources.banners import proven_weapons
@@ -398,3 +399,13 @@ def test_team_questions_still_see_other_builds():
     engine = engine_for("Mitya", "mitya", ["cyno"])
     hits = [chunk("team-builds/cyno#1")]
     assert engine._own_builds("Who works well with Mitya?", hits) == (hits, None)
+
+
+def test_in_game_text_is_not_leak_talk():
+    docs = [
+        {"doc_id": "book/1#a", "kind": "lore_book", "title": "t", "text": "our beta tester wrote"},
+        {"doc_id": "team/x#1", "kind": "team_facts", "title": "t", "text": "our beta tester wrote"},
+    ]
+    assert check_language(docs, {"book/1#a", "team/x#1"}, (7, 3)) == [
+        "team/x#1: mentions 'beta tester'"
+    ]
