@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 
 from irminsul import story
 from irminsul.api.players import line as showcase_line
-from irminsul.engine import grounding, guards, language, pulls
+from irminsul.engine import calc, grounding, guards, language, pulls
 from irminsul.engine.cards import pct
 from irminsul.engine.entities import EntityStore, Match
 from irminsul.engine.exact import answer_exact
@@ -167,6 +167,7 @@ class Engine:
         patches: dict | None = None,
         banners: dict | None = None,
         players=None,
+        planner: dict | None = None,
         search_slots: int = 2,
     ) -> None:
         self.store = store
@@ -178,6 +179,7 @@ class Engine:
         self.patches = patches  # patch notes (engine/patches.py) for "what changed in 7.1?"
         self.banners = banners  # official wish banners (sources/banners.py) for "what's on now?"
         self.players = players  # public character showcases (api/players.py), by UID
+        self.planner = planner  # domains, days and talent costs (pipeline/planner.py)
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
         self._search_slots = threading.BoundedSemaphore(max(1, search_slots))
@@ -229,7 +231,8 @@ class Engine:
             rows = self.players.characters(uid)
             if rows:
                 roster = "; ".join(showcase_line(c) for c in rows[:8])
-                return f"{question} (My showcased characters: {roster})"
+                server = calc.server_of(uid).capitalize()
+                return f"{question} (My showcased characters: {roster}) (My server: {server})"
         if not context or context not in self.store.by_id or self.store.find(question):
             return question
         match = self.store.by_id[context]
@@ -404,7 +407,15 @@ class Engine:
             )
         if spoiler := self._past_story_point(question, point):
             return spoiler
-        return answer_exact(self.store, question, self.patches, self.banners)
+        kqm_on = "kqm" not in self.exclude_tiers
+        return (
+            calc.calculate(question, self.planner, formulas=kqm_on)
+            or calc.farm_today(question, self.planner, self._roster_names, datetime.now(UTC))
+            or answer_exact(self.store, question, self.patches, self.banners)
+        )
+
+    def _roster_names(self, roster: str) -> list[str]:
+        return [m.entity.name for m in self.store.find(roster) if m.kind == "character"]
 
     def _showcase_answer(self, uid: str) -> Answer:
         rows = self.players.characters(uid)
@@ -557,7 +568,14 @@ class Engine:
         if not hits:
             return Answer(NO_SOURCES_REPLY, "rag_empty", trace=trace)
         citations = [
-            Citation(n, h.chunk.title, h.chunk.source_url, h.chunk.tier, h.chunk.doc_id)
+            Citation(
+                n,
+                h.chunk.title,
+                h.chunk.source_url,
+                h.chunk.tier,
+                h.chunk.doc_id,
+                version=getattr(h.chunk, "revealed_in", None),
+            )
             for n, h in enumerate(hits, 1)
         ]
         texts = {
@@ -617,6 +635,10 @@ class Engine:
             return Answer(NO_SOURCES_REPLY, "rag_empty", trace=trace)
         used = {int(n) for n in re.findall(r"\[(\d+)\]", text)}
         cited = [c for c in prepared.citations if c.n in used]
+        claims = report["sentences"]
+        for c in cited:  # the line behind each source, for "see the exact lines"
+            backed = [s["text"] for s in claims if c.n in s["cites"]]
+            c.quote = grounding.best_quote(backed, prepared.sources.get(c.n, ""))
         trace = {
             **prepared.trace,
             "provider": completion.provider,

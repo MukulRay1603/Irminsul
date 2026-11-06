@@ -37,6 +37,12 @@ def load_banners(data: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+def load_planner(data: Path) -> dict:
+    """Domains, days and talent costs, for sums and "what can I farm today?"."""
+    path = data / "planner.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
 def add_results(app: FastAPI, data: Path, web_dir: Path = WEB_DIR) -> None:
     """Test results: the ones published with the data, so they stay as fresh as it is."""
 

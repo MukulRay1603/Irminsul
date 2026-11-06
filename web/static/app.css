@@ -531,3 +531,9 @@ footer { padding-bottom: calc(34px + env(safe-area-inset-bottom)); }
 .sources::before { content: ""; position: absolute; left: 6px; top: -1px; width: 12px; height: 23px; border: solid var(--gold); border-width: 0 0 2px 2px; border-bottom-color: var(--sap); border-bottom-left-radius: 10px; opacity: .75; }
 .sources .src-pill { margin: 0; font-size: 12.5px; padding: 3px 10px 3px 8px; max-width: 260px; }
 .sources-label { font-size: 12.5px; color: var(--muted); margin-right: 2px; }
+.src-quotes { flex-basis: 100%; margin-top: 4px; font-size: 13.5px; color: var(--muted); }
+.src-quotes summary { cursor: pointer; width: fit-content; color: var(--leaf); }
+.src-quotes blockquote { margin: 8px 0 0; padding: 2px 0 2px 12px; border-left: 2px solid var(--gold); color: var(--text); }
+.src-quotes cite { display: block; margin-top: 2px; font-style: normal; font-size: 12.5px; color: var(--muted); }
+.plan-add { margin-top: 10px; padding: 6px 12px; border: 1px solid var(--line-2); border-radius: 999px; background: transparent; color: var(--leaf); font: inherit; font-size: 13.5px; cursor: pointer; }
+.plan-add:disabled { color: var(--muted); cursor: default; }

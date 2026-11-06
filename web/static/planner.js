@@ -603,6 +603,11 @@ async function start() {
     return el;
   }
 
+  // For the "Add to my planner" button under answers
+  window.planner = {
+    has: id => (chars.get(id) || weapons.get(id))?.name,
+    add: id => add(chars.has(id) ? "characters" : "weapons", id),
+  };
   renderToday(); renderList(); renderBackedUp();
   document.addEventListener("visibilitychange", () => { if (!document.hidden) renderToday(); });
   addEventListener("hashchange", importFromHash);

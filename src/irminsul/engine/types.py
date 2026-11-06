@@ -10,6 +10,8 @@ class Citation:
     url: str
     tier: str
     doc_id: str | None = None
+    version: str | None = None  # the game version this source was written for
+    quote: str | None = None  # the source's line behind the claim, kept short
 
 
 @dataclass

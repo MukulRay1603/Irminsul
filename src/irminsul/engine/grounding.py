@@ -226,6 +226,21 @@ def check(
     }
 
 
+def best_quote(claims: list[str], source: str, limit: int = 200) -> str | None:
+    """The line of a source that best backs these claims, short enough to be a quotation."""
+    wanted = set().union(*(_stems(c) for c in claims)) if claims else set()
+    best, score = None, 0
+    for line in re.split(r"(?<=[.!?])\s+|\n+", source):
+        line = re.sub(r"[#*`|]+", " ", line)
+        line = " ".join(line.split())
+        hits = len(_stems(line) & wanted)
+        if hits > score and len(line) > 20:
+            best, score = line, hits
+    if best is None:
+        return None
+    return best if len(best) <= limit else best[: limit - 1].rsplit(" ", 1)[0] + "…"
+
+
 def _fails(s: dict, strict: bool) -> bool:
     if s["status"] not in ("unsupported", "uncited"):
         return False

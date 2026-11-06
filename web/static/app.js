@@ -377,6 +377,8 @@ async function ask(q, opts = {}) {
     `<div class="redacted" aria-hidden="true"><span></span><span></span><span></span><div class="stamp"><b>Hidden by the leak filter</b></div></div>`);
   labelCitations(body, done.citations);
   if (done.citations?.length) el.append(sourceRow(done.citations));
+  const addToPlan = plannerButton(done);
+  if (addToPlan) el.append(addToPlan);
   const why = document.createElement("button"); why.type = "button"; why.className = "why"; why.textContent = "Why this answer?";
   why.onclick = () => { renderTrace(done); $("#tracePanel").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
   el.append(why); renderTrace(done);
