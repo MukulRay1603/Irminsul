@@ -121,7 +121,43 @@ function sourceRow(citations) {
     linkSource(a, c);
     row.append(a);
   }
+  const quotes = quoteList(citations);
+  if (quotes) row.append(quotes);
   return row;
+}
+
+// "See the exact lines": each source's line behind the answer, without leaving the page
+function quoteList(citations) {
+  const seen = new Set();
+  const rows = (citations || []).filter(c => c.quote && !seen.has(c.quote) && seen.add(c.quote));
+  if (!rows.length) return null;
+  const box = document.createElement("details");
+  box.className = "src-quotes";
+  box.innerHTML = "<summary>See the exact lines</summary>";
+  for (const c of rows) {
+    const q = document.createElement("blockquote");
+    q.textContent = c.quote;
+    const cite = document.createElement("cite");
+    cite.textContent = c.version ? `${sourceLabel(c)}, Version ${c.version}` : sourceLabel(c);
+    q.append(cite);
+    box.append(q);
+  }
+  return box;
+}
+
+// Adds the answer's character or weapon to the planner in one tap
+function plannerButton(done) {
+  const ids = [done.trace?.entity, ...(done.citations || []).map(c => c.doc_id?.split("#")[0])];
+  const id = ids.find(x => /^(character|weapon)\//.test(x || "") && window.planner?.has(x));
+  if (!id) return null;
+  const b = document.createElement("button");
+  b.type = "button"; b.className = "plan-add";
+  b.textContent = `Add ${window.planner.has(id)} to my planner`;
+  b.addEventListener("click", async () => {
+    await window.planner.add(id);
+    b.textContent = "Added to your planner"; b.disabled = true;
+  });
+  return b;
 }
 
 /* ---------- Cards for exact answers ---------- */

@@ -116,7 +116,8 @@ GENSHIN_WEAK = re.compile(
     r"|reactions?|crit|energy recharge|\ber\b|\bem\b|elemental mastery|f2p|co-op|boss\w*"
     r"|domains?|quests?|map|skill|burst|game|meta|tier list|characters?|lore|story|damage"
     r"|pulls?|pulling|free pick|new account|events?|exploration|floor 1[0-2]"
-    r"|farm\w*|new player|beginners?|grind\w*",
+    r"|farm\w*|new player|beginners?|grind\w*"
+    r"|\bdef(?:ense|ence)? (?:mult\w*|shred|reduction)|\bres(?:istance)? (?:mult\w*|shred)",
     re.I,
 )
 # Clear signs a question is about something else entirely.

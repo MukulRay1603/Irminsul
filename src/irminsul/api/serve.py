@@ -37,7 +37,7 @@ from irminsul.api.patches import add_patches, load_patch_history
 from irminsul.api.planner import add_planner
 from irminsul.api.players import Showcase
 from irminsul.api.pulls import add_pulls
-from irminsul.api.web import add_results, add_web, load_banners, load_videos
+from irminsul.api.web import add_results, add_web, load_banners, load_planner, load_videos
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import GuardConfig, version_from_manifest
@@ -116,6 +116,7 @@ def build_app():
         patches=patch_notes,
         banners=feed,
         players=Showcase(store),
+        planner=load_planner(data),
         # CPU-heavy searches allowed at once; the Space has 2 vCPUs
         search_slots=int(os.environ.get("IRMINSUL_SEARCH_CONCURRENCY", 2)),
     )
