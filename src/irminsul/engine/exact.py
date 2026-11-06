@@ -202,15 +202,19 @@ def weapon_answer(m: Match, q: str) -> Answer | None:
     wants_passive = bool(_PASSIVE.search(q))
     if not (wants_passive or _STATS.search(q) or re.search(r"\bsecondary|sub ?stat", q, re.I)):
         return None
-    sub = (
-        f", {w.secondary_stat} {_pct(w.secondary_value, w.secondary_stat)}"
-        if w.secondary_stat
-        else ""
-    )
-    lines = [
-        f"**{w.name}** ({w.rarity}★ {w.weapon_type}): base ATK {w.base_atk:.0f}{sub} "
-        f"at max level. [1]"
-    ]
+    if w.base_atk is None:  # new, from its official page: stats follow with the game data
+        secondary = f", {w.secondary_stat} secondary stat" if w.secondary_stat else ""
+        lines = [f"**{w.name}** ({w.rarity}★ {w.weapon_type}{secondary}). [1]"]
+    else:
+        sub = (
+            f", {w.secondary_stat} {_pct(w.secondary_value, w.secondary_stat)}"
+            if w.secondary_stat
+            else ""
+        )
+        lines = [
+            f"**{w.name}** ({w.rarity}★ {w.weapon_type}): base ATK {w.base_atk:.0f}{sub} "
+            f"at max level. [1]"
+        ]
     r = re.search(r"\br([1-5])\b", q, re.I)
     level = int(r.group(1)) if r else 1
     if w.passive_name and w.passive_by_refinement:

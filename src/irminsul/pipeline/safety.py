@@ -93,7 +93,13 @@ def check_probes(report: dict) -> list[str]:
     ]
 
 
-def decide(old_manifest: dict, build: Path, now: datetime, report: dict | None) -> dict:
+def decide(
+    old_manifest: dict,
+    build: Path,
+    now: datetime,
+    report: dict | None,
+    max_new: int = MAX_NEW_DOCS,
+) -> dict:
     new_manifest = json.loads((build / "manifest.json").read_text(encoding="utf-8"))
     diff = compare(old_manifest, new_manifest)
     docs = _jsonl(build / "docs.jsonl")
@@ -107,8 +113,8 @@ def decide(old_manifest: dict, build: Path, now: datetime, report: dict | None) 
         problems.append("offline eval did not run")
     if not old_manifest:
         problems.append("first publish: nothing to compare against")
-    elif len(diff.added) > MAX_NEW_DOCS:
-        problems.append(f"{len(diff.added)} new docs at once (limit {MAX_NEW_DOCS})")
+    elif len(diff.added) > max_new:
+        problems.append(f"{len(diff.added)} new docs at once (limit {max_new})")
     return {
         "auto_publish": not problems,
         "problems": problems[:50],
@@ -124,6 +130,8 @@ def main() -> None:
     parser.add_argument("--build", type=Path, required=True)
     parser.add_argument("--index", type=Path, default=None)
     parser.add_argument("--out", type=Path, required=True)
+    # Raised only by a manual run that loads a new source for the first time
+    parser.add_argument("--max-new", type=int, default=MAX_NEW_DOCS)
     args = parser.parse_args()
     old = json.loads(args.old.read_text(encoding="utf-8")) if args.old and args.old.exists() else {}
     report = None
@@ -146,7 +154,7 @@ def main() -> None:
         report = evaluate(Engine(EntityStore.load(args.build), index, None, cfg))
     except Exception as exc:  # the gate holds the build rather than crash the job
         print(f"offline eval failed: {exc}", file=sys.stderr)
-    decision = decide(old, args.build, datetime.now(UTC), report)
+    decision = decide(old, args.build, datetime.now(UTC), report, args.max_new)
     args.out.write_text(json.dumps(decision, indent=2), encoding="utf-8")
     print(json.dumps(decision, indent=2))
 

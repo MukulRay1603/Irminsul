@@ -7,6 +7,8 @@
 #   All clean (new characters included): publish on its own and restart the Space.
 # - Gate held it: open a review PR that says why. Merging it runs corpus-publish.yml.
 # Daily (not weekly) so a patch's new characters are live within a day of release.
+# On top of that, deep runs (irminsul-calendar decides) re-read every quest, book and build
+# guide: weekly, and on the days the game changes. A deep run always publishes.
 # Schedules only run from the default branch.
 name: Daily corpus check
 
@@ -20,6 +22,14 @@ on:
         description: "Why run now (e.g. 'patch day 7.2')"
         required: false
         default: "manual run"
+      deep:
+        description: "Also re-read quests, books and guides"
+        type: boolean
+        default: false
+      max_new:
+        description: "New-doc limit for the publish gate (raise only to load a new source)"
+        required: false
+        default: "400"
 
 permissions: {} # granted per job below
 
@@ -37,7 +47,7 @@ env:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 150
     permissions:
       contents: write # push the corpus/update-* branch for reviews
       pull-requests: write # open the review PR
@@ -68,18 +78,31 @@ jobs:
         if: env.HF_TOKEN != ''
         run: uv run irminsul-publish fetch-curated --repo "$HF_DATASET" --out config
 
+      - name: Deep run today? (the game calendar decides)
+        id: calendar
+        env:
+          FORCE: ${{ inputs.deep && '--force' || '' }}
+        run: uv run irminsul-calendar --previous prev $FORCE
+
       - name: Build corpus (Yatta + HoYoWiki + KQM, leak-gated)
-        run: uv run irminsul-build --out data/build
+        env:
+          DEEP: ${{ steps.calendar.outputs.deep == 'true' && '--deep' || '' }}
+        run: uv run irminsul-build --out data/build --previous prev $DEEP
 
       - name: Diff, guards and decision
         id: diff
+        env:
+          DEEP: ${{ steps.calendar.outputs.deep }}
         run: |
           uv run irminsul-diff --old prev/manifest.json --new data/build/manifest.json \
             --out data/build/CHANGELOG.md --decision data/build/decision.json \
             --history prev/history.json --history-out data/build/history.json
-          echo "changed=$(jq -r .changed data/build/decision.json)" >> "$GITHUB_OUTPUT"
+          changed="$(jq -r .changed data/build/decision.json)"
+          # A deep run always publishes, or the next run wouldn't know it happened
+          [ "$DEEP" = "true" ] && changed=true
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
           echo "review=$(jq -r .review data/build/decision.json)" >> "$GITHUB_OUTPUT"
-          if [ "$(jq -r .changed data/build/decision.json)" != "true" ]; then
+          if [ "$changed" != "true" ]; then
             echo "No game-data changes today. Nothing to publish." >> "$GITHUB_STEP_SUMMARY"
           else
             cat data/build/CHANGELOG.md >> "$GITHUB_STEP_SUMMARY"
@@ -105,9 +128,11 @@ jobs:
       - name: Publish gate (dates, leak language, probes, size)
         id: gate
         if: steps.diff.outputs.changed == 'true'
+        env:
+          MAX_NEW: ${{ inputs.max_new || '400' }}
         run: |
           uv run irminsul-safety --old prev/manifest.json --build data/build \
-            --index data/index --out data/build/safety.json
+            --index data/index --out data/build/safety.json --max-new "$MAX_NEW"
           echo "auto=$(jq -r .auto_publish data/build/safety.json)" >> "$GITHUB_OUTPUT"
           if [ "$(jq -r .auto_publish data/build/safety.json)" = "true" ]; then
             echo "Publish gate passed: dates, leak language, probes and size are all clean." >> "$GITHUB_STEP_SUMMARY"
@@ -180,7 +205,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh issue create --title "Daily corpus check failed ($(date -u +%F))" \
-            --body "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          A guard (record drop, unverified records, retrieval quality) or a source fetch failed.
-          Nothing was published."
+          run="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          # One open issue, not one a day: the next run retries on its own anyway
+          open="$(gh issue list --state open --search 'Daily corpus check failed in:title' \
+            --json number --jq '.[0].number')"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "Failed again: $run"
+          else
+            gh issue create --title "Daily corpus check failed ($(date -u +%F))" \
+              --body "Run: $run
+          A guard (record drop, unverified records, retrieval quality), a source fetch or the
+          freshness check failed. The site keeps serving the last good data."
+          fi

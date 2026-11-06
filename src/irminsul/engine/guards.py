@@ -61,6 +61,8 @@ _ADULT = re.compile(
     r"|xxx|18\+)(?![\w+])",
     re.I,
 )
+# Game text the adult filter must not trip on, in answers only: "needs AR 18+"
+_GAME_NUMBER = re.compile(r"\b(?:AR|Adventure Rank|Rank|Level|Lv\.?)\s*18\+", re.I)
 _CHEATS = re.compile(
     r"\b(cheat(s|ing)?|cheat engine|hack(s|ed|ing)?|hacker|mod ?menu|3dmigoto|gimi"
     r"|private servers?|grasscutter|aimbot|botting|auto[- ]?farm(ing)? (script|bot)s?"
@@ -260,7 +262,7 @@ _URL = re.compile(r"https?://[^\s)\]>]+|www\.[^\s)\]>]+")
 def check_output(text: str, allowed_urls: list[str]) -> tuple[str, list[str]]:
     """Clean a model's answer: only cited official links, no personal data, nothing explicit."""
     flags: list[str] = []
-    if _ADULT.search(text):
+    if _ADULT.search(_GAME_NUMBER.sub("", text)):
         return BLOCKED_OUTPUT_REPLY, ["adult"]
     allowed = tuple(u.rstrip("/") for u in allowed_urls if u.startswith("http"))
 

@@ -352,6 +352,21 @@ class YattaSource:
     def character_stories(self, game_id: str) -> list[tuple[str, str]]:
         return parse_stories(self._get(f"{self.lang}/avatarFetter/{game_id}"))
 
+    def quests(self) -> Iterator[dict[str, Any]]:
+        """Every Archon, Story and World Quest with its objectives. One request per quest."""
+        for quest_id, item in self._get(f"{self.lang}/quest")["items"].items():
+            if item.get("type") not in QUEST_TYPES:
+                continue
+            if _NOT_A_QUEST.search(item.get("chapterTitle") or ""):
+                continue
+            try:
+                quest = parse_quest(self._get(f"{self.lang}/quest/{quest_id}"))
+            except Exception:
+                log.exception("failed to fetch quest %s", quest_id)
+                continue
+            if quest:
+                yield quest
+
     def books(self) -> Iterator[tuple[dict[str, Any], list[tuple[dict[str, Any], str]]]]:
         """Each in-game book with its volumes' full text. One request per volume."""
         for book_id in self._get(f"{self.lang}/book")["items"]:
@@ -366,6 +381,28 @@ class YattaSource:
                 log.exception("failed to fetch book %s", book_id)
                 continue
             yield data, volumes
+
+
+QUEST_TYPES = {"aq": "Archon Quest", "lq": "Story Quest", "wq": "World Quest"}
+# Developer leftovers in the quest list
+_NOT_A_QUEST = re.compile(r"^\(test\)|\$HIDDEN|\bbeta test", re.I)
+
+
+def parse_quest(data: dict[str, Any]) -> dict[str, Any] | None:
+    """One quest as parts of (title, description, objectives). Dialogue is left out: players
+    ask what to do, and the script is the spoiler. None if there's nothing to show."""
+    parts = []
+    for _, story in sorted((data.get("storyList") or {}).items(), key=lambda kv: int(kv[0])):
+        info = story.get("info") or {}
+        steps = sorted((story.get("story") or {}).items(), key=lambda kv: int(kv[0]))
+        objectives: list[str] = []
+        for _, step in steps:
+            text = clean(step.get("title"))
+            if text and not step.get("isHidden") and text not in objectives[-1:]:
+                objectives.append(text)
+        if objectives or clean(info.get("description")):
+            parts.append((clean(info.get("title")), clean(info.get("description")), objectives))
+    return {"info": data.get("info") or {}, "parts": parts} if parts else None
 
 
 def parse_stories(data: dict[str, Any]) -> list[tuple[str, str]]:

@@ -74,6 +74,19 @@ class PoliteClient:
             time.sleep(backoff)
         raise FetchError(f"gave up on {url} after {self.retries} retries")
 
+    def get_page(self, url: str) -> str | None:
+        """A web page's HTML, or None if it doesn't exist. Never cached: pages are watched."""
+        self._wait()
+        try:
+            resp = self._client.get(url)
+        except httpx.TransportError as e:
+            raise FetchError(f"transport error for {url}: {e}") from e
+        if resp.status_code == 404:
+            return None
+        if resp.status_code != 200:
+            raise FetchError(f"HTTP {resp.status_code} for {url}")
+        return resp.text
+
     def close(self) -> None:
         self._client.close()
 

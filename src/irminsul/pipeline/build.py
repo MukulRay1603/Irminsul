@@ -4,14 +4,15 @@ Usage:
     uv run irminsul-build --out data/build --cache data/cache
     uv run irminsul-build --limit 5     # quick dev run on a few items per type
     uv run irminsul-build --sources kqm # only some sources (default: all)
-    uv run irminsul-build --sources yatta,hoyowiki,kqm,lore,books   # add in-game books too
+    uv run irminsul-build --deep --previous prev   # also quests, books and guides
 """
 
 import argparse
 import itertools
 import json
 import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -26,8 +27,10 @@ from irminsul.pipeline.render import (
     artifact_docs,
     book_docs,
     character_docs,
+    quest_doc,
     story_docs,
     weapon_docs,
+    wiki_quest_doc,
 )
 from irminsul.schema import (
     SCHEMA_VERSION,
@@ -38,16 +41,24 @@ from irminsul.schema import (
     SourceRef,
     Tier,
     Video,
+    Weapon,
     slugify,
 )
 from irminsul.sources import hoyowiki
-from irminsul.sources.banners import parse_banners, proven_live
+from irminsul.sources.banners import parse_banners, proven_live, proven_weapons
+from irminsul.sources.guides import fetch_guide, guide_urls
 from irminsul.sources.http import PoliteClient
 from irminsul.sources.kqm import KqmSource
 from irminsul.sources.notices import NoticesSource, fetch_notices
 from irminsul.sources.team_facts import parse_facts
-from irminsul.sources.yatta import SITE, YattaSource
-from irminsul.story import Changelog, MentionDater, character_revealed_in, later
+from irminsul.sources.yatta import QUEST_TYPES, SITE, YattaSource
+from irminsul.story import (
+    Changelog,
+    MentionDater,
+    character_revealed_in,
+    later,
+    parse_version,
+)
 
 log = logging.getLogger("irminsul.build")
 
@@ -55,8 +66,14 @@ SOURCES = ("yatta", "hoyowiki", "kqm", "lore", "team_facts", "notices")
 TEAM_FACTS = Path("config/team_facts.md")  # public team facts, approved by Ray (Oct 2026)
 # Build recommendations (weapons, sets, stats, teams), each line attributed to its guide
 TEAM_BUILDS = Path("config/team_builds.md")
-# In-game books: ~600 books and ~2,000 volume texts, one request each, so opt-in for now.
-OPTIONAL_SOURCES = ("books",)
+# The slow sources, thousands of requests between them: read on deep runs only (see
+# gamedays.py). Every other run carries their docs forward from the last published build, and
+# so does a deep run whose source fails: last good data stays until a better read replaces it.
+OPTIONAL_SOURCES = ("books", "quests", "guides")
+CARRIED = {"books": "book/", "quests": "quest/", "guides": "auto-builds/"}
+_LUNA = re.compile(r"Luna ([IVX]+)")
+_ROMAN = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX")
+_KQM_GUIDE = re.compile(r"https://keqingmains\.com/q/[\w-]+-quickguide/?")
 
 
 def _write_jsonl(path: Path, rows: list[BaseModel]) -> None:
@@ -93,6 +110,7 @@ class Official:
     announced: list[Character]
     videos: list[Video]
     skipped_beta: list[str]
+    weapons: list[Weapon] = field(default_factory=list)
 
 
 def fetch_official(
@@ -101,6 +119,8 @@ def fetch_official(
     now: datetime,
     limit: int | None,
     proven: dict[str, str] | None = None,
+    proven_gear: dict[str, str] | None = None,
+    live_weapons: list[Weapon] | None = None,
 ) -> Official:
     """Official name lists, announced characters and official videos from HoYoWiki.
 
@@ -108,6 +128,7 @@ def fetch_official(
     live roster, so partial (--limit) builds skip it and only sample videos. `proven` names
     characters on an official wish that has started: they are playable, so they are built
     from their official page instead of waiting for the game-data mirrors to catch up.
+    `proven_gear` does the same for weapons on a wish that has started.
     """
     proven = {normalise_name(k): v for k, v in (proven or {}).items()}
     entries = {
@@ -140,6 +161,16 @@ def fetch_official(
             live_ids[key] = character.id
         entity_id = live_ids.get(key, f"character/{slugify(entry.name)}")
         official.videos += hoyowiki.parse_videos(page, entity_id, now)
+    known = {normalise_name(w.name) for w in live_weapons or []}
+    proven_gear = {normalise_name(k): v for k, v in (proven_gear or {}).items()}
+    for entry in entries["weapons"]:
+        key = normalise_name(entry.name)
+        if limit is None and key in proven_gear and key not in known:
+            opened = datetime.fromisoformat(proven_gear[key]).replace(tzinfo=UTC)
+            weapon = hoyowiki.released_weapon(entry, wiki.page(entry.entry_id), now, opened)
+            if weapon is not None:
+                log.info("%s: on an official wish, built from the official page", entry.name)
+                official.weapons.append(weapon)
     return official
 
 
@@ -160,7 +191,9 @@ def stamp_revealed(docs: list[Doc], kept: dict[str, list], changelog: Changelog)
     when: dict[str, str | None] = {c.id: c.revealed_in for c in characters}
     for kind, category in (("weapons", "weapon"), ("artifact_sets", "reliquary")):
         for record in kept.get(kind, []):
-            when[record.id] = changelog.version_of(category, record.game_id)
+            when[record.id] = changelog.version_of(category, record.game_id) or (
+                changelog.latest() if record.game_id.startswith("hoyowiki:") else None
+            )
     names = {c.name: c.revealed_in for c in characters if c.revealed_in and "(" not in c.name}
     names |= {
         alias.title(): when[eid]
@@ -246,12 +279,140 @@ def fetch_lore(
     return kept, dropped, counts
 
 
+def wiki_version(text: str) -> str | None:
+    """HoYoWiki's "Version Released": "7.0", or "Luna VIII" for the versions the game numbers
+    6.0 to 6.8. Anything else is None, and the caller treats it as the newest version."""
+    if parse_version(text):
+        return text
+    if m := _LUNA.fullmatch(text.strip()):
+        return f"6.{_ROMAN.index(m.group(1))}"
+    return None
+
+
+def fetch_quests(
+    yatta: YattaSource,
+    wiki: hoyowiki.HoYoWikiSource,
+    changelog: Changelog,
+    live: str | None,
+    now: datetime,
+    limit: int | None,
+) -> tuple[list[Doc], list[tuple[str, str]]]:
+    """Every Archon, Story and World Quest, plus the official wiki page where one exists.
+
+    Quests carry the version that added them, as lore does, so story-safe mode can hide them.
+    The changelog tracks quests from 3.6: an unlisted quest is older than that.
+    """
+    released = Release(status=ReleaseStatus.RELEASED)
+    docs: list[Doc] = []
+    for quest in itertools.islice(yatta.quests(), limit):
+        info = quest["info"]
+        when = changelog.version_of("quest", info["id"]) or changelog.untracked_ceiling("quest")
+        source = SourceRef(
+            source="yatta",
+            url=f"{SITE}/archive/quest/{info['id']}",
+            tier=Tier.OFFICIAL,
+            fetched_at=now,
+            game_version=live,
+        )
+        docs.append(quest_doc(quest, QUEST_TYPES[info["type"]], released, source, when))
+    for entry in itertools.islice(wiki.entries(hoyowiki.MENU_QUESTS), limit):
+        if page := hoyowiki.quest_page(wiki.page(entry.entry_id)):
+            source = SourceRef(
+                source="hoyowiki",
+                url=hoyowiki.PAGE_URL.format(entry.entry_id),
+                tier=Tier.OFFICIAL,
+                fetched_at=now,
+            )
+            page["version"] = wiki_version(page["version"]) or live or ""
+            docs.append(wiki_quest_doc(entry.entry_id, entry.name, page, released, source))
+    kept = [d for d in docs if not later(d.revealed_in, live)]
+    dropped = [
+        (d.doc_id, f"revealed in {d.revealed_in}, after live {live}")
+        for d in docs
+        if later(d.revealed_in, live)
+    ]
+    return kept, dropped
+
+
+def curated_guides(builds: str) -> dict[str, tuple[str, str]]:
+    """Each section of the team's build file that cites a KQM quick guide:
+    section -> (guide URL, date the team last checked it)."""
+    found: dict[str, tuple[str, str]] = {}
+    section = None
+    for line in builds.splitlines():
+        if line.startswith("## "):
+            section = line[3:].strip()
+        elif section and (m := _KQM_GUIDE.search(line)):
+            checked = re.search(r"\d{4}-\d{2}-\d{2}", line[m.end() :])
+            found[section] = (m.group(), checked.group() if checked else "")
+    return found
+
+
+def read_guides(
+    characters: list[Character],
+    weapons: list[Weapon],
+    sets: list,
+    curated: str,
+    live: str | None,
+    now: datetime,
+) -> tuple[str, dict]:
+    """Fact lines for characters with no team build, and for guides updated since the team
+    last read them. Returns the lines as a facts file, and what happened."""
+    known_weapons = {normalise_name(w.name) for w in weapons}
+    known_sets = {normalise_name(a.name) for a in sets}
+    watched = curated_guides(curated)
+    covered = {normalise_name(s) for s in re.findall(r"^## (.+)$", curated, re.M)}
+    today = now.date().isoformat()
+    lines: list[str] = []
+    read: list[str] = []
+    no_guide: list[str] = []
+    client = PoliteClient(delay_s=1.5)
+    try:
+        for name, (url, checked) in watched.items():
+            guide = fetch_guide(client, [url], known_weapons, known_sets)
+            newer = guide and guide.modified and guide.modified > checked
+            if newer and (found := guide.lines(live or "", today)):
+                lines += [f"## {name}", *found]
+                read.append(name)
+        for c in characters:
+            if c.release.status != ReleaseStatus.RELEASED or normalise_name(c.name) in covered:
+                continue
+            if "(" in c.name or c.name == "Traveler":
+                continue
+            guide = fetch_guide(client, guide_urls(c.name), known_weapons, known_sets)
+            found = guide.lines(live or "", today) if guide else []
+            if found:
+                lines += [f"## {c.name}", *found]
+                read.append(c.name)
+            else:
+                no_guide.append(c.name)
+    finally:
+        client.close()
+    return "\n".join(lines), {"read": read, "no_guide": no_guide}
+
+
+def carried_docs(previous: Path | None, sources: tuple[str, ...], live: str | None) -> list[Doc]:
+    """Docs of the slow sources this build didn't read, from the last published build."""
+    path = previous / "docs.jsonl" if previous else None
+    prefixes = tuple(p for s, p in CARRIED.items() if s not in sources)
+    if path is None or not path.exists() or not prefixes:
+        return []
+    docs = []
+    with path.open(encoding="utf-8") as f:
+        for line in f:
+            doc = Doc.model_validate_json(line)
+            if doc.doc_id.startswith(prefixes) and not later(doc.revealed_in, live):
+                docs.append(doc)
+    return docs
+
+
 def build(
     out: Path,
     cache: Path | None,
     limit: int | None,
     blocklist: set[str],
     sources: tuple[str, ...] = SOURCES,
+    previous: Path | None = None,
 ) -> dict:
     now = datetime.now(UTC)
     take = (lambda it: itertools.islice(it, limit)) if limit else (lambda it: it)
@@ -302,10 +463,13 @@ def build(
                 now,
                 limit,
                 proven_live(feed, now),
+                proven_weapons(feed, now),
+                fetched["weapons"],
             )
         finally:
             wiki_client.close()
         fetched["characters"] += official.announced
+        fetched["weapons"] += official.weapons
         source_info["hoyowiki"] = {"official_names": {k: len(v) for k, v in official.names.items()}}
         log.info(
             "HoYoWiki: %s official names, %d announced, %d videos",
@@ -412,6 +576,61 @@ def build(
         dropped += lore_dropped
         log.info("lore: %s", counts["lore"])
 
+    # A deep source that fails keeps its last good docs: it's removed from `read` below
+    read = set(sources)
+    if "quests" in sources and changelog is not None:
+        quest_client = PoliteClient(cache_dir=cache)
+        wiki_client = PoliteClient(cache_dir=cache, headers=hoyowiki.HEADERS)
+        try:
+            quest_docs, quest_dropped = fetch_quests(
+                YattaSource(quest_client),
+                hoyowiki.HoYoWikiSource(wiki_client),
+                changelog,
+                live,
+                now,
+                limit,
+            )
+            docs += quest_docs
+            dropped += quest_dropped
+            counts["quests"] = len(quest_docs)
+        except Exception:
+            log.exception("quests failed: keeping the last good ones")
+            read.discard("quests")
+        finally:
+            quest_client.close()
+            wiki_client.close()
+    elif "quests" in sources:
+        read.discard("quests")
+
+    if "guides" in sources:
+        curated = TEAM_BUILDS.read_text(encoding="utf-8") if TEAM_BUILDS.exists() else ""
+        try:
+            guide_lines, counts["guides"] = read_guides(
+                kept.get("characters", []),
+                kept.get("weapons", []),
+                kept.get("artifact_sets", []),
+                curated,
+                live,
+                now,
+            )
+            auto = parse_facts(
+                guide_lines,
+                now,
+                version_from_manifest(source_info.get("yatta", {}).get("game_version")),
+                prefix="auto-builds",
+                what="builds",
+                checked_by="read from the guide by machine",
+            )
+            docs += auto.docs
+            dropped += [(f"auto_builds:{line}", reason) for line, reason in auto.dropped]
+        except Exception:
+            log.exception("guides failed: keeping the last good ones")
+            read.discard("guides")
+
+    carried = carried_docs(previous, tuple(read), live)
+    docs += carried
+    counts["carried"] = len(carried)
+
     if "team_facts" in sources and TEAM_FACTS.exists():
         facts = parse_facts(
             TEAM_FACTS.read_text(encoding="utf-8"),
@@ -449,9 +668,15 @@ def build(
     _write_jsonl(out / "videos.jsonl", official.videos)
     (out / "banners.json").write_text(json.dumps(feed, ensure_ascii=False), encoding="utf-8")
 
+    deep = all(s in sources for s in CARRIED)
+    last = previous / "manifest.json" if previous else None
+    last_deep = (
+        json.loads(last.read_text("utf-8")).get("deep_at") if last and last.exists() else None
+    )
     manifest = {
         "schema_version": SCHEMA_VERSION,
         "built_at": now.isoformat(),
+        "deep_at": now.isoformat() if deep else last_deep,
         "sources": source_info,
         "counts": counts,
         "docs": len(docs),
@@ -482,6 +707,12 @@ def main() -> None:
         help=f"comma-separated subset of {','.join(SOURCES + OPTIONAL_SOURCES)} "
         f"(default: {','.join(SOURCES)})",
     )
+    parser.add_argument(
+        "--deep", action="store_true", help="also read the slow sources (quests, books, guides)"
+    )
+    parser.add_argument(
+        "--previous", type=Path, default=None, help="last published build: slow docs carry over"
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
@@ -494,7 +725,8 @@ def main() -> None:
         }
     if unknown := set(args.sources) - set(SOURCES + OPTIONAL_SOURCES):
         parser.error(f"unknown sources: {', '.join(sorted(unknown))}")
-    manifest = build(args.out, args.cache, args.limit, blocklist, args.sources)
+    sources = args.sources + OPTIONAL_SOURCES if args.deep else args.sources
+    manifest = build(args.out, args.cache, args.limit, blocklist, sources, args.previous)
     log.info(
         "counts=%s docs=%d dropped=%d unverified=%d",
         manifest["counts"],
