@@ -136,7 +136,7 @@
   }
   fetch("/api/feedback-summary").then(r => r.ok ? r.json() : null).then(renderVotes).catch(() => {});
 
-  fetch("/static/results.json", { cache: "no-cache" })
+  fetch("/api/results", { cache: "no-cache" })
     .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
     .then(render)
     .catch(() => $("#meta").replaceChildren(h("li", "err", "The results file couldn't be loaded.")));

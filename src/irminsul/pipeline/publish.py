@@ -34,6 +34,8 @@ PUBLISH_FILES = (
     "videos.jsonl",
     "planner.json",
     "history.json",
+    "banners.json",
+    "results.json",
     "CHANGELOG.md",
 )
 # Downloaded with the live manifest: the history to append to, and the records and videos

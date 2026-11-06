@@ -13,6 +13,7 @@ name: Daily corpus check
 on:
   schedule:
     - cron: "17 9 * * *" # daily 09:17 UTC, after version-update maintenance has ended
+    - cron: "47 21 * * *" # and again in the evening: GitHub often starts schedules hours late
   workflow_dispatch:
     inputs:
       reason:
@@ -98,6 +99,8 @@ jobs:
           uv run irminsul-index build --docs data/build/docs.jsonl --out data/index
           uv run irminsul-index eval --index data/index --k 8 --configs hybrid+rerank \
             --out data/build/retrieval.json --min-hit "$MIN_HIT_AT_8"
+          # The public test results ship with the data, so they are never older than it
+          uv run irminsul-report --build data/build --index data/index --out data/build/results.json
 
       - name: Publish gate (dates, leak language, probes, size)
         id: gate
@@ -166,6 +169,11 @@ jobs:
             cat data/build/CHANGELOG.md; echo; echo "$staged"; } > /tmp/body.md
           gh pr create --base "$BASE" --head "$branch" \
             --title "Corpus update $day (held by the publish gate)" --body-file /tmp/body.md
+
+      # Unsafe is one question, out of date is another: compare the build with HoYoverse's own
+      # notices. It runs after publishing, so a stale source raises an alarm without blocking.
+      - name: Freshness check (official notices vs our data)
+        run: uv run irminsul-freshness --build data/build
 
       - name: Open an issue on failure
         if: failure()
