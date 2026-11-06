@@ -305,7 +305,9 @@ def fetch_quests(
     """
     released = Release(status=ReleaseStatus.RELEASED)
     docs: list[Doc] = []
-    for quest in itertools.islice(yatta.quests(), limit):
+    added = changelog.added.get("quest", {})
+    newest = [quest_id for quest_id, version in added.items() if version == live]
+    for quest in itertools.islice(yatta.quests(newest), limit):
         info = quest["info"]
         when = changelog.version_of("quest", info["id"]) or changelog.untracked_ceiling("quest")
         source = SourceRef(

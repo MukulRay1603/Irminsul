@@ -240,7 +240,9 @@
       if (mine) await loadRoster();
       root.replaceChildren(toolbar, view);
       render();
-      rail.querySelector("[aria-pressed=true]")?.scrollIntoView({ block: "nearest", inline: "center" });
+      // The rail only, sideways: scrollIntoView moved the whole page past the hero on load
+      const on = rail.querySelector("[aria-pressed=true]");
+      if (on) rail.scrollLeft = on.offsetLeft - rail.offsetLeft - (rail.clientWidth - on.offsetWidth) / 2;
     })();
   }
 

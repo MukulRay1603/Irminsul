@@ -27,7 +27,8 @@ modeBtn.onclick = () => setMode(document.documentElement.dataset.mode === "dark"
 
 /* ---------- Top bar turns solid past the hero ---------- */
 const bar = $("#bar");
-new IntersectionObserver(([e]) => bar.classList.toggle("solid", !e.isIntersecting), { threshold: .12 }).observe($(".hero-inner"));
+// Solid as soon as the title slides under it, or the buttons sit on top of the ask box
+new IntersectionObserver(([e]) => bar.classList.toggle("solid", !e.isIntersecting), { rootMargin: "-72px 0px 0px 0px" }).observe($(".hero h1"));
 
 /* ---------- The tree: grows once, then breathes (cheap after the first two seconds) ---------- */
 // Low-power devices (phones, 4-core laptops, data saver) get fewer motes, 30 fps and no glow.
@@ -36,7 +37,11 @@ const lowPower = (navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcur
 const tree = (() => {
   const cv = $("#tree"), ctx = cv.getContext("2d");
   let W = 0, H = 0, dpr = 1, branches = [], tips = [], motes = [], colors = {};
-  let baked = null, glow = null, growEnd = 0, raf = 0, onScreen = true, last = 0;
+  let baked = null, glow = null, sap = null, growEnd = 0, raf = 0, onScreen = true, last = 0;
+  // Depth: three layers of the tree shift by different amounts as the pointer moves
+  const parallax = !lowPower && matchMedia("(pointer: fine)").matches && !reduced;
+  const DEPTHS = [3, 9, 18];
+  let aimX = 0, aimY = 0, lookX = 0, lookY = 0, stirred = 0, pulses = [];
   const t0 = performance.now();
   const rnd = seed => () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const ease = t => t < 0 ? 0 : t > 1 ? 1 : 1 - Math.pow(1 - t, 3);
@@ -49,7 +54,7 @@ const tree = (() => {
   function recolor() {
     const cs = getComputedStyle(document.documentElement);
     colors = { leaf: cs.getPropertyValue("--leaf").trim(), gold: cs.getPropertyValue("--gold").trim(), sap: cs.getPropertyValue("--sap").trim() };
-    glow = sprite(colors.sap); baked = null;
+    glow = sprite(colors.sap); sap = sprite(colors.gold); baked = null;
     if (W && !raf) frame(performance.now());
   }
   function build() {
@@ -58,14 +63,15 @@ const tree = (() => {
     cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     branches = []; tips = []; baked = null;
     const r = rnd(7), scale = Math.min(W, H * 1.2), maxDepth = lowPower ? 7 : 8;
-    (function grow(x, y, ang, len, w, depth, start) {
+    (function grow(x, y, ang, len, w, depth, start, parent) {
       const x2 = x + Math.cos(ang) * len, y2 = y + Math.sin(ang) * len, bend = (r() - .5) * len * .5;
-      branches.push({ x, y, x2, y2, cx: (x + x2) / 2 + Math.cos(ang + Math.PI / 2) * bend, cy: (y + y2) / 2 + Math.sin(ang + Math.PI / 2) * bend, w, depth, start, dur: .18 + depth * .02 });
-      if (depth >= maxDepth || len < 6) { tips.push({ x: x2, y: y2, ph: r() * 6.28 }); return; }
+      const branch = { x, y, x2, y2, cx: (x + x2) / 2 + Math.cos(ang + Math.PI / 2) * bend, cy: (y + y2) / 2 + Math.sin(ang + Math.PI / 2) * bend, w, depth, start, dur: .18 + depth * .02, parent };
+      branches.push(branch);
+      if (depth >= maxDepth || len < 6) { tips.push({ x: x2, y: y2, ph: r() * 6.28, branch }); return; }
       const n = depth < 2 ? 2 : r() < .3 ? 3 : 2;
       for (let i = 0; i < n; i++) {
         const spread = (depth < 2 ? .42 : .55) * (i - (n - 1) / 2) + (r() - .5) * .35;
-        grow(x2, y2, ang + spread, len * (.72 + r() * .1), w * .68, depth + 1, start + .14);
+        grow(x2, y2, ang + spread, len * (.72 + r() * .1), w * .68, depth + 1, start + .14, branch);
       }
     })(W / 2, H + 10, -Math.PI / 2, scale * .2, Math.max(6, scale * .016), 0, 0);
     for (let i = 0; i < 6; i++) {  // roots spread along the bottom
@@ -97,10 +103,38 @@ const tree = (() => {
     }
     c.stroke();
   }
-  function bake() {  // the grown tree never changes: draw it once, then just copy the bitmap
-    baked = document.createElement("canvas"); baked.width = W * dpr; baked.height = H * dpr;
-    const c = baked.getContext("2d"); c.setTransform(dpr, 0, 0, dpr, 0, 0);
-    for (const b of branches) stroke(c, b, 1, !lowPower);
+  function bake() {  // the grown tree never changes: draw it once, then just copy the bitmaps
+    const scale = parallax ? Math.min(dpr, 1.5) : dpr, count = parallax ? DEPTHS.length : 1;
+    baked = Array.from({ length: count }, (_, i) => {
+      const layer = document.createElement("canvas"); layer.width = W * scale; layer.height = H * scale;
+      const c = layer.getContext("2d"); c.setTransform(scale, 0, 0, scale, 0, 0);
+      for (const b of branches) if (count === 1 || (b.depth < 3 ? 0 : b.depth < 6 ? 1 : 2) === i) stroke(c, b, 1, !lowPower);
+      return layer;
+    });
+  }
+  function point(b, p) {
+    const q = 1 - p;
+    return [q * q * b.x + 2 * q * p * b.cx + p * p * b.x2, q * q * b.y + 2 * q * p * b.cy + p * p * b.y2];
+  }
+  // A question sends sap from the roots up to the branch tips
+  function pulse() {
+    if (reduced || !tips.length) return;
+    const now = performance.now(), step = Math.max(1, Math.floor(tips.length / (lowPower ? 8 : 18)));
+    pulses = tips.filter((_, i) => i % step === 0).map((tip, i) => {
+      const path = [];
+      for (let b = tip.branch; b; b = b.parent) path.unshift(b);
+      return { path, start: now + (i % 6) * 70 };
+    });
+    schedule();
+  }
+  function drawPulses(now, ox, oy) {
+    pulses = pulses.filter(p => now - p.start < 1500);
+    for (const p of pulses) {
+      const at = (now - p.start) / 1500 * p.path.length;
+      if (at < 0) continue;
+      const seg = Math.min(p.path.length - 1, Math.floor(at)), [x, y] = point(p.path[seg], at - seg);
+      ctx.globalAlpha = .95; ctx.drawImage(sap, x + ox - 9, y + oy - 9, 18, 18);
+    }
   }
   function frame(now) {
     raf = 0;
@@ -110,11 +144,15 @@ const tree = (() => {
     ctx.clearRect(0, 0, W, H);
     if (t >= growEnd) {
       if (!baked) bake();
-      ctx.globalAlpha = 1; ctx.shadowBlur = 0; ctx.drawImage(baked, 0, 0, W, H);
+      lookX += (aimX - lookX) * .06; lookY += (aimY - lookY) * .06; stirred *= .95;
+      ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+      baked.forEach((layer, i) => ctx.drawImage(layer, lookX * DEPTHS[i], lookY * DEPTHS[i], W, H));
+      const ox = lookX * DEPTHS[2], oy = lookY * DEPTHS[2];
       if (!lowPower) for (const tip of tips) {
-        const pulse = .5 + .5 * Math.sin(t * 1.3 + tip.ph), s = 8 + 8 * pulse;
-        ctx.globalAlpha = .2 + .5 * pulse; ctx.drawImage(glow, tip.x - s / 2, tip.y - s / 2, s, s);
+        const beat = .5 + .5 * Math.sin(t * 1.3 + tip.ph), s = 8 + 8 * beat + 10 * stirred;
+        ctx.globalAlpha = Math.min(1, .2 + .5 * beat + .4 * stirred); ctx.drawImage(glow, tip.x + ox - s / 2, tip.y + oy - s / 2, s, s);
       }
+      if (pulses.length) drawPulses(now, ox, oy);
     } else for (const b of branches) { const p = ease((t - b.start) / b.dur); if (p > 0) stroke(ctx, b, p, false); }
     ctx.shadowBlur = 0;
     const show = Math.min(1, Math.max(0, t - 1));
@@ -136,7 +174,9 @@ const tree = (() => {
     clearTimeout(resizeTimer);
     resizeTimer = setTimeout(() => { if (cv.clientWidth !== W || Math.abs(cv.clientHeight - H) > 120) { build(); if (!raf) frame(performance.now()); } }, 150);
   });
-  return { start() { build(); recolor(); }, recolor };  // recolor draws the first frame
+  if (parallax) addEventListener("pointermove", e => { aimX = .5 - e.clientX / innerWidth; aimY = .5 - e.clientY / innerHeight; }, { passive: true });
+  $("#heroQ").addEventListener("input", () => { stirred = 1; }, { passive: true });  // typing wakes the tips
+  return { start() { build(); recolor(); }, recolor, pulse };  // recolor draws the first frame
 })();
 setMode(store.get("irminsul-mode") || (matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"));
 tree.start();
@@ -295,7 +335,8 @@ async function ask(q, opts = {}) {
   el.classList.add("streaming");
   el.innerHTML = `<div class="route"><i></i><span>Searching the branches…</span></div><div class="body typing"></div>`;
   thread.append(el); thread.setAttribute("aria-busy", "true");
-  $("#ask").scrollIntoView({ behavior: reduced ? "auto" : "smooth" });
+  tree.pulse();  // let the sap climb for a moment before moving down to the answer
+  setTimeout(() => $("#ask").scrollIntoView({ behavior: reduced ? "auto" : "smooth" }), !reduced && scrollY < innerHeight / 2 ? 700 : 0);
   const body = $(".body", el); let text = "", done = null, painting = 0;
   // Re-render the streamed markdown at most once a frame, not once per token
   const paint = () => { painting ||= requestAnimationFrame(() => { painting = 0; body.innerHTML = md(text); }); };
