@@ -353,6 +353,7 @@ async function ask(q, opts = {}) {
   const ent = done.trace.entity || done.citations?.map(c => c.doc_id || "").find(d => /^(character|weapon|artifact)\//.test(d))?.split("#")[0];
   // The dossier (big art, talents) renders after the answer has painted
   if (ent) { lastEntity = ent; setTimeout(() => showEntity(ent), 0); }
+  window.wishes?.remember(done.trace);  // "I'm at 40 pity": kept on this device only
   // Keyboard and screen-reader users land on the new answer, not back at the page top
   el.tabIndex = -1; el.focus({ preventScroll: true });
 }
@@ -363,6 +364,9 @@ function askBody(q, opts) {
   const story = opts.story ?? window.story?.value();
   const body = story ? { question: q, story_until: story } : { question: q };
   if (lastEntity) body.context = lastEntity;
+  const memory = window.wishes?.memory();  // what the player told the chat, from this device
+  if (memory?.stash) body.stash = memory.stash;
+  if (memory?.uid) body.uid = memory.uid;
   return body;
 }
 for (const id of ["heroForm", "dockForm"]) $("#" + id).addEventListener("submit", e => {

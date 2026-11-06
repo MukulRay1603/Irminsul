@@ -24,7 +24,15 @@ MAX_WISHES = 3000
 DAILY = 60
 ABYSS = 800  # 16th of each month
 THEATER = 800  # 1st of each month
-PER_VERSION = {"update compensation": 600, "livestream codes": 300, "Stygian": 450, "trials": 80}
+PER_VERSION = {
+    "update compensation": 600,  # 300 + 300, official notices 7.0 to 7.2
+    "livestream codes": 300,
+    "Stygian": 450,
+    "trials": 80,
+    "Battle Pass missions": 60,
+}
+# What a version usually adds on top, from the 7.2 breakdown: an estimate, shown separately
+TYPICAL_VERSION = {"events and quests": 2880, "exploration": 900, "achievements": 240}
 SHOP_FATES = 5  # Paimon's Bargains, 1st of each month, for Masterless Stardust
 
 CADENCE_DAYS = 42
@@ -122,6 +130,7 @@ class Income:
     days: int
     lines: list[tuple[str, int]]
     shop_fates: int
+    typical: int = 0  # events, exploration, achievements: likely, not guaranteed
 
     @property
     def primos(self) -> int:
@@ -130,6 +139,14 @@ class Income:
     @property
     def wishes(self) -> int:
         return self.primos // WISH_PRICE + self.shop_fates
+
+    @property
+    def likely(self) -> int:
+        return self.primos + self.typical
+
+    @property
+    def likely_wishes(self) -> int:
+        return self.likely // WISH_PRICE + self.shop_fates
 
 
 def income(today: date, until: date, welkin: bool = False) -> Income:
@@ -152,7 +169,8 @@ def income(today: date, until: date, welkin: bool = False) -> Income:
     ]
     if welkin:
         lines.append(("Welkin Moon", 90 * days))
-    return Income(until, days, lines, SHOP_FATES * theater)
+    typical = round(sum(TYPICAL_VERSION.values()) * days / CADENCE_DAYS)
+    return Income(until, days, lines, SHOP_FATES * theater, typical)
 
 
 # ---- reading a player's question ----------------------------------------------------------
@@ -174,6 +192,11 @@ _ODDS_ASK = re.compile(
     r"|\bwill i (?:get|have)\b|\bwhat are my\b",
     re.I,
 )
+_TELLING = re.compile(
+    r"\b(?:i have|i've got|ive got|i got|i'?m at|im at|i am at|my pity|i saved|i'?ve saved)\b",
+    re.I,
+)
+_RESULT = re.compile(r"\b(lost|won)\b[^.?!]*\b(?:50\s*/?\s*50|fifty[- ]fifty)\b", re.I)
 _SAVINGS_ASK = re.compile(
     r"\bhow (?:many|much)\b.*\b(?:primo\w*|wish(?:es)?|pulls?|gems?)\b"
     r"|\b(?:save|saving|savings|estimate|budget|free primo\w*)\b",
@@ -194,6 +217,8 @@ class Stash:
     guaranteed: bool
     copies: int
     banner: str
+    primos: int = 0
+    fates: int = 0
 
 
 def read_stash(question: str) -> Stash | None:
@@ -203,11 +228,11 @@ def read_stash(question: str) -> Stash | None:
         _FATES.search(question),
         _WISHES.search(question),
     )
-    if not (primos or fates or pulls):
+    pity = _PITY.search(question)
+    if not (primos or fates or pulls or pity):
         return None
     wishes = wishes_from(_int(primos and primos.group(1)), _int(fates and fates.group(1)))
     wishes += _int(pulls and pulls.group(1))
-    pity = _PITY.search(question)
     weapon = bool(_WEAPON_ASK.search(question) or _REFINE.search(question))
     copy = _COPIES.search(question)
     refine = _REFINE.search(question)
@@ -219,6 +244,8 @@ def read_stash(question: str) -> Stash | None:
         guaranteed,
         copies,
         "weapon" if weapon else "character",
+        _int(primos and primos.group(1)),
+        _int(fates and fates.group(1)),
     )
 
 
@@ -237,7 +264,39 @@ def is_savings_question(question: str) -> bool:
 
 
 def is_odds_question(question: str) -> bool:
-    return bool(_ODDS_ASK.search(question)) and read_stash(question) is not None
+    stash = read_stash(question)
+    if stash is None:
+        return False
+    if _ODDS_ASK.search(question):
+        return True
+    # "My friend got C6 in 100 pulls" is a story. Telling us means real numbers about yourself.
+    return bool(_TELLING.search(question)) and bool(stash.primos or stash.fates or stash.pity)
+
+
+def wants_saved_stash(question: str) -> bool:
+    """'What are my chances?' with no numbers: use what the player told us before."""
+    return bool(_ODDS_ASK.search(question)) and read_stash(question) is None
+
+
+def saved_text(saved: dict) -> str:
+    guaranteed = ", guaranteed" if saved.get("guaranteed") else ""
+    return (
+        f"(I have {saved.get('primos', 0)} primos, {saved.get('fates', 0)} fates, "
+        f"pity {saved.get('pity', 0)}{guaranteed})"
+    )
+
+
+def wish_result(question: str) -> dict | None:
+    """'I lost my 50/50 at 72' or 'won the 50/50': the new pity and guarantee, to remember."""
+    m = _RESULT.search(question)
+    if not m:
+        return None
+    return {"pity": 0, "guaranteed": m.group(1).lower() == "lost"}
+
+
+def stash_memory(s: Stash) -> dict:
+    """What the page keeps on the device from a player's own words."""
+    return {"primos": s.primos, "fates": s.fates, "pity": s.pity, "guaranteed": s.guaranteed}
 
 
 def odds_text(s: Stash) -> str:
@@ -262,11 +321,13 @@ def income_text(today: date, version: tuple[int, int], phase: int) -> str | None
     rows = "\n".join(f"- {label}: {amount:,}" for label, amount in est.lines if amount)
     fates = f"\n- Shop Fates for Stardust: {est.shop_fates}" if est.shop_fates else ""
     return (
-        f"**A rough floor of {est.primos:,} free Primogems ({est.wishes} wishes) from today "
-        f"until {version[0]}.{version[1]} Phase {phase}**, around "
-        f"{until.strftime('%b')} {until.day}, {until.year}.\n\n{rows}{fates}\n\n"
-        "That's simple addition of recurring free rewards, assuming you clear the Abyss and "
-        "Theater and do your dailies. Events, exploration and achievements add more. Add it to "
-        "what you've saved. The date is an estimate from the 42-day update cycle, and says "
-        "nothing about what that version contains."
+        f"**About {est.likely:,} free Primogems ({est.likely_wishes} wishes) from today until "
+        f"{version[0]}.{version[1]} Phase {phase}**, around "
+        f"{until.strftime('%b')} {until.day}, {until.year}. At least {est.primos:,} of that "
+        f"({est.wishes} wishes) is recurring and reliable.\n\n{rows}{fates}\n"
+        f"- Events, quests, exploration and achievements (usual amount, an estimate): "
+        f"{est.typical:,}\n\n"
+        "That's simple addition, assuming you clear the Abyss and Theater and do your dailies. "
+        "Add it to what you've saved. The date is an estimate from the 42-day update cycle, "
+        "and says nothing about what that version contains."
     )

@@ -31,6 +31,7 @@
     h("input", { type: "number", min: "0", max: String(max), inputmode: "numeric", value: String(onset.get()),
       oninput: e => { onset.set(Math.max(0, Math.min(max, parseInt(e.target.value, 10) || 0))); changed(); } }));
   const plain = n => n.toLocaleString();
+  const today = () => new Date().toISOString().slice(0, 10);
   const wishes = () => s.fates + Math.floor(s.primos / 160);
   const cur = () => s[s.banner];
 
@@ -100,8 +101,8 @@
       const r = await fetch(`/api/pulls/income?${new URLSearchParams({ until: s.target, welkin: s.welkin })}`); if (!r.ok) throw 0;
       const e = await r.json();
       savings.replaceChildren(
-        h("p", { class: "wt-big" }, "About ", h("b", { text: plain(wishes() + e.wishes) }), " wishes by then"),
-        h("p", { class: "wt-small", text: `Your ${plain(wishes())} now, plus at least ${plain(e.primos)} free Primogems${e.shop_fates ? ` and ${e.shop_fates} shop Fates` : ""}. Simple addition of recurring free rewards: events add more. Dates are estimates.` }));
+        h("p", { class: "wt-big" }, "About ", h("b", { text: plain(wishes() + e.likely_wishes) }), " wishes by then"),
+        h("p", { class: "wt-small", text: `Your ${plain(wishes())} now, plus about ${plain(e.likely)} free Primogems (at least ${plain(e.primos)})${e.shop_fates ? ` and ${e.shop_fates} shop Fates` : ""}, counting dailies, resets, codes, compensation and usual events. Dates are estimates.` }));
     } catch { savings.replaceChildren(); }
   }
   function changed(redraw) {
@@ -137,7 +138,7 @@
           h("p", { class: "wt-import-note", text: imported || "UIGF JSON from any wish tool. It's read in your browser and never uploaded. Never paste a game link or run a script for a website, including this one." }))),
       h("div", { class: "wt-card" },
         h("h3", { text: "Your stash" }),
-        h("div", { class: "wt-row" }, num("Primogems", "primos", 999999, { get: () => s.primos, set: v => { s.primos = v; } }),
+        h("div", { class: "wt-row" }, num(s.estimated ? "Primogems (estimate, tell me the real number anytime)" : "Primogems", "primos", 999999, { get: () => s.primos, set: v => { s.primos = v; s.asOf = today(); s.estimated = false; } }),
           num("Intertwined Fates", "fates", 9999, { get: () => s.fates, set: v => { s.fates = v; } }),
           num(s.banner === "weapon" ? "Copies wanted" : "Copies wanted (C0 = 1)", "copies", 7, { get: () => s.copies, set: v => { s.copies = Math.max(1, v); } })),
         out,
@@ -150,5 +151,34 @@
     calculate();
   }
 
-  fetch("/api/pulls/targets").then(r => (r.ok ? r.json() : { targets: [] })).then(d => { targets = d.targets; render(); }).catch(render);
+  /* ---------- the chat is the input: it tells us, we remember ---------- */
+  window.wishes = {
+    memory() {
+      const stash = s.primos || s.fates || s.character.pity
+        ? { primos: s.primos, fates: s.fates, pity: s.character.pity, guaranteed: s.character.guaranteed } : null;
+      return { stash, uid: s.uid || null };
+    },
+    remember(trace) {
+      if (trace?.uid) { s.uid = trace.uid; save(); }
+      const t = trace?.stash; if (!t) return;
+      if (t.primos) s.primos = t.primos;
+      if (t.fates) s.fates = t.fates;
+      if (t.primos || t.fates) s.asOf = today();
+      s.character.pity = t.pity ?? s.character.pity;
+      s.character.guaranteed = t.guaranteed ?? s.character.guaranteed;
+      changed(true);
+    },
+  };
+
+  /* Primogems earned since the player last told us: dailies and resets add up by themselves */
+  async function catchUp() {
+    if (!s.asOf || s.asOf >= today() || !s.primos) return;
+    try {
+      const q = new URLSearchParams({ until: today(), since: s.asOf });
+      const r = await fetch(`/api/pulls/income?${q}`); if (!r.ok) return;
+      s.primos += (await r.json()).primos; s.asOf = today(); s.estimated = true; changed(true);
+    } catch {}
+  }
+
+  fetch("/api/pulls/targets").then(r => (r.ok ? r.json() : { targets: [] })).then(d => { targets = d.targets; render(); catchUp(); }).catch(render);
 })();

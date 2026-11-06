@@ -55,16 +55,18 @@ def add_pulls(app: FastAPI, trusted_hops: int = 0) -> None:
         request: Request,
         until: str = Query(pattern=r"^\d{4}-\d{2}-\d{2}$"),
         welkin: bool = False,
+        since: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
     ) -> dict:
         check(request)
         today = datetime.now(UTC).date()
         try:
             end = datetime.strptime(until, "%Y-%m-%d").date()
+            start = datetime.strptime(since, "%Y-%m-%d").date() if since else today
         except ValueError as e:
             raise HTTPException(422, "Bad date") from e
         if end > today + timedelta(days=pulls.CADENCE_DAYS * 12):
             raise HTTPException(422, "Too far ahead to estimate")
-        est = pulls.income(today, end, welkin)
+        est = pulls.income(start, end, welkin)
         return {
             "until": until,
             "days": est.days,
@@ -72,6 +74,8 @@ def add_pulls(app: FastAPI, trusted_hops: int = 0) -> None:
             "primos": est.primos,
             "shop_fates": est.shop_fates,
             "wishes": est.wishes,
+            "likely": est.likely,
+            "likely_wishes": est.likely_wishes,
         }
 
     @app.get("/api/pulls/targets")

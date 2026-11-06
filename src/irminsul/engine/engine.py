@@ -21,6 +21,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
 from irminsul import story
+from irminsul.api.players import line as showcase_line
 from irminsul.engine import grounding, guards, language, pulls
 from irminsul.engine.cards import pct
 from irminsul.engine.entities import EntityStore, Match
@@ -76,6 +77,8 @@ ALLOWANCE_REPLY = (
     "and answers straight from game data, like stats and passives, are always free."
 )
 SOURCE_WORDS = 180
+# "What should I build next?" is about the player's own account
+_ABOUT_ME = re.compile(r"\b(?:my|mine|i|i'?m|me)\b", re.I)
 MAX_PROFILES = 8
 # A follow-up that points back at the previous answer's subject
 _REFERS_BACK = re.compile(
@@ -148,6 +151,7 @@ class Engine:
         exclude_tiers: frozenset[str] = frozenset(),
         patches: dict | None = None,
         banners: dict | None = None,
+        players=None,
         search_slots: int = 2,
     ) -> None:
         self.store = store
@@ -158,6 +162,7 @@ class Engine:
         self.exclude_tiers = exclude_tiers  # e.g. {"kqm"} when KQM content is switched off
         self.patches = patches  # patch notes (engine/patches.py) for "what changed in 7.1?"
         self.banners = banners  # official wish banners (sources/banners.py) for "what's on now?"
+        self.players = players  # public character showcases (api/players.py), by UID
         self._cache: OrderedDict[str, Answer] = OrderedDict()
         self.cache_size = cache_size
         self._search_slots = threading.BoundedSemaphore(max(1, search_slots))
@@ -171,12 +176,14 @@ class Engine:
         out_of_allowance: bool = False,
         story_until: str | None = None,
         context: str | None = None,
+        stash: dict | None = None,
+        uid: str | None = None,
     ) -> Answer:
         """`story_until` (a key of story.STORY_POINTS) turns on story-safe mode; `context` is
         the entity the previous answer was about (for "is she good?")."""
         start = time.perf_counter()
         point = story.point(story_until)
-        original = self.with_context(question.strip(), context)
+        original = self.with_context(question.strip(), context, stash, uid)
         question, lang = self._in_english(original, allow_llm and not out_of_allowance)
         if lang and (sensitive := self._sensitive(original)):
             answer = sensitive
@@ -188,12 +195,25 @@ class Engine:
         answer.trace["latency_ms"] = round((time.perf_counter() - start) * 1000, 1)
         return answer
 
-    def with_context(self, question: str, context: str | None) -> str:
+    def with_context(
+        self,
+        question: str,
+        context: str | None,
+        stash: dict | None = None,
+        uid: str | None = None,
+    ) -> str:
         """'Is she good?' after an answer about Furina becomes 'Is she good? (Furina)'.
 
         Only when the question names nothing itself and refers back to something (a pronoun or
         a bare follow-up), and only for a released entity.
         """
+        if stash and pulls.wants_saved_stash(question):
+            return f"{question} {pulls.saved_text(stash)}"
+        if uid and self.players and _ABOUT_ME.search(question) and not guards.UID.search(question):
+            rows = self.players.characters(uid)
+            if rows:
+                roster = "; ".join(showcase_line(c) for c in rows[:8])
+                return f"{question} (My showcased characters: {roster})"
         if not context or context not in self.store.by_id or self.store.find(question):
             return question
         match = self.store.by_id[context]
@@ -264,6 +284,8 @@ class Engine:
         out_of_allowance: bool = False,
         story_until: str | None = None,
         context: str | None = None,
+        stash: dict | None = None,
+        uid: str | None = None,
     ) -> Iterator[tuple[str, dict]]:
         """Yield ("meta" | "delta" | "done", payload) events for server-sent streaming.
 
@@ -271,7 +293,7 @@ class Engine:
         token by token; the final "done" event carries the citations the answer actually used.
         """
         start = time.perf_counter()
-        original = self.with_context(question.strip(), context)
+        original = self.with_context(question.strip(), context, stash, uid)
         question, lang = self._in_english(original, allow_llm and not out_of_allowance)
         point = story.point(story_until)
         answer = (self._sensitive(original) if lang else None) or self._before_llm(question, point)
@@ -326,10 +348,15 @@ class Engine:
         )
 
     def is_free(
-        self, question: str, story_until: str | None = None, context: str | None = None
+        self,
+        question: str,
+        story_until: str | None = None,
+        context: str | None = None,
+        stash: dict | None = None,
+        uid: str | None = None,
     ) -> bool:
         """Will this be answered without the AI (refusal, cache or game data)? No side effects."""
-        question = self.with_context(question.strip(), context)
+        question = self.with_context(question.strip(), context, stash, uid)
         if self.llm is not None and language.looks_foreign(question):
             return False  # translating it uses the model
         return self._before_llm(question, story.point(story_until)) is not None
@@ -346,6 +373,8 @@ class Engine:
                         f"\n\nWhat I can do is a rough guess at your savings:\n\n{estimate}"
                     )
             return refusal
+        if (found := guards.UID.search(question)) and self.players:
+            return self._showcase_answer(found.group(1))
         key = _cache_key(question, point)
         if key in self._cache:
             self._cache.move_to_end(key)
@@ -360,6 +389,22 @@ class Engine:
         if spoiler := self._past_story_point(question, point):
             return spoiler
         return answer_exact(self.store, question, self.patches, self.banners)
+
+    def _showcase_answer(self, uid: str) -> Answer:
+        rows = self.players.characters(uid)
+        if not rows:
+            text = (
+                "**I couldn't read that showcase.** It only works if the character showcase is "
+                "public in your in-game profile, so check that and try again in a minute."
+            )
+            return Answer(text, "exact", [], {"intent": "uid"})
+        roster = "\n".join(f"- {showcase_line(c)}" for c in rows)
+        text = (
+            f"**Got it: {len(rows)} characters in your public showcase.** I'll use them when "
+            f"you ask what to build or pull.\n\n{roster}\n\nI only see what you show in your "
+            "in-game profile. Your UID stays on this device."
+        )
+        return Answer(text, "exact", [], {"intent": "uid", "uid": uid})
 
     def _past_story_point(self, question: str, point: story.StoryPoint | None) -> Answer | None:
         """A gentle "past your story point" reply when the question names a character who

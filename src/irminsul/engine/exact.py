@@ -421,13 +421,18 @@ def wish_cost_answer(question: str) -> Answer | None:
 
 def pull_answer(question: str) -> Answer | None:
     """Wish odds from a player's numbers, or a free-Primogem estimate: sums, not a model."""
+    if result := pulls.wish_result(question):
+        state = "your next 5-star is guaranteed" if result["guaranteed"] else "next is a 50/50"
+        text = f"**Noted: pity is back to 0 and {state}.** I'll remember that on this device."
+        return Answer(text, "exact", [], {"intent": "wish_result", "stash": result})
     if pulls.is_odds_question(question):
         stash = pulls.read_stash(question)
         cite = Citation(
             1, "Wish rates and pity", "https://www.hoyolab.com/article/497840", Tier.COMMUNITY
         )
         text = pulls.odds_text(stash) + " [1]"
-        return Answer(text, "exact", [cite], {"intent": "pull_odds", "wishes": stash.wishes})
+        trace = {"intent": "pull_odds", "wishes": stash.wishes, "stash": pulls.stash_memory(stash)}
+        return Answer(text, "exact", [cite], trace)
     if pulls.is_savings_question(question):
         version, phase = pulls.target_version(question)
         text = pulls.income_text(datetime.now(UTC).date(), version, phase)
