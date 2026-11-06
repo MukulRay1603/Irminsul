@@ -1,0 +1,32 @@
+/* Wish tracker. Uses the tokens from app.css. */
+#wishes { scroll-margin-top: 64px; }
+#wishesApp { min-height: 420px; }
+.wt-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.wt-card { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); padding: clamp(14px, 2.4vw, 22px); box-shadow: var(--shadow); min-width: 0; }
+.wt-card h3 { margin: 0 0 10px; font-size: 16px; font-weight: 600; }
+.wt-card h3:not(:first-child) { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+.wt-tabs { display: inline-flex; gap: 6px; margin-bottom: 12px; }
+.wt-tabs button, .wt-taps button { padding: 8px 14px; min-height: 40px; border-radius: 999px; border: 1px solid var(--line); background: var(--bg-2); font-size: 14px; }
+.wt-tabs button[aria-pressed="true"] { background: var(--leaf); border-color: var(--leaf); color: var(--bg); font-weight: 600; }
+.wt-row { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: flex-end; margin-bottom: 12px; }
+.wt-field { display: grid; gap: 4px; font-size: 13.5px; color: var(--muted); flex: 1 1 110px; min-width: 0; }
+.wt-field.wide { flex-basis: 210px; }
+.wt-field input, .wt-field select { width: 100%; font: inherit; font-size: 16px; color: var(--text); background: var(--bg-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-variant-numeric: tabular-nums; }
+.wt-field input:focus, .wt-field select:focus { border-color: var(--leaf); outline: none; }
+.wt-check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; min-height: 40px; cursor: pointer; }
+.wt-check input { width: 18px; height: 18px; accent-color: var(--leaf); }
+.wt-taps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.wt-taps button:hover { border-color: var(--leaf); }
+.wt-taps .gold { border-color: var(--line-2); color: var(--gold); }
+.wt-big { margin: 0; font-size: 17px; }
+.wt-big b { font-size: 30px; font-weight: 500; color: var(--gold); font-variant-numeric: tabular-nums; }
+.wt-small { margin: 4px 0 0; font-size: 13.5px; color: var(--muted); }
+.wt-log { margin-bottom: 12px; font-size: 14px; }
+.wt-log summary { cursor: pointer; color: var(--leaf); }
+.wt-log ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; }
+.wt-log b { font-weight: 600; }
+.wt-import { border-top: 1px dashed var(--line); padding-top: 12px; }
+.wt-file { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.wt-file-btn { display: inline-block; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--leaf); color: var(--leaf); font-size: 14px; cursor: pointer; }
+.wt-file:focus-visible + .wt-file-btn { outline: 2px solid var(--leaf); outline-offset: 2px; }
+.wt-import-note { margin: 8px 0 0; font-size: 12.5px; color: var(--muted); }

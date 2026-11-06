@@ -8,7 +8,7 @@ comparison of 2-3 released entities of one kind, are answered here; anything els
 import re
 from datetime import UTC, datetime
 
-from irminsul.engine import cards
+from irminsul.engine import cards, pulls
 from irminsul.engine.entities import EntityStore, Match, released
 from irminsul.engine.types import Answer, Citation
 from irminsul.schema import ReleaseStatus, Tier, slugify
@@ -53,6 +53,7 @@ _OPINION = re.compile(
     re.I,
 )
 _COMPARE_MAX = 3
+_PLAYABLE = re.compile(r"\bplayable\b|\b(?:is|are) .*\b(?:released|out)\b|\bout yet\b", re.I)
 _BANNER_ASK = re.compile(
     r"\b(?:current|now|today|active|running|live|this phase|right now)\b.*"
     r"\b(?:banners?|event wish(?:es)?|wishes)\b"
@@ -127,6 +128,16 @@ _TALENT_LABEL = {
 
 def character_answer(m: Match, q: str) -> Answer | None:
     c = m.entity
+    # A fact from the release record: left to a model, "no source says so" became "no"
+    if _PLAYABLE.search(q) and not _OPINION.search(q):
+        when = c.release.released_at
+        since = f", since {_long_date(when.date().isoformat())}" if when else ""
+        return Answer(
+            f"**Yes, {c.name} is playable{since}.** [1]",
+            "exact",
+            [_cite(m, "overview")],
+            {"entity": c.id, "intent": "released"},
+        )
     # "What does Mizuki C2 do?" is a lookup; "How do I clear Floor 12 with Mizuki C2?" is not
     if (con := _CONST.search(q)) and c.constellations and not _ADVICE.search(q):
         level = int(con.group(1) or con.group(2))
@@ -419,6 +430,34 @@ def wish_cost_answer(question: str) -> Answer | None:
     return Answer(text, "exact", [cite], {"intent": "wish_cost", "wishes": n})
 
 
+def pull_answer(question: str) -> Answer | None:
+    """Wish odds from a player's numbers, or a free-Primogem estimate: sums, not a model."""
+    if result := pulls.wish_result(question):
+        state = "your next 5-star is guaranteed" if result["guaranteed"] else "next is a 50/50"
+        text = f"**Noted: pity is back to 0 and {state}.** I'll remember that on this device."
+        return Answer(text, "exact", [], {"intent": "wish_result", "stash": result})
+    if pulls.is_odds_question(question):
+        stash = pulls.read_stash(question)
+        cite = Citation(
+            1, "Wish rates and pity", "https://www.hoyolab.com/article/497840", Tier.COMMUNITY
+        )
+        text = pulls.odds_text(stash) + " [1]"
+        trace = {"intent": "pull_odds", "wishes": stash.wishes, "stash": pulls.stash_memory(stash)}
+        return Answer(text, "exact", [cite], trace)
+    if pulls.is_savings_question(question):
+        version, phase = pulls.target_version(question)
+        text = pulls.income_text(datetime.now(UTC).date(), version, phase)
+        if text:
+            cite = Citation(
+                1,
+                "Version update notice (official)",
+                "https://genshin.hoyoverse.com/en/news/detail/166383",
+                Tier.OFFICIAL,
+            )
+            return Answer(text + " [1]", "exact", [cite], {"intent": "savings"})
+    return None
+
+
 def _banner_line(b: dict) -> str:
     who = ", ".join(b["five_stars"]) or b["name"]
     four = f" (4-stars: {', '.join(b['four_stars'])})" if b["four_stars"] else ""
@@ -454,6 +493,8 @@ def answer_exact(
 ) -> Answer | None:
     if on_now := banner_answer(wish_banners, question):
         return on_now
+    if planned := pull_answer(question):
+        return planned
     matches = store.find(question)
     if not matches and (cost := wish_cost_answer(question)):
         return cost

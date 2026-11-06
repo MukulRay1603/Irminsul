@@ -17,6 +17,7 @@ the cited official sources, redacts personal data, and blocks explicit content.
 import re
 from dataclasses import dataclass
 
+from irminsul.engine import pulls
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.exact import is_patch_question
 from irminsul.engine.types import Answer
@@ -101,7 +102,8 @@ GENSHIN_STRONG = re.compile(
     r"|talent books?|weekly boss|teapot|serenitea|genius invokation|\btcg\b|wish(es)?\b"
     r"|banners?|pity|[45][- ]?stars?|\bc[0-6]\b|\br[1-5]\b|redeem|redemption code"
     r"|livestream|dmg\b|damage (formula|calculation)|elemental"
-    r"|selectors?|crystalfl\w*|ocul(?:i|us)|spiral abyss|free (?:5|4|five|four)[- ]?star",
+    r"|selectors?|crystalfl\w*|ocul(?:i|us)|spiral abyss|free (?:5|4|five|four)[- ]?star"
+    r"|\buid\b|50\s*/\s*50|fifty[- ]fifty",
     re.I,
 )
 # Common words that suggest Genshin only when nothing says otherwise.
@@ -190,7 +192,12 @@ def _refuse(text: str, route: str, guard: str, **extra) -> Answer:
     return Answer(text, route, trace={"guard": guard, **extra})
 
 
+# A UID is the public ID players swap to add friends, not personal data
+UID = re.compile(r"\buid\b\s*(?:is|:|=|#)?\s*(\d{9,10})\b", re.I)
+
+
 def has_personal_data(text: str) -> bool:
+    text = UID.sub(" ", text)
     return bool(
         _EMAIL.search(text)
         or _LONG_NUMBER.search(text)
@@ -220,7 +227,8 @@ def check(question: str, store: EntityStore | None, cfg: GuardConfig) -> Answer 
     future = [
         v for v in _VERSION.findall(question) if (int(v[0]), int(v[1])) > cfg.announced_version
     ]
-    if future:
+    # "How many primos by 7.4?" asks about a date, not the version's content
+    if future and not pulls.is_savings_question(question):
         return _refuse(
             LEAK_REPLY, "refuse_leak", "future_version", versions=[".".join(v) for v in future]
         )

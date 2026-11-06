@@ -35,6 +35,8 @@ from irminsul.api.feedback import add_feedback
 from irminsul.api.limits import Limits
 from irminsul.api.patches import add_patches, load_patch_history
 from irminsul.api.planner import add_planner
+from irminsul.api.players import Showcase
+from irminsul.api.pulls import add_pulls
 from irminsul.api.web import add_results, add_web, load_banners, load_videos
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
@@ -113,6 +115,7 @@ def build_app():
         exclude_tiers=frozenset() if kqm else frozenset({"kqm"}),
         patches=patch_notes,
         banners=feed,
+        players=Showcase(store),
         # CPU-heavy searches allowed at once; the Space has 2 vCPUs
         search_slots=int(os.environ.get("IRMINSUL_SEARCH_CONCURRENCY", 2)),
     )
@@ -145,6 +148,7 @@ def build_app():
         threading.Thread(target=art.warm, name="art-warm", daemon=True).start()
     add_results(app, data)
     add_planner(app, engine.store, data)
+    add_pulls(app, trusted_hops=trusted_proxy_hops())
     # Community build guides (YouTube), only with a key; the page offers the group only then
     key = os.environ.get("YOUTUBE_API_KEY", "").strip()
     community = CommunityVideos(engine.store, key, live) if key else None

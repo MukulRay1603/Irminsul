@@ -245,3 +245,16 @@ def test_freshness_catches_stale_game_data_and_a_broken_parser(tmp_path):
         for p in check(write_build(tmp_path), datetime(2027, 6, 1, tzinfo=UTC))
     )
     assert date(2026, 11, 6) == NOW.date()
+
+
+def test_playable_is_answered_from_the_release_record():
+    llm = FakeLLM()
+    e = Engine(store(), FakeIndex(), llm)
+    a = e.ask("Is Raiden Shogun playable yet?")
+    assert (
+        a.route == "exact"
+        and a.text.startswith("**Yes, Raiden Shogun is playable")
+        and llm.calls == 0
+    )
+    # Announced characters keep their own honest answer
+    assert e.ask("Is Mitya playable yet?").route == "announced"

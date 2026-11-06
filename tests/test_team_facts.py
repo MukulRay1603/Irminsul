@@ -75,17 +75,17 @@ def _curated(name: str) -> str:
 
 
 def test_the_curated_facts_file_parses_cleanly():
-    r = parse_facts(_curated("team_facts.md"), NOW, LIVE)
+    r = parse_facts(_curated("team_facts.md"), NOW)
     assert r.kept_lines >= 10 and not r.dropped
     assert len({d.doc_id for d in r.docs}) == len(r.docs)
 
 
 def test_the_curated_builds_file_parses_into_its_own_docs():
-    r = parse_facts(_curated("team_builds.md"), NOW, LIVE, prefix="team-builds", what="builds")
+    r = parse_facts(_curated("team_builds.md"), NOW, prefix="team-builds", what="builds")
     assert r.kept_lines >= 10 and not r.dropped
     assert all(d.doc_id.startswith("team-builds/") and d.kind == "team_builds" for d in r.docs)
     assert any(d.title.startswith("Escoffier builds") for d in r.docs)
-    assert {d.source.tier for d in r.docs} <= {Tier.KQM, Tier.COMMUNITY}
+    assert {d.source.tier for d in r.docs} <= {Tier.KQM, Tier.COMMUNITY, Tier.RAYY_VERIFIED}
 
 
 def test_curated_files_are_not_in_the_public_repo():
