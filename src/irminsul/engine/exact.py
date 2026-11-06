@@ -53,6 +53,7 @@ _OPINION = re.compile(
     re.I,
 )
 _COMPARE_MAX = 3
+_PLAYABLE = re.compile(r"\bplayable\b|\b(?:is|are) .*\b(?:released|out)\b|\bout yet\b", re.I)
 _BANNER_ASK = re.compile(
     r"\b(?:current|now|today|active|running|live|this phase|right now)\b.*"
     r"\b(?:banners?|event wish(?:es)?|wishes)\b"
@@ -127,6 +128,16 @@ _TALENT_LABEL = {
 
 def character_answer(m: Match, q: str) -> Answer | None:
     c = m.entity
+    # A fact from the release record: left to a model, "no source says so" became "no"
+    if _PLAYABLE.search(q) and not _OPINION.search(q):
+        when = c.release.released_at
+        since = f", since {_long_date(when.date().isoformat())}" if when else ""
+        return Answer(
+            f"**Yes, {c.name} is playable{since}.** [1]",
+            "exact",
+            [_cite(m, "overview")],
+            {"entity": c.id, "intent": "released"},
+        )
     # "What does Mizuki C2 do?" is a lookup; "How do I clear Floor 12 with Mizuki C2?" is not
     if (con := _CONST.search(q)) and c.constellations and not _ADVICE.search(q):
         level = int(con.group(1) or con.group(2))
