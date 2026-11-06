@@ -95,9 +95,11 @@ before reusing it. See [LICENSE](LICENSE). Versions up to tag `v0` remain MIT-li
 Irminsul is an **unofficial fan project**, not affiliated with or endorsed by HoYoverse. Genshin
 Impact and its characters, art and other content are trademarks and copyrights of HoYoverse.
 
-- Game data via the [Yatta API](https://gi.yatta.moe) and HoYoverse's [HoYoWiki](https://wiki.hoyolab.com) and news.
-- Theorycrafting from the [KQM Theorycrafting Library](https://github.com/KQM-git/TCL)
-  ([CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/)). Build recommendations credit
-  KQM, Game8 or Icy Veins and link the page each came from.
+- Game text via the community [Yatta API](https://gi.yatta.moe), and HoYoverse's [HoYoWiki](https://wiki.hoyolab.com) and news.
+- Theorycrafting from the [KQM Theorycrafting Library](https://github.com/KQM-git/TCL). Build
+  recommendations credit KQM, Game8 or Icy Veins and link the page each came from.
+
+Free and non-commercial. [DATA_SOURCES.md](DATA_SOURCES.md) lists each source, what its terms say and
+what permission is still needed. Rights holders can ask for anything to be changed or removed.
 
 Security issues: see [SECURITY.md](SECURITY.md).

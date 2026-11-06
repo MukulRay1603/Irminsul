@@ -536,7 +536,7 @@ def build(
         dropped += [drop for _, page in pages for drop in page.dropped] + linked_drops
         unverified += linked_unverified
         counts["kqm"] = {"pages": len(pages), "docs": len(kqm_docs)}
-        source_info["kqm"] = {"game_version": sha, "license": "CC BY-NC-SA 4.0"}
+        source_info["kqm"] = {"game_version": sha, "license": "none stated, see DATA_SOURCES.md"}
 
     if yatta is not None:
         # Only records the gate kept reach the planner; it skips announced characters itself.

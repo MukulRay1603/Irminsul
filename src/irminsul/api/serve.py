@@ -71,9 +71,9 @@ def make_art(store: EntityStore) -> LocalArt | RemoteArt:
 
 
 def kqm_enabled() -> bool:
-    """KQM (CC BY-NC-SA) content is on unless IRMINSUL_KQM is off/0/false/no.
+    """KQM content is on unless IRMINSUL_KQM is off/0/false/no.
 
-    The switch is a deploy setting, so a commercial build can drop KQM without a rebuild.
+    The switch is a deploy setting, so KQM can be dropped without a rebuild if they ask.
     """
     return _switch("IRMINSUL_KQM")
 

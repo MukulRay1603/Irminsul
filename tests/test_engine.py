@@ -238,7 +238,7 @@ def test_kqm_switch_drops_kqm_chunks_before_the_llm():
             )
             return [Hit(chunk, 0.9, 0)]
 
-    llm = FakeLLM()
+    llm = FakeLLM("Some KQM theorycraft. [1]")
     on = Engine(store(), KqmIndex(), llm).ask("how does the KQM guide rate this team?")
     assert on.route == "rag" and on.citations[0].tier == "kqm"
     off = Engine(store(), KqmIndex(), llm, exclude_tiers=frozenset({"kqm"}))

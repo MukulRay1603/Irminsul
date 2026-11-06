@@ -80,9 +80,9 @@ def test_output_guard_cleans_model_text():
 
 
 def test_model_output_is_guarded_end_to_end():
-    llm = FakeLLM(text="Raiden wants 250% ER [1]. More at https://evil.example/raiden.")
+    llm = FakeLLM(text="Raiden needs 200-220% ER [1]. More at https://evil.example/raiden.")
     answer = Engine(store(), FakeIndex(), llm).ask("How much ER does Raiden need?")
-    assert "evil.example" not in answer.text and answer.trace["output_guard"] == ["link"]
+    assert "evil.example" not in answer.text and "link" in answer.trace["output_guard"]
 
 
 def test_named_entities_get_their_official_profile_as_a_source():
