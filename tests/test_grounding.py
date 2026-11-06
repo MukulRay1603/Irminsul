@@ -6,7 +6,7 @@ import pytest
 from test_engine import FakeIndex, store
 
 from irminsul.engine.engine import Engine
-from irminsul.engine.grounding import MIN_OVERLAP, _check, check, split
+from irminsul.engine.grounding import MIN_OVERLAP, PARTIAL_NOTE, _check, check, enforce, split
 from irminsul.engine.llm import Completion
 
 # Excerpts of real index chunks (the text the model is given for each numbered source).
@@ -202,6 +202,75 @@ def test_engine_adds_grounding_to_stream_and_ask():
     q = "How much ER does Raiden need in National teams?"
     done = list(Engine(store(), FakeIndex(), FakeLLM(ANSWER)).ask_stream(q))[-1][1]
     g = done["trace"]["grounding"]
-    assert g["checked"] == 2 and g["unsupported"] == [1]
-    assert g["sentences"][1]["missing_numbers"] == ["300"]
-    assert Engine(store(), FakeIndex(), FakeLLM(ANSWER)).ask(q).trace["grounding"] == g
+    assert g["checked"] == 1 and g["unsupported"] == []
+    assert done["trace"]["removed"] == ["Solo, she needs 300% ER ."]
+    assert "300%" not in done["text"]  # the page re-renders without the streamed sentence
+    answer = Engine(store(), FakeIndex(), FakeLLM(ANSWER)).ask(q)
+    assert "300%" not in answer.text and answer.trace["grounding"] == g
+
+
+# ---- enforcement -------------------------------------------------------------------------
+SOURCES = {1: "Citlali is a Cryo support who shields the party and lowers Pyro RES by 20%."}
+
+
+def named(text):
+    return [("Citlali", "Cryo")] if "Citlali" in text else []
+
+
+def enforced(answer):
+    return enforce(answer, check(answer, SOURCES, named))
+
+
+def test_a_wrong_element_is_removed():
+    answer = "**Citlali shields the party.** [1]\n- Citlali (Hydro) triggers Melt reactions. [1]"
+    text, removed = enforced(answer)
+    assert "Hydro" not in text
+    assert removed and text.startswith("**Citlali shields")
+
+
+def test_a_number_no_source_has_is_removed():
+    text, removed = enforced("Citlali shields the party. [1] She lowers Pyro RES by 45%. [1]")
+    assert "45%" not in text and len(removed) == 1
+
+
+def test_a_name_the_cited_source_lacks_is_removed():
+    def find(text):
+        return [("Odette", "Cryo")] if "Odette" in text else []
+
+    answer = "Citlali shields the party. [1] Odette shields the party too. [1]"
+    text, _ = enforce(answer, check(answer, SOURCES, find))
+    assert "Odette" not in text
+
+
+def test_a_claim_the_source_never_makes_is_removed():
+    text, _ = enforced(
+        "Citlali shields the party. [1]\n"
+        "- Teammates enjoy tremendous burst windows during rotation swaps everywhere. [1]"
+    )
+    assert "rotation" not in text
+    assert "- " not in text  # no empty bullet left behind
+
+
+def test_a_lost_headline_is_said_out_loud():
+    text, _ = enforced("Citlali deals 900% damage. [1]\n- Citlali shields the party. [1]")
+    assert text.startswith(PARTIAL_NOTE)
+
+
+def test_nothing_verified_leaves_nothing():
+    assert enforced("Citlali deals 900% damage. [1]")[0] == ""
+
+
+def test_a_clean_answer_is_untouched():
+    answer = "**Citlali shields the party.** [1]\n- She lowers Pyro RES by 20%. [1]"
+    assert enforced(answer) == (answer, [])
+
+
+def test_short_labels_are_not_judged_on_wording():
+    report = check("Rarity: 5-star [1]", {1: "Columbina 5★ Hydro catalyst"})
+    assert report["unsupported"] == []
+
+
+def test_another_language_only_checks_numbers():
+    answer = "Citlali protege al equipo. [1] Reduce la RES en 45%. [1]"
+    text, _ = enforce(answer, check(answer, SOURCES), strict=False)
+    assert "protege" in text and "45%" not in text

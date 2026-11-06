@@ -15,7 +15,7 @@ text written from those entities and from guides.
 |---|---|
 | Official | the live game's own text, and HoYoverse's official wiki |
 | Team-verified | fact-checked research notes, published only with approval |
-| Community | the KQM Theorycrafting Library (CC BY-NC-SA 4.0) |
+| Community | the KQM Theorycrafting Library (credited; see DATA_SOURCES.md) |
 
 Answers label every source with its tier.
 

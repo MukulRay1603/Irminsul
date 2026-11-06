@@ -37,8 +37,12 @@ Rules:
   named character's or weapon's element, weapon type and rarity: use them to connect facts.
 - If the sources contain relevant facts but no direct recommendation (for example, which of
   two characters fits a team), explain what the sources say about each option and how it
-  relates to the question, and say plainly what the sources don't state. Say you don't have
-  verified information only when the sources are unrelated to the question.
+  relates to the question, and say plainly what the sources don't state. If the sources are
+  unrelated to the question, reply with exactly: I don't have verified information on that yet.
+- Use nothing from memory, even if you are sure of it: every sentence is checked against its
+  source, and one the source doesn't support is removed. A character's element, role or
+  teammates come from the sources too.
+- Summarise story and book text in your own words. Quote a short phrase at most.
 - For a weapon on a character, say what its passive does and whether it applies to that
   character (some passives only work for specific characters), and name its stats.
 - Only talk about Genshin Impact. Keep it family-friendly. Never ask for or repeat personal
@@ -73,6 +77,7 @@ BUSY_REPLY = (
 )
 NO_SOURCES_REPLY = "I don't have verified information on that yet."
 BUILD_DOCS = ("team-builds/", "auto-builds/")
+_NOTHING_VERIFIED = re.compile(r"\W*i (?:do not|don.t) have verified information", re.I)
 _BUILD_ASK = re.compile(
     r"\bbuilds?\b|\bbis\b|\bbest (?:weapons?|artifacts?|sets?)\b"
     r"|\b(?:weapons?|artifacts?|sets?|main stats?) (?:for|on)\b"
@@ -588,13 +593,25 @@ class Engine:
         llm = self.llm if allow_llm else None
         if llm is None:
             return Answer(NO_SOURCES_REPLY, "no_llm", citations, trace)
-        return _Prepared(messages, citations, trace, llm, texts)
+        return _Prepared(messages, citations, trace, llm, texts, lang)
 
-    @staticmethod
-    def _finish_rag(prepared: "_Prepared", completion: Completion) -> Answer:
+    def _named(self, text: str) -> list[tuple[str, str | None]]:
+        return [(m.entity.name, getattr(m.entity, "element", None)) for m in self.store.find(text)]
+
+    def _finish_rag(self, prepared: "_Prepared", completion: Completion) -> Answer:
         text = normalise_citations(completion.text)
         # Only cited official links, no personal data, nothing explicit
         text, output_flags = guards.check_output(text, [c.url for c in prepared.citations])
+        # Every sentence against its source: what fails is removed, not just marked
+        named = None if prepared.lang else self._named
+        report = grounding.check(text, prepared.sources, named)
+        text, removed = grounding.enforce(text, report, strict=not prepared.lang)
+        if removed:
+            output_flags = [*output_flags, "unverified"]
+            report = grounding.check(text, prepared.sources, named)
+        if not text or _NOTHING_VERIFIED.match(text):
+            trace = {**prepared.trace, "removed": removed, "output_guard": ["unverified"]}
+            return Answer(NO_SOURCES_REPLY, "rag_empty", trace=trace)
         used = {int(n) for n in re.findall(r"\[(\d+)\]", text)}
         cited = [c for c in prepared.citations if c.n in used]
         trace = {
@@ -608,7 +625,8 @@ class Engine:
             "cited": sorted(used),
             "uncited_answer": not cited,
             # Each sentence checked against the source text it cites (no model call).
-            "grounding": grounding.check(text, prepared.sources),
+            "grounding": report,
+            "removed": removed,
             "output_guard": output_flags,
         }
         return Answer(text.strip(), "rag", cited or prepared.citations, trace)
@@ -621,6 +639,7 @@ class _Prepared:
     trace: dict
     llm: ChatModel
     sources: dict[int, str]  # citation number -> the source text the model was given
+    lang: str | None = None  # the language the answer was written in, if not English
 
 
 def _cache_key(question: str, point: story.StoryPoint | None) -> str:

@@ -10,17 +10,30 @@ Citations make answers look trustworthy even when they are wrong, so every sente
 Factual-looking sentences with no citation are checked against all of the answer's sources
 and flagged when none of them backs the sentence.
 
-It is a cheap screen, not proof: a number that appears anywhere in the cited source passes
-(a 2-piece bonus quoted with the 4-piece number would not be caught).
+Two more checks use the game's own records: a character, weapon or set the sentence names must
+appear in the source it cites, and "Citlali (Hydro)" must match Citlali's real element.
+
+`enforce` then acts on the report: a sentence that fails is removed, so a wrong line never
+stays on the page with a warning next to it. It is still a screen, not proof: a number that
+appears anywhere in the cited source passes (a 2-piece bonus quoted with the 4-piece number
+would not be caught), and wording alone can't tell a good paraphrase from a subtle error.
 
 Deterministic, no model calls: a typical answer takes well under a millisecond.
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 
 MIN_OVERLAP = 0.5
 MIN_FACT_WORDS = 4  # an uncited sentence needs a number or this many content words to count
+MIN_CHECKED_WORDS = 3  # "Rarity: 5-star" is too short for word overlap to mean anything
+# Below this a sentence is removed. Claims a source doesn't make score 0.33 or less;
+# between here and MIN_OVERLAP it stays, marked in the page, if its names and numbers hold.
+REMOVE_BELOW = 0.4
+HARD_FAILURES = {"number", "name", "element"}
+ELEMENTS = "anemo|geo|electro|dendro|hydro|pyro|cryo"
+PARTIAL_NOTE = "I could only verify part of an answer to this. Here's what the sources state:"
 
 CITE = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
@@ -72,6 +85,7 @@ class Sentence:
     reason: str | None = None  # number | words | no_citation
     overlap: float | None = None
     missing_numbers: list[str] = field(default_factory=list)
+    raw: str = ""  # as written in the answer, for removing it
 
 
 def _plain(text: str) -> str:
@@ -148,7 +162,7 @@ def _check(text: str, source: str) -> tuple[bool, str | None, float, list[str]]:
     overlap = len(words & _stems(source)) / len(words) if words else 1.0
     if missing:
         return False, "number", overlap, missing
-    if overlap < MIN_OVERLAP:
+    if overlap < MIN_OVERLAP and len(words) >= MIN_CHECKED_WORDS:
         return False, "words", overlap, []
     return True, None, overlap, []
 
@@ -160,21 +174,49 @@ def _factual(text: str) -> bool:
     return bool(_numbers(text)) or len(_stems(text)) >= MIN_FACT_WORDS
 
 
-def check(answer: str, sources: dict[int, str]) -> dict:
-    """Grounding report for an answer, given the source text for each citation number."""
+def _records(text: str, source: str, named: list[tuple[str, str | None]]) -> str | None:
+    """What the game's records contradict in a sentence: "element", "name" or nothing.
+
+    `named` is (name, element) for each character, weapon or set the sentence names.
+    """
+    folded = source.casefold().replace("’", "'")
+    for name, element in named:
+        claim = re.search(rf"{re.escape(name)}\W{{1,3}}({ELEMENTS})\b", text, re.I)
+        if claim and element and claim.group(1).casefold() != element.casefold():
+            return "element"
+        words = [w for w in name.casefold().replace("’", "'").split() if len(w) > 3]
+        if words and not any(w in folded for w in words):
+            return "name"
+    return None
+
+
+def check(
+    answer: str,
+    sources: dict[int, str],
+    named: Callable[[str], list[tuple[str, str | None]]] | None = None,
+) -> dict:
+    """Grounding report for an answer, given the source text for each citation number.
+
+    `named` finds the game records a sentence names (see `_records`).
+    """
     sentences: list[Sentence] = []
     everything = "\n".join(sources.values())
     for i, (raw, cites) in enumerate(split(answer)):
-        s = Sentence(i, _plain(raw), [n for n in cites if n in sources])
+        s = Sentence(i, _plain(raw), [n for n in cites if n in sources], raw=raw)
         if s.cites:
             ok, s.reason, overlap, s.missing_numbers = _check(
                 s.text, "\n".join(sources[n] for n in s.cites)
             )
             s.status, s.overlap = ("supported" if ok else "unsupported"), round(overlap, 2)
+            cited = "\n".join(sources[n] for n in s.cites)
+            if named and (wrong := _records(s.text, cited, named(s.text))):
+                s.status, s.reason = "unsupported", wrong
         elif _factual(s.text):
             ok, _, overlap, s.missing_numbers = _check(s.text, everything)
             s.overlap = round(overlap, 2)
             s.status, s.reason = ("supported", None) if ok else ("uncited", "no_citation")
+            if named and (wrong := _records(s.text, everything, named(s.text))):
+                s.status, s.reason = "uncited", wrong
         sentences.append(s)
     return {
         "checked": sum(1 for s in sentences if s.cites),
@@ -182,3 +224,53 @@ def check(answer: str, sources: dict[int, str]) -> dict:
         "uncited": [s.i for s in sentences if s.status == "uncited"],
         "sentences": [asdict(s) for s in sentences],
     }
+
+
+def _fails(s: dict, strict: bool) -> bool:
+    if s["status"] not in ("unsupported", "uncited"):
+        return False
+    if s["reason"] in HARD_FAILURES or s["missing_numbers"]:
+        return True
+    return strict and s["overlap"] is not None and s["overlap"] < REMOVE_BELOW
+
+
+def _cut(text: str, raw: str) -> str:
+    if raw in text:
+        return text.replace(raw, "", 1)
+    # A table row was checked as its cells joined up: remove the row
+    lines = text.splitlines()
+    keep = [
+        line
+        for line in lines
+        if not (
+            line.strip().startswith("|") and " ".join(re.split(r"\s*\|\s*", line)).strip() == raw
+        )
+    ]
+    return "\n".join(keep)
+
+
+def enforce(answer: str, report: dict, strict: bool = True) -> tuple[str, list[str]]:
+    """Remove every sentence that failed. Returns (the answer, what was removed), and "" when
+    nothing factual is left. `strict` is off for answers in another language, where word
+    overlap with English sources means nothing and only numbers and records can be checked."""
+    failed = [s for s in report["sentences"] if _fails(s, strict)]
+    if not failed:
+        return answer, []
+    text = answer
+    for s in failed:
+        text = _cut(text, s["raw"])
+    lines = []
+    for line in text.splitlines():
+        if LIST_MARK.sub("", line).strip(" *") or not line.strip():
+            lines.append(line.rstrip())
+    text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    kept = [
+        s
+        for s in report["sentences"]
+        if s not in failed and (s["status"] == "supported" or not strict)
+    ]
+    if not kept:
+        return "", [s["text"] for s in failed]
+    if report["sentences"][0] in failed:  # the headline went: don't let a bullet pose as it
+        text = f"{PARTIAL_NOTE}\n\n{text}"
+    return text, [s["text"] for s in failed]

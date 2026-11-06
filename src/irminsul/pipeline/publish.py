@@ -61,8 +61,8 @@ Versioned, leak-gated Genshin Impact knowledge for the Irminsul assistant
 
 - `tier=official`: in-game text (Yatta API) and HoYoverse's HoYoWiki. Genshin Impact
   content belongs to HoYoverse; this is an unofficial fan project.
-- `tier=kqm`: derived from the KQM Theorycrafting Library, CC BY-NC-SA 4.0
-  (https://github.com/KQM-git/TCL). Non-commercial, share-alike.
+- `tier=kqm`: derived from the KQM Theorycrafting Library
+  (https://github.com/KQM-git/TCL), credited and non-commercial. It states no licence.
 
 Only released or officially announced content is included. See `manifest.json` for
 counts, source versions and every record the leak gate dropped.
