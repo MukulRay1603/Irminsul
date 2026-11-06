@@ -31,6 +31,24 @@ log = logging.getLogger("irminsul.web")
 WEB_DIR = Path(__file__).resolve().parents[3] / "web"
 
 
+def load_banners(data: Path) -> dict:
+    """Official wish banners and version dates, parsed at build time."""
+    path = data / "banners.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def add_results(app: FastAPI, data: Path, web_dir: Path = WEB_DIR) -> None:
+    """Test results: the ones published with the data, so they stay as fresh as it is."""
+
+    @app.get("/api/results", include_in_schema=False)
+    def results() -> FileResponse:
+        fresh = data / "results.json"
+        path = fresh if fresh.exists() else web_dir / "static" / "results.json"
+        return FileResponse(
+            path, media_type="application/json", headers={"Cache-Control": "no-cache"}
+        )
+
+
 def load_videos(data: Path) -> dict[str, list[dict]]:
     videos: dict[str, list[dict]] = {}
     path = data / "videos.jsonl"

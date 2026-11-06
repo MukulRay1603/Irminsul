@@ -84,7 +84,7 @@ a vanilla-JS front end under a strict Content Security Policy
 
 ## Status
 
-Live beta for Genshin Impact 7.1. It started as [v0](https://github.com/MukulRay1603/Irminsul/releases/tag/v0),
+Live beta, updated daily from the game's official sources. It started as [v0](https://github.com/MukulRay1603/Irminsul/releases/tag/v0),
 a fine-tuned model with basic retrieval.
 
 ## Licence and credits

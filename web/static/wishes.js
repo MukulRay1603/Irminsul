@@ -13,7 +13,7 @@
     character: { pity: 0, guaranteed: false }, weapon: { pity: 0, guaranteed: false }, log: [] });
   const load = () => { try { return { ...fresh(), ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { return fresh(); } };
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {} };
-  let s = load(), targets = [], timer = 0;
+  let s = load(), targets = [], timer = 0, imported = "";
 
   function h(tag, props = {}, ...kids) {
     const el = document.createElement(tag);
@@ -61,7 +61,7 @@
     reader.onload = () => {
       let list;
       try { list = records(JSON.parse(reader.result)); } catch { list = null; }
-      if (!list?.length) { note.textContent = "That file isn't a UIGF wish export."; return; }
+      if (!list?.length) { imported = "That file isn't a UIGF wish export."; note.textContent = imported; return; }
       const type = r => String(r.uigf_gacha_type || r.gacha_type);
       const count = banner => {
         const rows = list.filter(r => (banner === "weapon" ? type(r) === "302" : ["301", "400"].includes(type(r))))
@@ -76,7 +76,7 @@
       };
       const c = count("character"), w = count("weapon");
       s.log = [...c.fives, ...w.fives].sort((a, b) => (a.day < b.day ? 1 : -1)).slice(0, 40);
-      note.textContent = `Imported ${plain(c.rows + w.rows)} wishes. Pity is filled in. Tick "guaranteed" yourself if you lost your last 50/50.`;
+      imported = `Imported ${plain(c.rows + w.rows)} wishes. Pity is filled in. Tick "guaranteed" yourself if you lost your last 50/50.`;
       changed(true);
     };
     reader.readAsText(file);
@@ -134,7 +134,7 @@
           h("button", { type: "button", text: s.banner === "weapon" ? "Got the wrong 5-star" : "Lost the 50/50", onclick: () => gotFive(false) })),
         history(),
         h("div", { class: "wt-import" }, fileInput, h("label", { for: "wtFile", class: "wt-file-btn", text: "Import a wish history file" }),
-          h("p", { class: "wt-import-note", text: "UIGF JSON from any wish tool. It's read in your browser and never uploaded. Never paste a game link or run a script for a website, including this one." }))),
+          h("p", { class: "wt-import-note", text: imported || "UIGF JSON from any wish tool. It's read in your browser and never uploaded. Never paste a game link or run a script for a website, including this one." }))),
       h("div", { class: "wt-card" },
         h("h3", { text: "Your stash" }),
         h("div", { class: "wt-row" }, num("Primogems", "primos", 999999, { get: () => s.primos, set: v => { s.primos = v; } }),

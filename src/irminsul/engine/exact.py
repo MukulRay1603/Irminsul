@@ -12,6 +12,7 @@ from irminsul.engine import cards, pulls
 from irminsul.engine.entities import EntityStore, Match, released
 from irminsul.engine.types import Answer, Citation
 from irminsul.schema import ReleaseStatus, Tier, slugify
+from irminsul.sources import banners
 
 _STATS = re.compile(
     r"\bbase (atk|attack|hp|def|defen[cs]e|stats?)\b|\blevel 90\b|\blv\.? ?90\b|\bascension\b"
@@ -52,6 +53,14 @@ _OPINION = re.compile(
     re.I,
 )
 _COMPARE_MAX = 3
+_BANNER_ASK = re.compile(
+    r"\b(?:current|now|today|active|running|live|this phase|right now)\b.*"
+    r"\b(?:banners?|event wish(?:es)?|wishes)\b"
+    r"|\b(?:banners?|event wish(?:es)?)\b.*\b(?:current|now|today|active|running|right now)\b"
+    r"|\bwho(?:'s| is)? on (?:the )?(?:banners?|event wish(?:es)?)\b"
+    r"|\bwhat(?:'s| is| are)(?: the)? banners?\b",
+    re.I,
+)
 _NOT_BASE_STATS = re.compile(
     r"\bmain ?stats?\b|\bsub ?stats?\b|\bartifacts?\b|\bsands\b|\bgoblet\b|\bcirclet\b"
     r"|\bfirst\b|" + _OPINION.pattern,
@@ -433,7 +442,41 @@ def pull_answer(question: str) -> Answer | None:
     return None
 
 
-def answer_exact(store: EntityStore, question: str, patches: dict | None = None) -> Answer | None:
+def _banner_line(b: dict) -> str:
+    who = ", ".join(b["five_stars"]) or b["name"]
+    four = f" (4-stars: {', '.join(b['four_stars'])})" if b["four_stars"] else ""
+    return f"- **{who}** on {b['name']}, until {_long_date(b['end'])}{four} [1]"
+
+
+def banner_answer(feed: dict | None, question: str) -> Answer | None:
+    """What's on the wish banners now, read from the official notices with code."""
+    if not feed or not feed.get("banners") or not _BANNER_ASK.search(question):
+        return None
+    if _OPINION.search(question):
+        return None  # "should I pull on the current banner?" is advice
+    today = datetime.now(UTC).date()
+    now, later = banners.active(feed, today), banners.upcoming(feed, today)
+    shown = now or later[:4]
+    if not shown:
+        return None
+    head = "**On the wish banners now:**" if now else "**No wish is open right now. Next up:**"
+    lines = [head, *(_banner_line(b) for b in shown)]
+    if now and later:
+        lines += ["", f"Next phase opens {_long_date(later[0]['start'])}."]
+    cite = Citation(
+        1, f"Version {shown[0]['version']} Event Wishes Notice", shown[0]["source"], Tier.OFFICIAL
+    )
+    return Answer("\n".join(lines), "exact", [cite], {"intent": "banners"})
+
+
+def answer_exact(
+    store: EntityStore,
+    question: str,
+    patches: dict | None = None,
+    wish_banners: dict | None = None,
+) -> Answer | None:
+    if on_now := banner_answer(wish_banners, question):
+        return on_now
     if planned := pull_answer(question):
         return planned
     matches = store.find(question)
