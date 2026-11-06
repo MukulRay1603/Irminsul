@@ -102,7 +102,7 @@ def _em_answer(q: str) -> Answer | None:
     text = (
         f"**{value} EM adds {bonus:.1%} to {label}.** [1]\n\n"
         f"- Working: {top} × {value} ÷ ({offset} + {value}) = {bonus:.4f}\n"
-        "- This is the Elemental Mastery part only. Set bonuses such as Crimson Witch add on top. [1]"
+        "- This is the EM part only. Set bonuses such as Crimson Witch add on top. [1]"
     )
     trace = {"intent": "calc", "calc": "em"}
     return Answer(
