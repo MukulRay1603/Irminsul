@@ -110,13 +110,13 @@ ASK = (
 def test_farm_today_matches_roster_to_open_domains():
     monday = datetime(2026, 11, 2, 15, tzinfo=UTC)
     answer = calc.farm_today(ASK, PLANNER, names, monday)
-    assert "1 showcased characters" in answer.text
+    assert "1 showcased character can farm" in answer.text
     assert "Amber" in answer.text and "Furina" not in answer.text
 
 
 def test_everything_is_open_on_sunday():
     sunday = datetime(2026, 11, 8, 15, tzinfo=UTC)
-    assert "2 showcased" in calc.farm_today(ASK, PLANNER, names, sunday).text
+    assert "2 showcased characters" in calc.farm_today(ASK, PLANNER, names, sunday).text
 
 
 def test_farm_today_without_a_uid_asks_for_one():

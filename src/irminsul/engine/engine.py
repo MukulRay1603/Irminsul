@@ -230,7 +230,7 @@ class Engine:
         if uid and self.players and _ABOUT_ME.search(question) and not guards.UID.search(question):
             rows = self.players.characters(uid)
             if rows:
-                roster = "; ".join(showcase_line(c) for c in rows[:8])
+                roster = "; ".join(showcase_line(c) for c in rows)  # a showcase holds 12 at most
                 server = calc.server_of(uid).capitalize()
                 return f"{question} (My showcased characters: {roster}) (My server: {server})"
         if not context or context not in self.store.by_id or self.store.find(question):
