@@ -219,8 +219,8 @@ def farm_today(question: str, planner: dict | None, names, now: datetime) -> Ans
     if not open_now and not later:
         return None
     if open_now:
-        count = len(open_now)
-        text = f"**On {place} servers today, {count} showcased characters can farm books.** [1]\n\n"
+        count = f"{len(open_now)} showcased character" + ("s" if len(open_now) > 1 else "")
+        text = f"**On {place} servers today, {count} can farm talent books.** [1]\n\n"
         text += "\n".join(f"- {line}" for line in open_now)
     else:
         text = f"**No showcased talent books are open on {place} servers today.** [1]\n\n"
