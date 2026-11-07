@@ -99,6 +99,8 @@ class CitationOut(BaseModel):
     url: str
     tier: str
     doc_id: str | None = None
+    version: str | None = None
+    quote: str | None = None
 
 
 class FollowUp(BaseModel):

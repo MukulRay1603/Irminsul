@@ -574,7 +574,9 @@ class Engine:
                 h.chunk.source_url,
                 h.chunk.tier,
                 h.chunk.doc_id,
-                version=getattr(h.chunk, "revealed_in", None),
+                # Only game text is dated by its own release. A guide's date is a spoiler
+                # ceiling from the characters it names, not when it was written.
+                version=h.chunk.revealed_in if h.chunk.tier == "official" else None,
             )
             for n, h in enumerate(hits, 1)
         ]
