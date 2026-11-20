@@ -68,12 +68,15 @@ function renderMarkdown(text) {
 const TIER_NAMES = { official: "Official game data", kqm: "KQM theorycrafting", rayy_verified: "Team-verified notes", community: "Community" };
 
 // "Raiden Shogun: Elemental Burst" -> "Raiden Shogun"; "Mika constellations" -> "Mika"
+const SITES = { "keqingmains.com": "KQM", "game8.co": "Game8", "icy-veins.com": "Icy Veins", "prydwen.gg": "Prydwen" };
 function sourceLabel(c) {
   let t = String(c.title || "").replace(/^Official profile:\s*/i, "");
-  t = t.split(/:\s|\s[—–]\s/)[0].replace(/\s+(overview|constellations)$/i, "").trim();
-  if (c.tier === "kqm") t = `KQM · ${t}`;
-  else if (c.tier === "rayy_verified") t = `Team notes · ${t}`;
-  return t.length > 26 ? `${t.slice(0, 25)}…` : t;
+  // Team build titles end with "(team-checked, game8.co)": name the site instead
+  const via = t.match(/\s*\((?:team-checked|read from the guide by machine), ([^)]+)\)$/);
+  t = t.replace(/\s*\([^)]*\)$/, "").split(/:\s|\s[—–]\s/)[0].replace(/\s+(overview|constellations)$/i, "").trim();
+  const site = via ? SITES[via[1]] || via[1] : c.tier === "kqm" ? "KQM" : c.tier === "rayy_verified" ? "Team notes" : "";
+  if (site && !t.startsWith(site)) t = `${site} · ${t}`;
+  return t.length > 40 ? `${t.slice(0, 39)}…` : t;
 }
 
 function linkSource(a, c) {
@@ -136,7 +139,7 @@ function quoteList(citations) {
   box.innerHTML = "<summary>See the exact lines</summary>";
   for (const c of rows) {
     const q = document.createElement("blockquote");
-    q.textContent = c.quote;
+    q.textContent = c.quote.replace(/^Source:\s*\S+\s*/, "").replace(/\s*\(checked [^)]*\)/g, "");
     const cite = document.createElement("cite");
     cite.textContent = c.version ? `${sourceLabel(c)}, Version ${c.version}` : sourceLabel(c);
     q.append(cite);
@@ -162,7 +165,8 @@ function plannerButton(done) {
 
 /* ---------- Cards for exact answers ---------- */
 const stars = n => n ? `<span class="stars" aria-label="${n} stars">${"★".repeat(n)}</span>` : "";
-const tags = c => [c.element, c.weapon_type, c.region].filter(Boolean).map(t => `<span>${escHTML(t)}</span>`).join("");
+const regionName = r => String(r).split("_")[0];  // the wiki's ids: "Snezhnaya_Star"
+const tags = c => [c.element, c.weapon_type, c.region && regionName(c.region)].filter(Boolean).map(t => `<span>${escHTML(t)}</span>`).join("");
 const prose = t => escHTML(t).split(/\n{2,}/).map(p => `<p>${goldNumbers(p.replace(/\n/g, "<br>"))}</p>`).join("");
 
 function cardHead(c, kicker) {
@@ -320,6 +324,7 @@ function renderCard(card) {
 /* ---------- Answer header: what kind of answer this is, and copy ---------- */
 const BADGES = {
   exact: ["From game data", "No AI used", "exact"],
+  formula: ["From a published formula", "No AI used", "exact"],
   announced: ["Official announcement", "No AI used", "announced"],
   rag: ["Written by AI", "from cited sources", "ai"],
   refuse_leak: ["Leak filter", "Nothing searched", "guard"],

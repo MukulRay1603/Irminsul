@@ -14,8 +14,9 @@ from dataclasses import asdict
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field, field_validator
+from starlette.middleware.gzip import GZipMiddleware
 
 from irminsul import story
 from irminsul.api.limits import Limits
@@ -234,6 +235,7 @@ class SecurityHeaders:
             (b"referrer-policy", b"strict-origin-when-cross-origin"),
             (b"permissions-policy", PERMISSIONS_POLICY.encode()),
             (b"cross-origin-opener-policy", b"same-origin"),
+            (b"strict-transport-security", b"max-age=31536000"),
         ]
         if self.frame_ancestors == "'none'":
             extra.append((b"x-frame-options", b"DENY"))
@@ -299,6 +301,15 @@ def _quota(limits: Limits, cid: str) -> dict:
     return {"personal": limits.allowance(cid), "pool": limits.pool()}
 
 
+NOT_FOUND_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Not found · Irminsul</title>
+<link rel="stylesheet" href="/static/app.css"></head>
+<body><main class="notfound"><h1>This page isn't here</h1>
+<p>The link may be old. Everything Irminsul does starts from the home page.</p>
+<p><a href="/">Back to Irminsul</a></p></main></body></html>"""
+
+
 def create_app(
     engine: Engine,
     limits: Limits | None = None,
@@ -311,7 +322,7 @@ def create_app(
     app = FastAPI(
         title="Irminsul",
         version="1.0.0a0",
-        description="Genshin Impact answers from official, version-tagged data.",
+        description="Unofficial Genshin Impact answers from cited, version-tagged sources.",
     )
     if cors:
         app.add_middleware(
@@ -321,7 +332,18 @@ def create_app(
             allow_headers=["content-type"],
         )
     app.add_middleware(BodyLimit, max_bytes=MAX_BODY_BYTES)
+    # Pages, scripts and data compress 4-6x. Streamed answers (text/event-stream) are
+    # excluded by Starlette, so they still arrive word by word.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
     app.add_middleware(SecurityHeaders, frame_ancestors=frame_ancestors)
+
+    @app.exception_handler(404)
+    async def not_found(request: Request, exc: Exception) -> Response:
+        if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+            return HTMLResponse(NOT_FOUND_PAGE, status_code=404)
+        return JSONResponse(
+            status_code=404, content={"detail": getattr(exc, "detail", "Not Found")}
+        )
 
     @app.exception_handler(Exception)
     async def unexpected(request: Request, exc: Exception) -> JSONResponse:

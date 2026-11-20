@@ -101,6 +101,10 @@ _REFERS_BACK = re.compile(
     r"|^\W*(?:and|what about|how about|also)\b",
     re.I,
 )  # official profiles of named entities added to the sources (each ~40 words)
+STORY_HIDDEN_REPLY = (
+    "**That's past your story point** (you've finished up to {label}), so I'm keeping it "
+    "hidden to avoid spoilers. Choose **Show anyway** if you'd like the answer."
+)
 SPOILER_REPLY = (
     "**{name}** comes after your story point (you've finished up to {label}), so I'm keeping "
     "this hidden to avoid spoilers. Choose **Show anyway** if you'd like the answer."
@@ -389,7 +393,8 @@ class Engine:
                 estimate = pulls.income_text(datetime.now(UTC).date(), *target)
                 if estimate:
                     refusal.text += (
-                        f"\n\nWhat I can do is a rough guess at your savings:\n\n{estimate}"
+                        f"\n\nWhat I can do is estimate the Primogems you could save by then, from "
+                        f"free sources only:\n\n{estimate}"
                     )
             return refusal
         if (found := guards.UID.search(question)) and self.players:
@@ -565,6 +570,8 @@ class Engine:
         }
         if point:
             trace["spoiler_filter"] = story.filter_info(point, report.get("hidden", 0))
+        if not hits and point and report.get("hidden"):
+            return Answer(STORY_HIDDEN_REPLY.format(label=point.label), "spoiler", trace=trace)
         if not hits:
             return Answer(NO_SOURCES_REPLY, "rag_empty", trace=trace)
         citations = [

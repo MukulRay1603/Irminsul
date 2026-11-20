@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "generated": "2026-10-27",
-  "game_version": "7.1",
+  "generated": "2026-11-20",
+  "game_version": "7.2",
   "eval_set": {
-    "items": 129,
-    "answerable": 108,
+    "items": 130,
+    "answerable": 110,
     "by_category": {
       "beginner": 4,
       "build": 7,
@@ -17,18 +17,18 @@
       "privacy": 3,
       "safety": 4,
       "spoiler": 4,
-      "stat": 49,
-      "upcoming": 3
+      "stat": 51,
+      "upcoming": 2
     }
   },
   "answers": {
-    "scored": 101,
-    "passed": 101,
-    "needs_llm": 28,
+    "scored": 100,
+    "passed": 100,
+    "needs_llm": 30,
     "pass_rate": 1,
     "stat_accuracy": {
-      "passed": 49,
-      "total": 49,
+      "passed": 51,
+      "total": 51,
       "rate": 1.0
     },
     "passive_accuracy": {
@@ -67,8 +67,8 @@
         "rate": 1.0
       },
       "privacy": {
-        "passed": 3,
-        "total": 3,
+        "passed": 2,
+        "total": 2,
         "rate": 1.0
       },
       "safety": {
@@ -82,13 +82,13 @@
         "rate": 1.0
       },
       "stat": {
-        "passed": 49,
-        "total": 49,
+        "passed": 51,
+        "total": 51,
         "rate": 1.0
       },
       "upcoming": {
-        "passed": 3,
-        "total": 3,
+        "passed": 1,
+        "total": 1,
         "rate": 1.0
       }
     },
@@ -98,12 +98,12 @@
     "config": "hybrid+rerank",
     "embed_model": "BAAI/bge-small-en-v1.5",
     "questions": 93,
-    "chunks": 5202,
-    "hit_at_3": 0.839,
-    "hit_at_8": 0.946,
-    "mrr_at_3": 0.799,
-    "mrr_at_8": 0.822,
-    "p50_ms": 272.0
+    "chunks": 9544,
+    "hit_at_3": 0.796,
+    "hit_at_8": 0.903,
+    "mrr_at_3": 0.756,
+    "mrr_at_8": 0.78,
+    "p50_ms": 331.0
   },
   "cost": {
     "per_ai_answer_usd": 0.0,
@@ -119,7 +119,7 @@
       "per_ai_answer_usd": 0.000825,
       "per_1000_ai_answers_usd": 0.825
     },
-    "ai_share_of_eval_set": 0.217,
-    "per_answer_blended_usd": 0.000179
+    "ai_share_of_eval_set": 0.231,
+    "per_answer_blended_usd": 0.000191
   }
 }

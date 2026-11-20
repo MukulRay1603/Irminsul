@@ -65,7 +65,7 @@ _ROSTER = re.compile(r"\(My showcased characters: (.+?)\)(?: \(My server: (\w+)\
 def _formula(section: str) -> Citation:
     return Citation(
         1,
-        "KQM damage formula",
+        "Damage formula",
         FORMULAS,
         "kqm",
         f"kqm/combat-mechanics/damage/damage-formula#{section}",

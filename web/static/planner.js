@@ -447,7 +447,7 @@ async function start() {
         h("span", { class: "pl-meta", text: `${w.rarity}★ ${w.weapon_type}` }),
         h("button", { type: "button", class: "pl-x", "aria-label": `Remove ${w.name}`, text: "×", onclick: () => remove("weapons", idx, w.name) }),
       ),
-      s && h("p", { class: "pl-need", text: `${s.items[0]} series · ${s.days.map(d => DAYS[d]).join(" & ")} and Sunday` }),
+      s && h("p", { class: "pl-need", text: `${s.items[0]} series · ${[...s.days.map(d => DAYS[d]), "Sun"].join(", ")}` }),
     );
   }
   async function remove(kind, idx, name) {

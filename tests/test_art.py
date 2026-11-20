@@ -219,7 +219,8 @@ def test_upstream_requests_are_paced(tmp_path):
     start = time.monotonic()
     for kind in ("icon", "card", "splash", "banner"):
         art.file(f"c/raiden-shogun/{kind}", 64)
-    assert time.monotonic() - start >= 0.15  # 4 fetches, at least 3 gaps
+    # 4 fetches, at least 3 gaps. Windows timers tick every ~15 ms, so allow one tick short
+    assert time.monotonic() - start >= 0.135
 
 
 def test_serve_picks_the_art_mode(tmp_path, monkeypatch):
