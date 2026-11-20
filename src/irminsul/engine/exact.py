@@ -470,6 +470,32 @@ def _banner_line(b: dict) -> str:
     return f"- **{who}** on {b['name']}, until {_long_date(b['end'])}{four} [1]"
 
 
+_FUTURE_WISH = re.compile(
+    r"\b(?:banners?|wish(?:es)?|5[- ]?stars?|4[- ]?stars?|reruns?)\b.*\b(\d+\.\d)\b"
+    r"|\b(\d+\.\d)\b.*\b(?:banners?|wish(?:es)?|reruns?)\b",
+    re.I,
+)
+
+
+def unannounced_wishes(feed: dict | None, question: str) -> Answer | None:
+    """Banners for a later version with no official wish notice yet. The only honest answer
+    is that they aren't announced: anything else would be a guess or a leak."""
+    m = _FUTURE_WISH.search(question)
+    if not m or not feed:
+        return None
+    version = m.group(1) or m.group(2)
+    known = {b["version"] for b in feed.get("banners", [])}
+    live = max(feed.get("versions") or {"0.0": ""}, key=lambda v: tuple(map(int, v.split("."))))
+    if version in known or tuple(map(int, version.split("."))) <= tuple(map(int, live.split("."))):
+        return None
+    text = (
+        f"**HoYoverse hasn't announced the Version {version} wishes yet.** I only share official "
+        "notices, never leaks or predictions, so I'll have them as soon as the official notice "
+        "is out."
+    )
+    return Answer(text, "exact", [], {"intent": "banners", "unannounced": version})
+
+
 def banner_answer(feed: dict | None, question: str) -> Answer | None:
     """What's on the wish banners now, read from the official notices with code."""
     if not feed or not feed.get("banners") or not _BANNER_ASK.search(question):
@@ -499,6 +525,8 @@ def answer_exact(
 ) -> Answer | None:
     if on_now := banner_answer(wish_banners, question):
         return on_now
+    if not_yet := unannounced_wishes(wish_banners, question):
+        return not_yet
     if planned := pull_answer(question):
         return planned
     matches = store.find(question)

@@ -20,7 +20,8 @@
     stat: "Stats (base and ascension)", passive: "Passives, set bonuses, constellations",
     upcoming: "Announced characters", leak_probe: "Leak probes", injection: "Prompt injection",
     offtopic: "Off-topic", mechanic: "Game mechanics", build: "Builds and teams",
-    gacha: "Wishes and pity", beginner: "Beginner questions",
+    gacha: "Wishes and pity", beginner: "Beginner questions", privacy: "Privacy",
+    safety: "Safety", spoiler: "Story spoilers",
   };
 
   function tile(value, label, detail, tone = "") {
@@ -96,7 +97,7 @@
       const scored = s ? s.total : 0, needs = counts[k] - scored;
       fill.style.setProperty("--v", String(s && s.total ? s.passed / s.total : 0));
       bar.append(fill);
-      const val = h("b", "cat-val", s ? `${s.passed}/${s.total}` : "–");
+      const val = h("b", "cat-val", s ? `${s.passed}/${s.total}` : "AI-written");
       row.append(name, bar, val);
       if (needs > 0) { row.classList.add("llm"); row.append(h("span", "cat-note", `${needs} need an AI answer, not scored here`)); }
       return [s ? 0 : 1, row];

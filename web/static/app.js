@@ -364,7 +364,8 @@ async function ask(q, opts = {}) {
   quotaUI.set(done.quota);
   // The server's output guard changed a streamed answer (e.g. removed a link): show its version
   if (done.text) { text = done.text; body.innerHTML = md(text); }
-  $(".route", el).outerHTML = answerHeader(done.route, gameVersion, done.citations?.length || 0);
+  const formula = done.trace?.intent === "calc" && done.citations?.some(c => c.tier !== "official");
+  $(".route", el).outerHTML = answerHeader(formula ? "formula" : done.route, gameVersion, done.citations?.length || 0);
   const cardEl = done.card && renderCard(done.card);
   if (cardEl) { body.replaceChildren(cardEl); body.classList.add("has-card"); }
   const copy = $(".copy", el);
@@ -380,7 +381,7 @@ async function ask(q, opts = {}) {
   const addToPlan = plannerButton(done);
   if (addToPlan) el.append(addToPlan);
   const why = document.createElement("button"); why.type = "button"; why.className = "why"; why.textContent = "Why this answer?";
-  why.onclick = () => { renderTrace(done); $("#tracePanel").scrollIntoView({ behavior: "smooth", block: "nearest" }); };
+  why.onclick = () => { renderTrace(done); $("#tracePanel").scrollIntoView({ behavior: reduced ? "auto" : "smooth", block: "nearest" }); };
   el.append(why); renderTrace(done);
   window.trust?.decorate(el, done);  // source check marks and the Report button (trust.js)
   window.feedback?.decorate(el, done, q);  // 👍/👎 and the "what went wrong?" form (feedback.js)
@@ -393,7 +394,8 @@ async function ask(q, opts = {}) {
     box.onclick = ev => { const b = ev.target.closest("button[data-q]"); if (b) ask(b.dataset.q); };
     el.append(box);
   }
-  const ent = done.trace.entity || done.citations?.map(c => c.doc_id || "").find(d => /^(character|weapon|artifact)\//.test(d))?.split("#")[0];
+  const ent = done.trace.entity || done.citations?.map(c => (c.doc_id || "").replace(/^(?:team|auto)-builds\//, "character/"))
+    .find(d => /^(character|weapon|artifact)\//.test(d))?.split("#")[0];
   // The dossier (big art, talents) renders after the answer has painted
   if (ent) { lastEntity = ent; setTimeout(() => showEntity(ent), 0); }
   window.wishes?.remember(done.trace);  // "I'm at 40 pity": kept on this device only
@@ -421,7 +423,9 @@ function renderTrace(d) {
   queueMicrotask(sizeBars);
   const t = d.trace, p = $("#tracePanel"); p.hidden = false;
   const why = {
-    exact: "Answered straight from official game data. No AI model was used.",
+    exact: d.trace?.intent === "calc" && d.citations?.some(c => c.tier !== "official")
+      ? "Worked out with the published formula credited below. No AI model was used."
+      : "Answered straight from game data. No AI model was used.",
     announced: "Officially announced but not released, so only official information is shown.",
     refuse_leak: "The question asks about leaks or unannounced content, so the leak filter stopped it before any search.",
     refuse_injection: "The question tried to change the assistant's instructions, so the guardrail refused it.",
@@ -432,6 +436,8 @@ function renderTrace(d) {
     spoiler: "You set a story point, and this is about a character released after it, so nothing was searched.",
   }[d.route] || "";
   const hits = (t.retrieval || []).slice(0, 6), max = Math.max(...hits.map(h => h.score), 1e-6);
+  const named = new Map((d.citations || []).map(c => [c.doc_id, c.title]));
+  const nameOf = id => named.get(id) || id.split("#")[0].split("/").pop().replace(/[-_]/g, " ");
   p.innerHTML = `<div class="pad"><h3>Why this answer</h3><p class="placeholder">${esc((ROUTES[d.route] || [d.route])[0])}. ${why}</p>
     <ul class="list"><li><span>Time</span><span>${esc(t.latency_ms ?? "?")} ms</span></li>
     ${t.provider ? `<li><span>Model</span><span>${esc(t.provider)}, ${esc(t.model)}</span></li>` : ""}
@@ -439,7 +445,7 @@ function renderTrace(d) {
     ${t.cache === "hit" ? `<li><span>Cache</span><span>Answered before</span></li>` : ""}
     ${t.spoiler_filter ? `<li><span>Spoiler filter</span><span>${esc(window.story?.traceLine(t.spoiler_filter))}</span></li>` : ""}</ul>
     ${hits.length ? `<p class="placeholder searched">Sources searched</p>` + hits.map(h =>
-      `<div class="row"><small title="${esc(h.doc_id)}">${esc(h.doc_id)}</small><div class="bar-s" data-w="${Math.max(8, 64 * h.score / max)}"></div></div>`).join("") : ""}</div>`;
+      `<div class="row"><small title="${esc(h.doc_id)}">${esc(nameOf(h.doc_id))}</small><div class="bar-s" data-w="${Math.max(8, 64 * h.score / max)}"></div></div>`).join("") : ""}</div>`;
 }
 
 function sizeBars() {
@@ -471,7 +477,7 @@ function paintEntity(e, box) {
           ${e.rarity ? `<span class="stars" aria-label="${e.rarity} stars">${"★".repeat(e.rarity)}</span>` : ""}
           <h2>${esc(e.name)}</h2>${e.title ? `<div class="title">${esc(e.title)}</div>` : ""}
           <div class="tags">${e.element ? `<span>${e.element_icon ? `<img src="${esc(e.element_icon)}" alt="">` : ""}${esc(e.element)}</span>` : ""}
-            ${e.weapon_type ? `<span>${esc(e.weapon_type)}</span>` : ""}${e.region ? `<span>${esc(e.region)}</span>` : ""}</div>
+            ${e.weapon_type ? `<span>${esc(e.weapon_type)}</span>` : ""}${e.region ? `<span>${esc(regionName(e.region))}</span>` : ""}</div>
           ${announced ? `<span class="badge">Announced: official info only</span>` : ""}
         </div></div>
       <div class="pad">

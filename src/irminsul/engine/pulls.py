@@ -319,7 +319,11 @@ def income_text(today: date, version: tuple[int, int], phase: int) -> str | None
         return None
     est = income(today, until)
     rows = "\n".join(f"- {label}: {amount:,}" for label, amount in est.lines if amount)
-    fates = f"\n- Shop Fates for Stardust: {est.shop_fates}" if est.shop_fates else ""
+    fates = (
+        f"\n- Plus {est.shop_fates} Intertwined Fates from the Stardust shop"
+        if est.shop_fates
+        else ""
+    )
     return (
         f"**About {est.likely:,} free Primogems ({est.likely_wishes} wishes) from today until "
         f"{version[0]}.{version[1]} Phase {phase}**, around "

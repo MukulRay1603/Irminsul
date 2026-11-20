@@ -20,7 +20,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from irminsul.api.art import LocalArt, RemoteArt
@@ -96,6 +96,10 @@ def add_web(
             .replace("__VERSION__", web_version(web_dir))
         )
         fresh = {"Cache-Control": "no-cache"}
+
+        @app.get("/robots.txt", include_in_schema=False)
+        def robots() -> PlainTextResponse:
+            return PlainTextResponse("User-agent: *\nDisallow: /ask\nDisallow: /api/\n")
 
         @app.get("/", include_in_schema=False)
         def index():

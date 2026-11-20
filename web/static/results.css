@@ -91,3 +91,9 @@
   .cat.votes { grid-template-columns: minmax(0, 1fr) 50px auto; }
 }
 @media (prefers-reduced-motion: reduce) { .bar-fill { animation: none; } }
+
+/* Space held while results.json loads, so the page doesn't jump */
+#tiles:empty { min-height: 132px; }
+#retrMeters:empty { min-height: 150px; }
+#costBody:empty { min-height: 150px; }
+#cats:empty { min-height: 420px; }
