@@ -13,6 +13,7 @@ Any mode can be followed by a cross-encoder re-ranker over the top candidates.
 
 import json
 import os
+import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
@@ -46,6 +47,33 @@ def _reranker(model: str):
 
 def _tokenize(texts: list[str]):
     return bm25s.tokenize(texts, stopwords="en", show_progress=False)
+
+
+_WORD = re.compile(r"[a-z0-9']+")
+HEAD_WORDS = 12  # the chunk's heading stays, so the re-ranker knows what the passage is about
+
+
+def _passage(text: str, query: str, limit: int) -> str:
+    """What the re-ranker reads: the opening words, or, when the question's distinctive words
+    only appear further down (a name in a long story), the heading plus the part around them.
+
+    The re-ranker reads `limit` words for speed. Reading only the opening let a long story
+    that names the "Hexenzirkel" in paragraph three lose to a page that never names it.
+    """
+    words = text.split()
+    if len(words) <= limit:
+        return text
+    terms = {w for w in _WORD.findall(query.casefold()) if len(w) >= 5}
+    if not terms:
+        return " ".join(words[:limit])
+    head = " ".join(words[:limit]).casefold()
+    if any(term in head for term in terms):
+        return " ".join(words[:limit])
+    for pos, word in enumerate(words):
+        if any(term in word.casefold() for term in terms):
+            start = max(HEAD_WORDS, pos - (limit - HEAD_WORDS) // 3)
+            return " ".join(words[:HEAD_WORDS] + words[start : start + limit - HEAD_WORDS])
+    return " ".join(words[:limit])
 
 
 @dataclass
@@ -176,7 +204,7 @@ class HybridIndex:
         if rerank and order:
             if self._rerank is None:
                 self._rerank = _reranker(self._rerank_model)
-            passages = [" ".join(self.chunks[i].text.split()[:rerank_words]) for i in order]
+            passages = [_passage(self.chunks[i].text, query, rerank_words) for i in order]
             scores = list(self._rerank.rerank(query, passages))
             ranked = sorted(zip(order, scores, strict=True), key=lambda x: x[1], reverse=True)
         else:

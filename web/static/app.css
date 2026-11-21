@@ -550,3 +550,8 @@ footer { padding-bottom: calc(34px + env(safe-area-inset-bottom)); }
 .skip:focus { top: 12px; }
 .notfound { width: min(560px, 100% - 32px); margin: 18vh auto; text-align: center; }
 .notfound a { color: var(--leaf); }
+.gallery-wrap { position: relative; }
+.gallery-arrow { position: absolute; top: 40%; z-index: 2; width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text); font-size: 24px; line-height: 1; display: grid; place-items: center; box-shadow: var(--shadow); }
+.gallery-arrow.prev { left: -6px; } .gallery-arrow.next { right: -6px; }
+.gallery-arrow:disabled { opacity: 0; pointer-events: none; }
+@media (hover: none), (max-width: 640px) { .gallery-arrow { display: none; } }  /* touch scrolls the row */

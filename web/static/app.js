@@ -224,6 +224,17 @@ soundBtn.onclick = () => {
 };
 
 /* ---------- AI-answer counter: ticks locally, re-synced from the server after every answer ---------- */
+/* ---------- Demo mode: the owner's device during a pitch (see is_demo in api/app.py) ---------- */
+const demoKey = (() => {
+  const m = location.hash.match(/^#demo=([\w-]{16,})$/);
+  try {
+    if (m) { localStorage.setItem("irminsul-demo", m[1]); history.replaceState(null, "", location.pathname); }
+    if (location.hash === "#demo=off") { localStorage.removeItem("irminsul-demo"); history.replaceState(null, "", location.pathname); }
+    return localStorage.getItem("irminsul-demo") || "";
+  } catch { return ""; }
+})();
+const demoHeader = () => demoKey ? { "x-irminsul-demo": demoKey } : {};
+
 const quotaUI = (() => {
   let q = null, synced = 0, lastCur = null, lastCount = "";
   const hms = s => {
@@ -341,7 +352,7 @@ async function ask(q, opts = {}) {
   // Re-render the streamed markdown at most once a frame, not once per token
   const paint = () => { painting ||= requestAnimationFrame(() => { painting = 0; body.innerHTML = md(text); }); };
   try {
-    const res = await fetch("/ask/stream", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(askBody(q, opts)) });
+    const res = await fetch("/ask/stream", { method: "POST", headers: { "content-type": "application/json", ...demoHeader() }, body: JSON.stringify(askBody(q, opts)) });
     if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(typeof e.detail === "string" ? e.detail : `Error ${res.status}`); }
     const reader = res.body.getReader(), dec = new TextDecoder(); let buf = "";
     for (;;) {
@@ -536,3 +547,19 @@ document.addEventListener("keydown", e => {
 document.addEventListener("error", e => {
   if (e.target instanceof HTMLImageElement && new URL(e.target.src).pathname.startsWith("/art/")) e.target.remove();
 }, true);
+
+/* ---------- Character row: arrows and the mouse wheel move it sideways ---------- */
+(() => {
+  const row = $("#gallery"), prev = $(".gallery-arrow.prev"), next = $(".gallery-arrow.next");
+  if (!row || !prev || !next) return;
+  const step = () => Math.max(300, row.clientWidth * 0.8);
+  const sync = () => {
+    prev.disabled = row.scrollLeft < 4;
+    next.disabled = row.scrollLeft + row.clientWidth >= row.scrollWidth - 4;
+  };
+  prev.addEventListener("click", () => row.scrollBy({ left: -step(), behavior: reduced ? "auto" : "smooth" }));
+  next.addEventListener("click", () => row.scrollBy({ left: step(), behavior: reduced ? "auto" : "smooth" }));
+  row.addEventListener("scroll", sync, { passive: true });
+  new ResizeObserver(sync).observe(row);
+  new MutationObserver(sync).observe(row, { childList: true });
+})();
