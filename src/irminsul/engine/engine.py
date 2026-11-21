@@ -84,6 +84,8 @@ _FATES_ASK = re.compile(
     r"|\bfates?\b.{0,20}\b(?:sources?|where (?:to|do i) get)\b",
     re.I,
 )
+# One team fact: "- <fact> (checked <date>; applies to <version>)"
+_FACT_LINE = re.compile(r"(?:^|\s)-\s+([A-Z0-9\"'][^\n]*?)\s*\(checked [^)]*\)")
 # (doc, which of its lines to quote): every line here was checked against its source page
 FATE_FACTS = (
     ("team/wishes#2", r"160 Primogems"),
@@ -439,19 +441,25 @@ class Engine:
         by a model: the sources a player needs sit in five short docs search found poorly."""
         if not _FATES_ASK.search(question) or self.index is None:
             return None
-        chunks = {c.doc_id: c for c in getattr(self.index, "chunks", [])}
+        # A doc can span several chunks, and chunking flattens its "- fact" lines into one
+        # line: put the doc back together, then take each fact up to its "(checked ...)" note
+        by_doc: dict[str, list] = {}
+        for c in getattr(self.index, "chunks", []):
+            by_doc.setdefault(c.doc_id, []).append(c)
         lines, citations = [], []
         for doc_id, keep in FATE_FACTS:
-            c = chunks.get(doc_id)
-            if c is None:
+            parts = by_doc.get(doc_id)
+            if not parts:
                 continue
-            found = [
-                re.sub(r"\s*\(checked [^)]*\)\s*$", "", line[2:]).strip()
-                for line in c.text.splitlines()
-                if line.startswith("- ") and re.search(keep, line, re.I)
-            ]
+            whole = " ".join(p.text for p in parts)
+            found = []
+            for fact in _FACT_LINE.findall(whole):
+                fact = " ".join(fact.split())
+                if re.search(keep, fact, re.I) and fact not in found:
+                    found.append(fact)
             if not found:
                 continue
+            c = parts[0]
             n = len(citations) + 1
             citations.append(Citation(n, c.title, c.source_url, c.tier, doc_id))
             lines += [f"- {text} [{n}]" for text in found]
