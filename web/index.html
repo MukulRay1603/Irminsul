@@ -90,7 +90,11 @@
       <div class="filters" id="filters" role="group" aria-label="Filter by element"></div>
     </div>
   </div>
-  <div class="gallery" id="gallery"></div>
+  <div class="gallery-wrap">
+    <button type="button" class="gallery-arrow prev" aria-label="Scroll characters left" aria-controls="gallery">‹</button>
+    <div class="gallery" id="gallery"></div>
+    <button type="button" class="gallery-arrow next" aria-label="Scroll characters right" aria-controls="gallery">›</button>
+  </div>
   <p class="gallery-empty" id="galleryEmpty" role="status"></p>
 </section>
 

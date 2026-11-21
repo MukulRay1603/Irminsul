@@ -79,6 +79,20 @@ BUSY_REPLY = (
     "moment. Please try again in a little while."
 )
 NO_SOURCES_REPLY = "I don't have verified information on that yet."
+_FATES_ASK = re.compile(
+    r"\b(?:how|where|ways?)\b.{0,30}\b(?:get|earn|farm|obtain|buy|more)\b.{0,30}\bfates?\b"
+    r"|\bfates?\b.{0,20}\b(?:sources?|where (?:to|do i) get)\b",
+    re.I,
+)
+# (doc, which of its lines to quote): every line here was checked against its source page
+FATE_FACTS = (
+    ("team/wishes#2", r"160 Primogems"),
+    ("team/wishes#11", r"Paimon's Bargains"),
+    ("team/wishes#9", r"Starglitter"),
+    ("team/wishes#10", r"Stardust"),
+    ("team/primogems#1", r"maintenance compensation is 300|Issue Fix Compensation"),
+    ("team/primogems#4", r"Estimate"),
+)
 BUILD_DOCS = ("team-builds/", "auto-builds/")
 _NOTHING_VERIFIED = re.compile(r"\W*i (?:do not|don.t) have verified information", re.I)
 _BUILD_ASK = re.compile(
@@ -416,8 +430,39 @@ class Engine:
         return (
             calc.calculate(question, self.planner, formulas=kqm_on)
             or calc.farm_today(question, self.planner, self._roster_names, datetime.now(UTC))
+            or self._fates_answer(question)
             or answer_exact(self.store, question, self.patches, self.banners)
         )
+
+    def _fates_answer(self, question: str) -> Answer | None:
+        """Where Fates come from, quoted from the team-checked fact lines rather than written
+        by a model: the sources a player needs sit in five short docs search found poorly."""
+        if not _FATES_ASK.search(question) or self.index is None:
+            return None
+        chunks = {c.doc_id: c for c in getattr(self.index, "chunks", [])}
+        lines, citations = [], []
+        for doc_id, keep in FATE_FACTS:
+            c = chunks.get(doc_id)
+            if c is None:
+                continue
+            found = [
+                re.sub(r"\s*\(checked [^)]*\)\s*$", "", line[2:]).strip()
+                for line in c.text.splitlines()
+                if line.startswith("- ") and re.search(keep, line, re.I)
+            ]
+            if not found:
+                continue
+            n = len(citations) + 1
+            citations.append(Citation(n, c.title, c.source_url, c.tier, doc_id))
+            lines += [f"- {text} [{n}]" for text in found]
+        if len(citations) < 2:
+            return None  # not enough checked facts to stand on: let retrieval try
+        text = (
+            "**Intertwined Fates are bought: with Primogems, or in the Shop with Starglitter and "
+            "Stardust from your wishes.**\n\n" + "\n".join(lines) + "\n\nEvents, quests, "
+            "exploration and achievements also give Primogems every version."
+        )
+        return Answer(text, "exact", citations, {"intent": "fates"})
 
     def _roster_names(self, roster: str) -> list[str]:
         return [m.entity.name for m in self.store.find(roster) if m.kind == "character"]

@@ -141,3 +141,48 @@ def test_best_quote_stays_short():
 
 def test_nothing_in_common_means_no_quote():
     assert best_quote(["zebra"], "Citlali is a Cryo support.") is None
+
+
+def fates_engine(texts):
+    from types import SimpleNamespace
+
+    from irminsul.engine.engine import Engine
+
+    engine = Engine.__new__(Engine)
+    chunks = [
+        SimpleNamespace(
+            doc_id=d, title=d, source_url="https://x.test/" + d, tier="community", text=t
+        )
+        for d, t in texts.items()
+    ]
+    engine.index = SimpleNamespace(chunks=chunks)
+    return engine
+
+
+FACTS = {
+    "team/wishes#2": (
+        "# Wishes\n- One wish costs one Intertwined Fate, and either Fate can be bought for "
+        "160 Primogems. (checked 2026-10-26; applies to 7.1)\n- Pity is 90."
+    ),
+    "team/wishes#11": (
+        "# Wishes\n- In Paimon's Bargains, a Fate costs 75 Masterless Stardust, 5 a month. "
+        "(checked 2026-10-26; applies to 7.1)"
+    ),
+}
+
+
+def test_fates_answer_quotes_checked_lines_with_citations():
+    answer = fates_engine(FACTS)._fates_answer("How do I get more Intertwined Fates?")
+    assert "bought for 160 Primogems. [1]" in answer.text
+    assert "75 Masterless Stardust, 5 a month. [2]" in answer.text
+    assert "checked 2026" not in answer.text and "Pity is 90" not in answer.text
+    assert [c.n for c in answer.citations] == [1, 2]
+
+
+def test_fates_answer_needs_its_sources():
+    engine = fates_engine({"team/wishes#2": FACTS["team/wishes#2"]})
+    assert engine._fates_answer("How do I get Intertwined Fates?") is None
+
+
+def test_other_questions_skip_the_fates_answer():
+    assert fates_engine(FACTS)._fates_answer("Is Furina worth pulling?") is None

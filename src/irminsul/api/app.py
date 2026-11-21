@@ -5,6 +5,7 @@ Hardening for a public endpoint lives here too (see docs/security.md): the clien
 every limit, a raw body cap, security headers, closed CORS and errors without internals.
 """
 
+import hmac
 import ipaddress
 import json
 import logging
@@ -259,6 +260,7 @@ def sse_events(
     context: str | None = None,
     stash: dict | None = None,
     uid: str | None = None,
+    demo: bool = False,
 ) -> Iterator[str]:
     """The /ask/stream body. A fresh RAG answer is paid for even if the client hangs up
     before the `done` event: the LLM call already happened, so leaving early is not free."""
@@ -277,8 +279,8 @@ def sse_events(
                 pending = payload["route"] == "rag"
             if kind == "done":
                 pending = False
-                _spend(limits, cid, payload["route"], payload["trace"])
-                payload = {**payload, "quota": _quota(limits, cid)}
+                _spend(limits, cid, payload["route"], payload["trace"], demo)
+                payload = {**payload, "quota": _quota(limits, cid, demo)}
             yield f"event: {kind}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
     except Exception:
         # Headers are already sent, so report a generic error event instead of a traceback.
@@ -286,19 +288,34 @@ def sse_events(
         yield f"event: error\ndata: {json.dumps({'detail': ERROR_DETAIL})}\n\n"
     finally:
         if pending:
-            _spend(limits, cid, "rag", {})
+            _spend(limits, cid, "rag", {}, demo)
 
 
-def _spend(limits: Limits, cid: str, route: str, trace: dict) -> None:
+def _spend(limits: Limits, cid: str, route: str, trace: dict, demo: bool = False) -> None:
     # Only fresh AI-written answers cost anything; exact answers, cache hits and refusals
     # are free for the player and for the budget.
     if route == "rag" and trace.get("cache") != "hit":
         limits.spend_llm()
-        limits.spend_allowance(cid)
+        if not demo:
+            limits.spend_allowance(cid)
 
 
-def _quota(limits: Limits, cid: str) -> dict:
-    return {"personal": limits.allowance(cid), "pool": limits.pool()}
+def _quota(limits: Limits, cid: str, demo: bool = False) -> dict:
+    personal = limits.allowance(cid)
+    if demo:  # a demo device isn't limited by the personal allowance
+        personal = {**personal, "current": limits.allowance_cap, "demo": True}
+    return {"personal": personal, "pool": limits.pool()}
+
+
+DEMO_HEADER = "x-irminsul-demo"
+
+
+def is_demo(request: Request) -> bool:
+    """IRMINSUL_DEMO_KEY, a Space secret, lifts the personal AI allowance for the owner's own
+    device during a demo. The shared daily budget and the burst limits still apply."""
+    key = os.environ.get("IRMINSUL_DEMO_KEY", "")
+    sent = request.headers.get(DEMO_HEADER, "")
+    return len(key) >= 16 and bool(sent) and hmac.compare_digest(sent, key)
 
 
 NOT_FOUND_PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -329,7 +346,7 @@ def create_app(
             CORSMiddleware,
             allow_origins=cors,
             allow_methods=["GET", "POST"],
-            allow_headers=["content-type"],
+            allow_headers=["content-type", DEMO_HEADER],
         )
     app.add_middleware(BodyLimit, max_bytes=MAX_BODY_BYTES)
     # Pages, scripts and data compress 4-6x. Streamed answers (text/event-stream) are
@@ -374,7 +391,7 @@ def create_app(
     @app.get("/quota")
     def quota(request: Request) -> dict:
         """The caller's AI-answer allowance and the shared pool, both refilling over time."""
-        return _quota(limits, cid_of(request))
+        return _quota(limits, cid_of(request), is_demo(request))
 
     @app.get("/api/story")
     def story_points() -> dict:
@@ -385,7 +402,7 @@ def create_app(
     def ask_stream(body: AskRequest, request: Request):
         """Server-sent events: `meta` (route + candidate citations), `delta` (text chunks),
         `done` (final route, the citations actually used, trace, and the caller's quota)."""
-        cid = cid_of(request)
+        cid, demo = cid_of(request), is_demo(request)
         if reason := limits.allow(
             cid,
             free=engine.is_free(
@@ -400,11 +417,12 @@ def create_app(
                 cid,
                 body.question,
                 allow_llm=limits.llm_budget_left(),
-                out_of_allowance=not limits.has_allowance(cid),
+                out_of_allowance=not (demo or limits.has_allowance(cid)),
                 story_until=body.story_until,
                 context=body.context,
                 stash=_saved(body),
                 uid=body.uid,
+                demo=demo,
             ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
@@ -412,7 +430,7 @@ def create_app(
 
     @app.post("/ask", response_model=AskResponse)
     def ask(body: AskRequest, request: Request):
-        cid = cid_of(request)
+        cid, demo = cid_of(request), is_demo(request)
         if reason := limits.allow(
             cid,
             free=engine.is_free(
@@ -426,13 +444,13 @@ def create_app(
         answer = engine.ask(
             body.question,
             allow_llm=allow_llm,
-            out_of_allowance=not limits.has_allowance(cid),
+            out_of_allowance=not (demo or limits.has_allowance(cid)),
             story_until=body.story_until,
             context=body.context,
             stash=_saved(body),
             uid=body.uid,
         )
-        _spend(limits, cid, answer.route, answer.trace)
+        _spend(limits, cid, answer.route, answer.trace, demo)
         return AskResponse(
             answer=answer.text,
             route=answer.route,
