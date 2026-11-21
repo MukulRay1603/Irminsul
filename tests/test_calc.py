@@ -186,3 +186,22 @@ def test_fates_answer_needs_its_sources():
 
 def test_other_questions_skip_the_fates_answer():
     assert fates_engine(FACTS)._fates_answer("Is Furina worth pulling?") is None
+
+
+def test_fates_answer_reads_facts_the_way_the_index_stores_them():
+    # Chunking flattens a doc's "- fact" lines into one line and can split it across chunks
+    flat = {
+        "team/wishes#2": (
+            "# Wishes: team-checked facts\nSource: https://x.test - One wish costs one "
+            "Intertwined Fate, and either Fate can be bought for 160 Primogems. "
+            "(checked 2026-10-26; applies to 7.1) - Pity is 90. "
+            "(checked 2026-10-26; applies to 7.1)"
+        ),
+        "team/wishes#11": (
+            "# Wishes: team-checked facts\nSource: https://x.test - In Paimon's Bargains, a 4-star "
+            "costs 5 Starglitter. (checked 2026-10-26; applies to 7.1)"
+        ),
+    }
+    answer = fates_engine(flat)._fates_answer("Where do I get Fates?")
+    assert answer and "bought for 160 Primogems. [1]" in answer.text
+    assert "Pity is 90" not in answer.text and "4-star costs 5 Starglitter. [2]" in answer.text
