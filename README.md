@@ -64,14 +64,15 @@ flowchart LR
 
 ## Measured, not claimed
 
-Measured on 5 November 2026, before the corpus grew to 6,800 documents and before sentence removal shipped.
+Measured on 21 November 2026 against the live site, with the full corpus and sentence removal on. Load, layout and cost figures are from earlier runs and haven't changed since.
 
 | | |
 |---|---|
-| Live site, full test set with the real model | **113 / 118** scored (95.8%), with all 19 leak, injection, privacy, safety and off-topic probes handled correctly |
-| Offline test set (guards, exact answers, refusals) | **101 / 101** |
+| Live site, full test set with the real model | **117 / 123** scored (95.1%); 7 more questions weren't scored because the test device used up its AI allowance |
+| Leak, injection, privacy, safety and off-topic probes | **24 / 24** handled correctly |
+| Offline test set (guards, exact answers, refusals) | **100 / 100** |
 | Story leaks past the player's progress, in spoiler-safe mode | **0** |
-| Right source in the top 8 search results | **0.946** on 93 questions |
+| Right source in the top 8 search results | **0.914** on 93 questions (0.946 before the corpus grew to 6,800 documents) |
 | 50 concurrent users | **210 req/s**, p95 **0.45 s**, zero errors |
 | Mobile layout shift (CLS) | **0.04** (down from 0.92) |
 | Build recommendations checked against their sources | **1,045 lines** after corrections |
