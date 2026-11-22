@@ -120,6 +120,7 @@ GENSHIN_WEAK = re.compile(
     r"|\bdef(?:ense|ence)? (?:mult\w*|shred|reduction)|\bres(?:istance)? (?:mult\w*|shred)",
     re.I,
 )
+_WORDS = re.compile(r"[a-z][a-z'-]+")
 # Clear signs a question is about something else entirely.
 OFFTOPIC_SIGNS = re.compile(
     r"website|\bhtml\b|\bcss\b|javascript|python|\bjava\b|c\+\+|\bcode\b|coding|programm\w*"
@@ -239,13 +240,18 @@ def check(question: str, store: EntityStore | None, cfg: GuardConfig) -> Answer 
             LEAK_REPLY, "refuse_leak", "future_version", versions=[".".join(v) for v in future]
         )
     # "What changed in 7.1?" names no character but is plainly about the game
-    if not (on_topic(question, bool(named)) or is_patch_question(question)):
+    vocabulary = store.vocabulary if store else frozenset()
+    if not (on_topic(question, bool(named), vocabulary) or is_patch_question(question)):
         return _refuse(OFFTOPIC_REPLY, "refuse_offtopic", "offtopic")
     return None
 
 
-def on_topic(question: str, names_an_entity: bool) -> bool:
-    """Genshin unless it names another game, or shows clear signs of another subject."""
+def on_topic(
+    question: str, names_an_entity: bool, vocabulary: frozenset[str] = frozenset()
+) -> bool:
+    """Genshin unless it names another game, or shows clear signs of another subject.
+    `vocabulary` is the game's proper nouns, learned from the corpus (pipeline/vocab.py): one
+    counts like a common game word, so it never outweighs a clear sign of another subject."""
     strong = (
         bool(GENSHIN_STRONG.search(question))
         or bool(GENSHIN_OTHER_LANGUAGES.search(question))
@@ -257,7 +263,11 @@ def on_topic(question: str, names_an_entity: bool) -> bool:
         return False
     if OFFTOPIC_TASKS.search(question):  # "help with my homework, Genshin is my excuse"
         return False
-    return strong or bool(GENSHIN_WEAK.search(question))
+    if strong or GENSHIN_WEAK.search(question):
+        return True
+    return any(
+        w.strip("'-").removesuffix("'s") in vocabulary for w in _WORDS.findall(question.casefold())
+    )
 
 
 _URL = re.compile(r"https?://[^\s)\]>]+|www\.[^\s)\]>]+")

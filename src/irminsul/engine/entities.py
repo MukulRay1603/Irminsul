@@ -6,6 +6,7 @@ answered here directly, with a citation, in microseconds and at zero cost.
 """
 
 import difflib
+import json
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -119,7 +120,11 @@ def _key(text: str) -> str:
 
 class EntityStore:
     def __init__(
-        self, characters: list[Character], weapons: list[Weapon], artifacts: list[ArtifactSet]
+        self,
+        characters: list[Character],
+        weapons: list[Weapon],
+        artifacts: list[ArtifactSet],
+        vocabulary: dict | None = None,
     ) -> None:
         self.by_id: dict[str, Match] = {}
         for c in characters:
@@ -140,6 +145,13 @@ class EntityStore:
         for alias, eid in ALIASES.items():
             if eid in self.by_id:
                 self.aliases[alias] = eid
+        # Learned from the data (pipeline/vocab.py): the game's proper nouns, and nicknames
+        # players use. A learned nickname never replaces a name or a hand-made alias.
+        vocabulary = vocabulary or {}
+        self.vocabulary: frozenset[str] = frozenset(vocabulary.get("words", ()))
+        for alias, eid in vocabulary.get("nicknames", {}).items():
+            if eid in self.by_id and alias not in COMMON_WORDS:
+                self.aliases.setdefault(_key(alias), eid)
         self.max_words = max(len(a.split()) for a in self.aliases)
         # Character names a typo can be matched against ("raidne" -> raiden): 5+ letters only
         self._fuzzy = sorted(
@@ -163,10 +175,12 @@ class EntityStore:
                 if x
             ]
 
+        vocabulary = build / "vocabulary.json"
         return cls(
             read("characters.jsonl", Character),
             read("weapons.jsonl", Weapon),
             read("artifact_sets.jsonl", ArtifactSet),
+            json.loads(vocabulary.read_text(encoding="utf-8")) if vocabulary.exists() else None,
         )
 
     def find(self, question: str) -> list[Match]:

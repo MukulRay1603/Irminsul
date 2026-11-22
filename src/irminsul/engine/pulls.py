@@ -35,10 +35,47 @@ PER_VERSION = {
 TYPICAL_VERSION = {"events and quests": 2880, "exploration": 900, "achievements": 240}
 SHOP_FATES = 5  # Paimon's Bargains, 1st of each month, for Masterless Stardust
 
+# The income figures above were last compared with the official notices for this version;
+# the freshness check asks for a look once a newer version is live (no feed publishes them)
+INCOME_CHECKED_FOR = (7, 2)
+
 CADENCE_DAYS = 42
-ANCHOR_VERSION = (7, 2)  # official start date; later ones follow the cadence
+# Used only until the official calendar is loaded (use_calendar): the last start date known
+# when this was written. Every date after it comes from the notices or the cadence.
+ANCHOR_VERSION = (7, 2)
 ANCHOR_DATE = date(2026, 11, 4)
 MINORS_PER_MAJOR = 8  # x.0 to x.7 since 5.x
+PHASE_DAYS = 21
+
+# The official calendar: each version's start (its Update Details notice) and each phase-2
+# start (its wish notice), from the build's banners.json. Loaded at boot by use_calendar().
+_STARTS: dict[tuple[int, int], date] = {}
+_PHASE2: dict[tuple[int, int], date] = {}
+
+
+def _key(version: str) -> tuple[int, int] | None:
+    major, _, minor = str(version).partition(".")
+    return (int(major), int(minor)) if major.isdigit() and minor.isdigit() else None
+
+
+def use_calendar(feed: dict | None) -> None:
+    """Take version and phase dates from the official notices instead of the cadence."""
+    _STARTS.clear()
+    _PHASE2.clear()
+    for version, day in ((feed or {}).get("versions") or {}).items():
+        if (v := _key(version)) and day:
+            _STARTS[v] = date.fromisoformat(day)
+    for banner in (feed or {}).get("banners") or []:
+        if banner.get("phase") == 2 and banner.get("start") and (v := _key(banner["version"])):
+            _PHASE2[v] = date.fromisoformat(banner["start"])
+
+
+def anchor() -> tuple[tuple[int, int], date]:
+    """The newest version with an official start date: estimates count on from it."""
+    if _STARTS:
+        version = max(_STARTS)
+        return version, _STARTS[version]
+    return ANCHOR_VERSION, ANCHOR_DATE
 
 
 def _rates(banner: str) -> np.ndarray:
@@ -108,10 +145,15 @@ def wishes_from(primos: int = 0, fates: int = 0) -> int:
 
 
 def version_start(version: tuple[int, int], phase: int = 1) -> date:
-    steps = (version[0] * MINORS_PER_MAJOR + version[1]) - (
-        ANCHOR_VERSION[0] * MINORS_PER_MAJOR + ANCHOR_VERSION[1]
-    )
-    return ANCHOR_DATE + timedelta(days=CADENCE_DAYS * steps + (21 if phase == 2 else 0))
+    """The official date when the notices have one, else the usual cadence from the newest
+    official start."""
+    if phase == 2 and version in _PHASE2:
+        return _PHASE2[version]
+    if version in _STARTS:
+        return _STARTS[version] + timedelta(days=PHASE_DAYS if phase == 2 else 0)
+    (major, minor), start = anchor()
+    steps = (version[0] * MINORS_PER_MAJOR + version[1]) - (major * MINORS_PER_MAJOR + minor)
+    return start + timedelta(days=CADENCE_DAYS * steps + (PHASE_DAYS if phase == 2 else 0))
 
 
 def _monthly(start: date, end: date, day: int) -> int:
@@ -153,7 +195,7 @@ def income(today: date, until: date, welkin: bool = False) -> Income:
     days = max(0, (until - today).days)
     abyss, theater = _monthly(today, until, 16), _monthly(today, until, 1)
     versions = 0
-    step = ANCHOR_DATE
+    step = anchor()[1]
     while step <= until:
         if step > today:
             versions += 1

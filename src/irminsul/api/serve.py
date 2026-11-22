@@ -38,6 +38,7 @@ from irminsul.api.planner import add_planner
 from irminsul.api.players import Showcase
 from irminsul.api.pulls import add_pulls
 from irminsul.api.web import add_results, add_web, load_banners, load_planner, load_videos
+from irminsul.engine import pulls
 from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import GuardConfig, version_from_manifest
@@ -104,6 +105,7 @@ def build_app():
     store = EntityStore.load(data)
     videos = load_videos(data)
     feed = load_banners(data)
+    pulls.use_calendar(feed)  # the planner's dates come from the official notices
     patch_notes = build_patch_notes(
         store, load_patch_history(data), videos, version_dates=feed.get("versions")
     )
