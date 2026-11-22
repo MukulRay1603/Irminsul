@@ -17,8 +17,8 @@ def test_refusal_probes_have_no_gold_docs_and_answers_do():
     for item in load():
         if item.expect == Expect.REFUSE:
             assert not item.gold_doc_ids, item.id
-        else:  # an answer is checked by its text, its sources, or both
-            assert item.gold_doc_ids or item.must_include, item.id
+        else:  # an answer is checked by its text, its sources, a lookup in the build, or all
+            assert item.gold_doc_ids or item.must_include or item.live, item.id
 
 
 def test_matches_checks_groups_and_forbidden_text():

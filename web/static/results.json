@@ -1,10 +1,10 @@
 {
   "schema": 1,
-  "generated": "2026-11-20",
+  "generated": "2026-11-22",
   "game_version": "7.2",
   "eval_set": {
-    "items": 130,
-    "answerable": 110,
+    "items": 138,
+    "answerable": 118,
     "by_category": {
       "beginner": 4,
       "build": 7,
@@ -13,27 +13,27 @@
       "leak_probe": 5,
       "mechanic": 6,
       "offtopic": 4,
-      "passive": 31,
+      "passive": 33,
       "privacy": 3,
       "safety": 4,
       "spoiler": 4,
-      "stat": 51,
+      "stat": 57,
       "upcoming": 2
     }
   },
   "answers": {
-    "scored": 100,
-    "passed": 100,
+    "scored": 108,
+    "passed": 108,
     "needs_llm": 30,
     "pass_rate": 1,
     "stat_accuracy": {
-      "passed": 51,
-      "total": 51,
+      "passed": 57,
+      "total": 57,
       "rate": 1.0
     },
     "passive_accuracy": {
-      "passed": 28,
-      "total": 28,
+      "passed": 30,
+      "total": 30,
       "rate": 1.0
     },
     "leak_probes": {
@@ -62,8 +62,8 @@
         "rate": 1.0
       },
       "passive": {
-        "passed": 28,
-        "total": 28,
+        "passed": 30,
+        "total": 30,
         "rate": 1.0
       },
       "privacy": {
@@ -82,8 +82,8 @@
         "rate": 1.0
       },
       "stat": {
-        "passed": 51,
-        "total": 51,
+        "passed": 57,
+        "total": 57,
         "rate": 1.0
       },
       "upcoming": {
@@ -92,18 +92,19 @@
         "rate": 1.0
       }
     },
-    "failures": []
+    "failures": [],
+    "set_aside": []
   },
   "retrieval": {
     "config": "hybrid+rerank",
     "embed_model": "BAAI/bge-small-en-v1.5",
-    "questions": 93,
+    "questions": 101,
     "chunks": 9544,
-    "hit_at_3": 0.796,
-    "hit_at_8": 0.903,
-    "mrr_at_3": 0.756,
-    "mrr_at_8": 0.78,
-    "p50_ms": 331.0
+    "hit_at_3": 0.752,
+    "hit_at_8": 0.921,
+    "mrr_at_3": 0.729,
+    "mrr_at_8": 0.764,
+    "p50_ms": 180.0
   },
   "cost": {
     "per_ai_answer_usd": 0.0,
@@ -119,7 +120,7 @@
       "per_ai_answer_usd": 0.000825,
       "per_1000_ai_answers_usd": 0.825
     },
-    "ai_share_of_eval_set": 0.231,
-    "per_answer_blended_usd": 0.000191
+    "ai_share_of_eval_set": 0.217,
+    "per_answer_blended_usd": 0.000179
   }
 }

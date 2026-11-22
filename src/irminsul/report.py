@@ -79,7 +79,7 @@ def answers(build: Path) -> tuple[dict, str | None]:
     manifest = json.loads((build / "manifest.json").read_text(encoding="utf-8"))
     live = version_from_manifest(manifest.get("sources", {}).get("yatta", {}).get("game_version"))
     cfg = GuardConfig(live, (live[0], live[1] + 1)) if live else GuardConfig()
-    report = evaluate(Engine(EntityStore.load(build), None, None, cfg))
+    report = evaluate(Engine(EntityStore.load(build), None, None, cfg), build)
     cats = report["by_category"]
     refusals = [_ratio(cats.get(c.value)) for c in REFUSAL_PROBES]
     refusals = [r for r in refusals if r]
@@ -97,6 +97,7 @@ def answers(build: Path) -> tuple[dict, str | None]:
         },
         "by_category": {c: _ratio(v) for c, v in cats.items()},
         "failures": [{"id": f["id"], "problems": f["problems"]} for f in report["failures"]],
+        "set_aside": report["set_aside"],
     }, f"{live[0]}.{live[1]}" if live else None
 
 

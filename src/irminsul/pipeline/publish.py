@@ -6,6 +6,8 @@ Flow (driven by the GitHub workflows):
 2. `stage`: upload a new build to a dated branch, e.g. `update-2026-11-01`. Nothing user-facing
    changes yet.
 3. `promote`: after the weekly PR is merged, copy that branch's files onto `main`.
+4. `head` before promoting and `rollback --to <sha>` if the live check fails afterwards
+   (see canary.py): the site goes back to the build it served before.
 
 The token comes from the HF_TOKEN environment variable (a GitHub Actions secret Ray sets).
 The dataset itself must already exist: this never creates repos.
@@ -170,6 +172,27 @@ def fetch_curated(repo: str, out: Path) -> list[str]:
     return list(CURATED_FILES)
 
 
+def head(repo: str) -> str:
+    """The commit `main` points at now: recorded before a publish, so it can be undone."""
+    return _api().dataset_info(repo, revision="main").sha
+
+
+def rollback(repo: str, sha: str) -> None:
+    """Put the published files back as they were at `sha` (a commit on main). Curated team
+    files are left alone: they're edited on their own schedule, not with builds."""
+    api = _api()
+    with tempfile.TemporaryDirectory() as tmp:
+        local = api.snapshot_download(repo, repo_type="dataset", revision=sha, local_dir=tmp)
+        api.upload_folder(
+            folder_path=local,
+            repo_id=repo,
+            repo_type="dataset",
+            revision="main",
+            commit_message=f"Roll back to {sha[:10]}: the published build failed its live check",
+            ignore_patterns=[".cache/*", ".gitattributes", "curated/*"],
+        )
+
+
 def restart_space(space: str) -> None:
     """The Space loads the dataset at boot, so a restart is what makes a new build live."""
     _api().restart_space(space)
@@ -189,6 +212,11 @@ def main() -> None:
     p = sub.add_parser("promote")
     p.add_argument("--repo", required=True)
     p.add_argument("--branch", required=True)
+    h = sub.add_parser("head")
+    h.add_argument("--repo", required=True)
+    b = sub.add_parser("rollback")
+    b.add_argument("--repo", required=True)
+    b.add_argument("--to", required=True, help="a commit sha printed by `head`")
     r = sub.add_parser("restart-space")
     r.add_argument("--space", required=True)
     u = sub.add_parser("upload-curated")
@@ -206,6 +234,10 @@ def main() -> None:
         print("fetched", ", ".join(fetch_curated(args.repo, args.out)))
     elif args.cmd == "stage":
         stage(args.repo, args.build, args.branch, args.index)
+    elif args.cmd == "head":
+        print(head(args.repo))
+    elif args.cmd == "rollback":
+        rollback(args.repo, args.to)
     elif args.cmd == "restart-space":
         restart_space(args.space)
     else:

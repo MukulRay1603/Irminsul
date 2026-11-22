@@ -71,6 +71,10 @@ TEAM_BUILDS = Path("config/team_builds.md")
 # so does a deep run whose source fails: last good data stays until a better read replaces it.
 OPTIONAL_SOURCES = ("books", "quests", "guides")
 CARRIED = {"books": "book/", "quests": "quest/", "guides": "auto-builds/"}
+# Daily sources that, when down, fall back to their last published docs instead of failing the
+# run: a source outage is the data's problem, not a person's. freshness.py raises an alarm
+# only when a fallback lasts FALLBACK_LIMIT days.
+FALLBACK = {"kqm": "kqm/", "notices": "notice/", "lore": "lore_story"}
 _LUNA = re.compile(r"Luna ([IVX]+)")
 _ROMAN = ("I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX")
 _KQM_GUIDE = re.compile(r"https://keqingmains\.com/q/[\w-]+-quickguide/?")
@@ -398,19 +402,44 @@ def read_guides(
     return "\n".join(lines), {"read": read, "no_guide": no_guide}
 
 
-def carried_docs(previous: Path | None, sources: tuple[str, ...], live: str | None) -> list[Doc]:
-    """Docs of the slow sources this build didn't read, from the last published build."""
+def previous_docs(previous: Path | None, wanted, live: str | None) -> list[Doc]:
+    """Docs from the last published build that `wanted(doc)` picks, minus anything not yet
+    revealed for the live version."""
     path = previous / "docs.jsonl" if previous else None
-    prefixes = tuple(p for s, p in CARRIED.items() if s not in sources)
-    if path is None or not path.exists() or not prefixes:
+    if path is None or not path.exists():
         return []
     docs = []
     with path.open(encoding="utf-8") as f:
         for line in f:
             doc = Doc.model_validate_json(line)
-            if doc.doc_id.startswith(prefixes) and not later(doc.revealed_in, live):
+            if wanted(doc) and not later(doc.revealed_in, live):
                 docs.append(doc)
     return docs
+
+
+def fallback_docs(previous: Path | None, source: str, live: str | None) -> list[Doc]:
+    rule = FALLBACK[source]
+    if rule.endswith("/"):
+        return previous_docs(previous, lambda d: d.doc_id.startswith(rule), live)
+    return previous_docs(previous, lambda d: d.kind == rule, live)
+
+
+def fallbacks_since(previous: Path | None, failed: set[str], now: datetime) -> dict[str, str]:
+    """When each failed source last worked: kept from the last manifest, so a long outage
+    shows its real length."""
+    last = previous / "manifest.json" if previous else None
+    before = (
+        json.loads(last.read_text("utf-8")).get("fallbacks", {}) if last and last.exists() else {}
+    )
+    return {s: before.get(s, now.isoformat()) for s in sorted(failed)}
+
+
+def carried_docs(previous: Path | None, sources: tuple[str, ...], live: str | None) -> list[Doc]:
+    """Docs of the slow sources this build didn't read, from the last published build."""
+    prefixes = tuple(p for s, p in CARRIED.items() if s not in sources)
+    if not prefixes:
+        return []
+    return previous_docs(previous, lambda d: d.doc_id.startswith(prefixes), live)
 
 
 def build(
@@ -430,6 +459,7 @@ def build(
     schedule: list[dict] = []
     changelog: Changelog | None = None
     live: str | None = None
+    failed: set[str] = set()  # sources that fell back to their last published docs
 
     if "yatta" in sources:
         client = PoliteClient(cache_dir=cache)
@@ -456,6 +486,10 @@ def build(
         news_client = PoliteClient(cache_dir=None)
         try:
             notices = fetch_notices(NoticesSource(news_client), now, live)
+        except Exception:
+            log.exception("notices failed: keeping the last published ones")
+            notices = fallback_docs(previous, "notices", live)
+            failed.add("notices")
         finally:
             news_client.close()
     feed = parse_banners(notices)
@@ -527,6 +561,10 @@ def build(
             sha = kqm.fetch()
             log.info("KQM TCL commit: %s", sha)
             pages = list(take(kqm.pages(now, blocklist)))
+        except Exception:
+            log.exception("KQM failed: keeping the last published pages")
+            sha, pages = None, []
+            failed.add("kqm")
         finally:
             kqm.close()
         # KQM pages carry no release data: only serve character pages for characters
@@ -542,6 +580,13 @@ def build(
         docs += kqm_docs
         dropped += [drop for _, page in pages for drop in page.dropped] + linked_drops
         unverified += linked_unverified
+        if "kqm" in failed:
+            kqm_docs = fallback_docs(previous, "kqm", live)
+            docs += kqm_docs
+            last = previous / "manifest.json" if previous else None
+            if last and last.exists():  # the commit those pages came from
+                before = json.loads(last.read_text("utf-8")).get("sources", {})
+                sha = before.get("kqm", {}).get("game_version")
         counts["kqm"] = {"pages": len(pages), "docs": len(kqm_docs)}
         source_info["kqm"] = {"game_version": sha, "license": "none stated, see DATA_SOURCES.md"}
 
@@ -564,6 +609,8 @@ def build(
             "weapons": len(planner["weapons"]),
         }
 
+    # A deep source that fails keeps its last good docs: it's removed from `read`
+    read = set(sources)
     if changelog is not None and ("lore" in sources or "books" in sources):
         lore_client = PoliteClient(cache_dir=cache)
         try:
@@ -577,14 +624,18 @@ def build(
                 books="books" in sources,
                 limit=limit,
             )
+        except Exception:
+            log.exception("lore failed: keeping the last published stories")
+            lore_docs, lore_dropped = fallback_docs(previous, "lore", live), []
+            counts["lore"] = {"fallback": len(lore_docs)}
+            failed.add("lore")
+            read.discard("books")  # books come from the same source: carried below
         finally:
             lore_client.close()
         docs += lore_docs
         dropped += lore_dropped
         log.info("lore: %s", counts["lore"])
 
-    # A deep source that fails keeps its last good docs: it's removed from `read` below
-    read = set(sources)
     if "quests" in sources and changelog is not None:
         quest_client = PoliteClient(cache_dir=cache)
         wiki_client = PoliteClient(cache_dir=cache, headers=hoyowiki.HEADERS)
@@ -691,6 +742,7 @@ def build(
         "dropped": [{"id": i, "reason": r} for i, r in dropped],
         "unverified": unverified,
         "skipped_beta": official.skipped_beta,
+        "fallbacks": fallbacks_since(previous, failed, now),
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest

@@ -43,6 +43,7 @@ env:
   HF_TOKEN: ${{ secrets.HF_TOKEN }}
   IRMINSUL_MODEL_CACHE: ${{ github.workspace }}/.models
   MIN_HIT_AT_8: "0.90"
+  SITE: https://mukulray-irminsul.hf.space
 
 jobs:
   update:
@@ -119,6 +120,8 @@ jobs:
       - name: Index and retrieval quality gate
         if: steps.diff.outputs.changed == 'true'
         run: |
+          # Generated tests follow the data: a patch's new characters are tested the same day
+          uv run irminsul-evalgen --build data/build
           uv run irminsul-index build --docs data/build/docs.jsonl --out data/index
           uv run irminsul-index eval --index data/index --k 8 --configs hybrid+rerank \
             --out data/build/retrieval.json --min-hit "$MIN_HIT_AT_8"
@@ -159,10 +162,38 @@ jobs:
 
       - name: Gate passed, so publish now and restart the site
         if: steps.diff.outputs.changed == 'true' && steps.gate.outputs.auto == 'true' && env.HF_TOKEN != ''
+        id: publish
         run: |
+          echo "before=$(uv run irminsul-publish head --repo "$HF_DATASET")" >> "$GITHUB_OUTPUT"
           uv run irminsul-publish promote --repo "$HF_DATASET" --branch "update-$(date -u +%F)-$GITHUB_RUN_NUMBER"
           uv run irminsul-publish restart-space --space "$HF_SPACE"
           echo "Published automatically and restarted the Space." >> "$GITHUB_STEP_SUMMARY"
+
+      # The site must serve the new build and answer as well as the build does offline. If it
+      # doesn't, put the previous build back on its own and say so in one issue.
+      - name: Live check, rolling back if it fails
+        if: steps.publish.outputs.before != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BEFORE: ${{ steps.publish.outputs.before }}
+        run: |
+          if uv run irminsul-canary --site "$SITE" --build data/build --out data/build/canary.json; then
+            echo "Live check passed: $(jq -r '"\(.passed)/\(.asked)"' data/build/canary.json) answered as offline." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          uv run irminsul-publish rollback --repo "$HF_DATASET" --to "$BEFORE"
+          uv run irminsul-publish restart-space --space "$HF_SPACE"
+          run="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          { echo "The build published by $run failed its live check, so the dataset was rolled back to \`${BEFORE:0:10}\` and the site restarted."; echo;
+            echo '```json'; cat data/build/canary.json 2>/dev/null || echo '{}'; echo '```'; } > /tmp/issue.md
+          # One open issue, not one a day: the next build retries on its own
+          open="$(gh issue list --state open --search 'Published build rolled back in:title'             --json number --jq '.[0].number')"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body-file /tmp/issue.md
+          else
+            gh issue create --title "Published build rolled back ($(date -u +%F))" --body-file /tmp/issue.md
+          fi
+          echo "**Live check failed: rolled back to ${BEFORE:0:10}.**" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Gate held it, so open a review PR
         if: steps.diff.outputs.changed == 'true' && steps.gate.outputs.auto != 'true'
