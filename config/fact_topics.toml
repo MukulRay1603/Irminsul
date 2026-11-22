@@ -1,0 +1,16 @@
+# Topics for team fact lines, so an exact answer finds its lines wherever they sit in the
+# curated file (sources/team_facts.py). A line can also carry its own tags: "... #fates".
+#   topic:   the answer that uses the line
+#   section: the "## Section" the line is under (left out: any section)
+#   match:   a regular expression the line's text must match
+
+# "How do I get more Fates?" (engine.py, _fates_answer)
+[[rule]]
+topic = "fates"
+section = "Wishes"
+match = "160 Primogems|Paimon's Bargains|Starglitter back|Masterless Stardust"
+
+[[rule]]
+topic = "fates"
+section = "Primogems"
+match = "maintenance compensation is 300|Issue Fix Compensation|^Estimate"

@@ -12,6 +12,7 @@ import itertools
 import json
 import logging
 import re
+import tomllib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -20,6 +21,7 @@ from pydantic import BaseModel
 
 from irminsul.engine.entities import ALIASES
 from irminsul.engine.guards import version_from_manifest
+from irminsul.pipeline import recheck
 from irminsul.pipeline.gate import gate, gate_linked_docs, normalise_name
 from irminsul.pipeline.guides import reaction_guides
 from irminsul.pipeline.planner import build_planner, parse_schedule
@@ -50,7 +52,7 @@ from irminsul.sources.guides import fetch_guide, guide_urls
 from irminsul.sources.http import PoliteClient
 from irminsul.sources.kqm import KqmSource
 from irminsul.sources.notices import NoticesSource, fetch_notices
-from irminsul.sources.team_facts import parse_facts
+from irminsul.sources.team_facts import fact_lines, parse_facts
 from irminsul.sources.yatta import QUEST_TYPES, SITE, YattaSource
 from irminsul.story import (
     Changelog,
@@ -66,6 +68,7 @@ SOURCES = ("yatta", "hoyowiki", "kqm", "lore", "team_facts", "notices")
 TEAM_FACTS = Path("config/team_facts.md")  # public team facts, approved by Ray (Oct 2026)
 # Build recommendations (weapons, sets, stats, teams), each line attributed to its guide
 TEAM_BUILDS = Path("config/team_builds.md")
+FACT_TOPICS = Path("config/fact_topics.toml")  # which answers use which fact lines
 # The slow sources, thousands of requests between them: read on deep runs only (see
 # gamedays.py). Every other run carries their docs forward from the last published build, and
 # so does a deep run whose source fails: last good data stays until a better read replaces it.
@@ -442,6 +445,25 @@ def carried_docs(previous: Path | None, sources: tuple[str, ...], live: str | No
     return previous_docs(previous, lambda d: d.doc_id.startswith(prefixes), live)
 
 
+def fact_checks(
+    curated: dict[str, str], previous: Path | None, live, now: datetime, online: bool
+) -> dict:
+    """Re-read the sources of the curated lines that are behind the live version (recheck.py).
+    Earlier verdicts come from the last published build; a failure keeps them as they were."""
+    path = previous / "fact_checks.json" if previous else None
+    before = json.loads(path.read_text("utf-8")) if path and path.exists() else {}
+    lines = [line for text in curated.values() for line in fact_lines(text)]
+    client = PoliteClient(delay_s=1.0, retries=1, cache_dir=None) if online else None
+    try:
+        return recheck.recheck(lines, before, live, now, client)
+    except Exception:
+        log.exception("fact re-check failed: keeping the last verdicts")
+        return before or {"facts": {}}
+    finally:
+        if client:
+            client.close()
+
+
 def build(
     out: Path,
     cache: Path | None,
@@ -689,26 +711,23 @@ def build(
     docs += carried
     counts["carried"] = len(carried)
 
-    if "team_facts" in sources and TEAM_FACTS.exists():
-        facts = parse_facts(
-            TEAM_FACTS.read_text(encoding="utf-8"),
-            now,
-            version_from_manifest(source_info.get("yatta", {}).get("game_version")),
-        )
-        docs += facts.docs
-        dropped += [(f"team_facts:{line}", reason) for line, reason in facts.dropped]
-        counts["team_facts"] = {"lines": facts.kept_lines, "docs": len(facts.docs)}
-    if "team_facts" in sources and TEAM_BUILDS.exists():
-        builds = parse_facts(
-            TEAM_BUILDS.read_text(encoding="utf-8"),
-            now,
-            version_from_manifest(source_info.get("yatta", {}).get("game_version")),
-            prefix="team-builds",
-            what="builds",
-        )
-        docs += builds.docs
-        dropped += [(f"team_builds:{line}", reason) for line, reason in builds.dropped]
-        counts["team_builds"] = {"lines": builds.kept_lines, "docs": len(builds.docs)}
+    live_key = version_from_manifest(source_info.get("yatta", {}).get("game_version"))
+    curated = {
+        name: path.read_text(encoding="utf-8")
+        for name, path in (("facts", TEAM_FACTS), ("builds", TEAM_BUILDS))
+        if "team_facts" in sources and path.exists()
+    }
+    topics = tomllib.loads(FACT_TOPICS.read_text("utf-8"))["rule"] if FACT_TOPICS.exists() else []
+    checks = fact_checks(curated, previous, live_key, now, "team_facts" in sources)
+    (out / "fact_checks.json").write_text(json.dumps(checks, indent=1), encoding="utf-8")
+    counts["fact_checks"] = checks.get("counts", {})
+    for name, kw in (("facts", {}), ("builds", {"prefix": "team-builds", "what": "builds"})):
+        if name not in curated:
+            continue
+        result = parse_facts(curated[name], now, live_key, checks=checks, topics=topics, **kw)
+        docs += result.docs
+        dropped += [(f"team_{name}:{line}", reason) for line, reason in result.dropped]
+        counts[f"team_{name}"] = {"lines": result.kept_lines, "docs": len(result.docs)}
 
     docs += notices
     counts["notices"] = len(notices)

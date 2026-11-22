@@ -6,7 +6,9 @@ HoYoverse's own notices as the truth:
   every weapon on one must be a weapon in our data,
 - the newest version with an update notice must be the version our game data says is live,
 - there must be a wish open or announced,
-- the last deep run (quests, books, guides) must be recent.
+- the last deep run (quests, books, guides) must be recent,
+- every team fact behind the live version must still be confirmed by its source page
+  (recheck.py): a hidden fact, or a page unreadable for a week, needs a look.
 
 Usage:
     uv run irminsul-freshness --build data/build
@@ -18,12 +20,41 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from irminsul.engine import pulls
 from irminsul.engine.guards import version_from_manifest
 from irminsul.pipeline.gate import normalise_name
 from irminsul.sources.banners import active, proven_live, proven_weapons, upcoming
 
 DEEP_RUN_LIMIT = timedelta(days=9)  # weekly, with two days of grace
 FALLBACK_LIMIT = timedelta(days=3)  # a source down this long needs a look; shorter heals itself
+UNREADABLE_LIMIT = timedelta(days=7)  # a fact's page unreadable this long can't be re-checked
+
+
+def fact_problems(build: Path, now: datetime) -> list[str]:
+    """Team facts their source no longer confirms (hidden from answers), and pages that have
+    been unreadable too long. Only page addresses are named: issues are public."""
+    path = build / "fact_checks.json"
+    facts = json.loads(path.read_text("utf-8")).get("facts", {}) if path.exists() else {}
+    changed = sorted({f["url"] for f in facts.values() if f.get("status") == "changed"})
+    stuck = sorted(
+        {
+            f["url"]
+            for f in facts.values()
+            if f.get("status") == "unreadable"
+            and now.date() - datetime.fromisoformat(f.get("since") or f["on"]).date()
+            > UNREADABLE_LIMIT
+        }
+    )
+    problems = []
+    if changed:
+        n = sum(f.get("status") == "changed" for f in facts.values())
+        problems.append(
+            f"{n} team fact lines are hidden: their source no longer shows what they say. "
+            f"Re-check them by hand (a newer checked date brings a line back): {', '.join(changed)}"
+        )
+    if stuck:
+        problems.append(f"team fact sources unreadable for over a week: {', '.join(stuck)}")
+    return problems
 
 
 def check(build: Path, now: datetime) -> list[str]:
@@ -66,10 +97,16 @@ def check(build: Path, now: datetime) -> list[str]:
     newest = max(started, default=None)
     if live and newest and tuple(int(x) for x in newest.split(".")) > live:
         problems.append(f"the game is on {newest} but our game data says {live[0]}.{live[1]}")
+    if live and live > pulls.INCOME_CHECKED_FOR:
+        checked = ".".join(map(str, pulls.INCOME_CHECKED_FOR))
+        problems.append(
+            f"the free-Primogem figures (engine/pulls.py) were last compared with the notices "
+            f"for {checked}: compare them with the {live[0]}.{live[1]} notices"
+        )
 
     if not active(feed, now.date()) and not upcoming(feed, now.date()):
         problems.append("no wish is open or announced: the banner notices may have changed format")
-    return problems
+    return problems + fact_problems(build, now)
 
 
 def main() -> None:

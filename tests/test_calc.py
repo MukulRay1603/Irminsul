@@ -162,11 +162,11 @@ def fates_engine(texts):
 FACTS = {
     "team/wishes#2": (
         "# Wishes\n- One wish costs one Intertwined Fate, and either Fate can be bought for "
-        "160 Primogems. (checked 2026-10-26; applies to 7.1)\n- Pity is 90."
+        "160 Primogems. (checked 2026-10-26; applies to 7.1; topics: fates)\n- Pity is 90."
     ),
     "team/wishes#11": (
         "# Wishes\n- In Paimon's Bargains, a Fate costs 75 Masterless Stardust, 5 a month. "
-        "(checked 2026-10-26; applies to 7.1)"
+        "(checked 2026-10-26; applies to 7.1; topics: fates)"
     ),
 }
 
@@ -194,12 +194,12 @@ def test_fates_answer_reads_facts_the_way_the_index_stores_them():
         "team/wishes#2": (
             "# Wishes: team-checked facts\nSource: https://x.test - One wish costs one "
             "Intertwined Fate, and either Fate can be bought for 160 Primogems. "
-            "(checked 2026-10-26; applies to 7.1) - Pity is 90. "
+            "(checked 2026-10-26; applies to 7.1; topics: fates) - Pity is 90. "
             "(checked 2026-10-26; applies to 7.1)"
         ),
         "team/wishes#11": (
             "# Wishes: team-checked facts\nSource: https://x.test - In Paimon's Bargains, a 4-star "
-            "costs 5 Starglitter. (checked 2026-10-26; applies to 7.1)"
+            "costs 5 Starglitter. (checked 2026-10-26; applies to 7.1; topics: fates)"
         ),
     }
     answer = fates_engine(flat)._fates_answer("Where do I get Fates?")

@@ -84,18 +84,19 @@ _FATES_ASK = re.compile(
     r"|\bfates?\b.{0,20}\b(?:sources?|where (?:to|do i) get)\b",
     re.I,
 )
-# One team fact: "- <fact> (checked <date>; applies to <version>)"
-_FACT_LINE = re.compile(r"(?:^|\s)-\s+([A-Z0-9\"'][^\n]*?)\s*\(checked [^)]*\)")
-# (doc, which of its lines to quote): every line here was checked against its source page
-FATE_FACTS = (
-    ("team/wishes#2", r"160 Primogems"),
-    ("team/wishes#11", r"Paimon's Bargains"),
-    ("team/wishes#9", r"Starglitter"),
-    ("team/wishes#10", r"Stardust"),
-    ("team/primogems#1", r"maintenance compensation is 300|Issue Fix Compensation"),
-    ("team/primogems#4", r"Estimate"),
-)
+# One team fact: "- <fact> (checked <date>; applies to <version>[; topics: a, b])"
+_FACT_LINE = re.compile(r"(?:^|\s)-\s+([A-Z0-9\"'][^\n]*?)\s*\(checked ([^)]*)\)")
+_TOPICS = re.compile(r";\s*topics:\s*([\w, -]+)$")
+
 BUILD_DOCS = ("team-builds/", "auto-builds/")
+
+
+def _doc_order(doc_id: str) -> tuple[str, int]:
+    """team/wishes#2 before team/wishes#11: the file's own order within a section."""
+    name, _, n = doc_id.partition("#")
+    return name, int(n) if n.isdigit() else 0
+
+
 _NOTHING_VERIFIED = re.compile(r"\W*i (?:do not|don.t) have verified information", re.I)
 _BUILD_ASK = re.compile(
     r"\bbuilds?\b|\bbis\b|\bbest (?:weapons?|artifacts?|sets?)\b"
@@ -437,8 +438,9 @@ class Engine:
         )
 
     def _fates_answer(self, question: str) -> Answer | None:
-        """Where Fates come from, quoted from the team-checked fact lines rather than written
-        by a model: the sources a player needs sit in five short docs search found poorly."""
+        """Where Fates come from, quoted from the team-checked fact lines tagged `fates`
+        (config/fact_topics.toml) rather than written by a model: the sources a player needs
+        sit in five short docs search found poorly."""
         if not _FATES_ASK.search(question) or self.index is None:
             return None
         # A doc can span several chunks, and chunking flattens its "- fact" lines into one
@@ -447,15 +449,16 @@ class Engine:
         for c in getattr(self.index, "chunks", []):
             by_doc.setdefault(c.doc_id, []).append(c)
         lines, citations = [], []
-        for doc_id, keep in FATE_FACTS:
-            parts = by_doc.get(doc_id)
-            if not parts:
+        for doc_id in sorted(by_doc, key=_doc_order):
+            if not doc_id.startswith("team/"):
                 continue
+            parts = by_doc[doc_id]
             whole = " ".join(p.text for p in parts)
             found = []
-            for fact in _FACT_LINE.findall(whole):
+            for fact, note in _FACT_LINE.findall(whole):
                 fact = " ".join(fact.split())
-                if re.search(keep, fact, re.I) and fact not in found:
+                tags = _TOPICS.search(note)
+                if tags and "fates" in tags.group(1).split(", ") and fact not in found:
                     found.append(fact)
             if not found:
                 continue

@@ -90,6 +90,12 @@ jobs:
           DEEP: ${{ steps.calendar.outputs.deep == 'true' && '--deep' || '' }}
         run: uv run irminsul-build --out data/build --previous prev $DEEP
 
+      # The game's proper nouns from this build, and nicknames from feedback rated helpful
+      - name: On-topic words and nicknames (learned from the data)
+        run: >-
+          uv run irminsul-vocab --build data/build --previous prev
+          --feedback-repo MukulRay/irminsul-feedback
+
       - name: Diff, guards and decision
         id: diff
         env:

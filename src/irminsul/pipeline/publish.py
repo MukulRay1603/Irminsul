@@ -37,6 +37,8 @@ PUBLISH_FILES = (
     "planner.json",
     "history.json",
     "banners.json",
+    "fact_checks.json",
+    "vocabulary.json",
     "results.json",
     "CHANGELOG.md",
 )
@@ -50,6 +52,8 @@ PREVIOUS_FILES = (
     "videos.jsonl",
     "banners.json",  # the game calendar that decides deep runs
     "docs.jsonl",  # carried forward: quests, books and read guides between deep runs
+    "fact_checks.json",  # the last re-check of each team fact (pipeline/recheck.py)
+    "vocabulary.json",  # nicknames learned so far (pipeline/vocab.py)
 )
 CARD = """---
 license: other

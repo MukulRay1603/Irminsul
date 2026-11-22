@@ -18,7 +18,8 @@ PER_CLIENT_PER_HOUR = 600  # the page recalculates as a player types
 def upcoming(today, count: int = 8) -> list[dict]:
     """The next version phases, with their estimated dates."""
     out = []
-    index = pulls.ANCHOR_VERSION[0] * pulls.MINORS_PER_MAJOR + pulls.ANCHOR_VERSION[1]
+    (major, minor), _ = pulls.anchor()
+    index = major * pulls.MINORS_PER_MAJOR + minor
     while len(out) < count:
         version = divmod(index, pulls.MINORS_PER_MAJOR)
         for phase in (1, 2):

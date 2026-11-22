@@ -31,6 +31,7 @@ irminsul-answer-eval = "irminsul.engine.evaluate:main"
 irminsul-serve = "irminsul.api.serve:main"
 irminsul-report = "irminsul.report:main"
 irminsul-canary = "irminsul.canary:main"
+irminsul-vocab = "irminsul.pipeline.vocab:main"
 
 [dependency-groups]
 dev = [
