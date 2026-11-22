@@ -221,6 +221,14 @@ def _constellations(page: dict[str, Any]) -> list[Constellation]:
     ]
 
 
+def base_stats(page: dict[str, Any]) -> BaseStats | None:
+    """Level-90 base stats from an official character page, or None if it has none."""
+    try:
+        return _base_stats(page)
+    except (TypeError, ValueError, AttributeError):
+        return None
+
+
 def _base_stats(page: dict[str, Any]) -> BaseStats | None:
     rows = _module(page, "Ascend", "ascension")
     top = next((r for r in rows if r.get("key") == "Lv.90"), None)

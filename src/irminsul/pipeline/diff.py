@@ -137,6 +137,12 @@ def to_markdown(diff: CorpusDiff, new: dict, problems: list[str]) -> str:
         lines.append("No content changes.")
     lines += _ids("Added docs", diff.added) + _ids("Removed docs", diff.removed)
     lines += _ids("Changed docs", diff.changed)
+    if disagree := new.get("cross_check"):
+        lines += [f"**Yatta and HoYoWiki disagree, official value used ({len(disagree)})**"]
+        lines += [
+            f"- `{d['id']}` {d['field']}: Yatta {d['yatta']:g}, HoYoWiki {d['hoyowiki']:g}"
+            for d in disagree[:25]
+        ] + [""]
     if diff.new_drops:
         lines += [f"**Newly dropped by the leak gate ({len(diff.new_drops)})**"]
         lines += [f"- `{x['id']}`: {x['reason']}" for x in diff.new_drops[:25]] + [""]

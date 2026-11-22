@@ -33,6 +33,23 @@ REFUSE_ROUTES = {
 }
 
 
+# Answers that say nothing about quality: no model reachable, or out of allowance right now
+NOT_SCORED = ("no_llm", "no_index", "no_allowance", "busy")
+
+
+def score(item, text: str, route: str, cited: set[str]) -> tuple[bool, list[str]]:
+    """Does one answer meet its item? Shared by the offline eval and the live run (canary)."""
+    ok, problems = matches(text, item)
+    refused = route in REFUSE_ROUTES
+    if item.expect == Expect.REFUSE and not refused:
+        ok, problems = False, problems + ["should have refused"]
+    if item.expect != Expect.REFUSE and refused:
+        ok, problems = False, problems + [f"wrongly refused ({route})"]
+    if item.gold_doc_ids and item.expect != Expect.REFUSE and not cited & set(item.gold_doc_ids):
+        ok, problems = False, problems + ["gold doc not cited"]
+    return ok, problems
+
+
 def evaluate(engine: Engine, build: Path | None = None) -> dict:
     """Score every item; with a build, items that look answers up read them from it first."""
     rows = []
@@ -49,17 +66,8 @@ def evaluate(engine: Engine, build: Path | None = None) -> dict:
                 }
             )
             continue
-        ok, problems = matches(answer.text, item)
-        refused = answer.route in REFUSE_ROUTES
-        if item.expect == Expect.REFUSE and not refused:
-            ok, problems = False, problems + ["should have refused"]
-        if item.expect != Expect.REFUSE and refused:
-            ok, problems = False, problems + [f"wrongly refused ({answer.route})"]
-        if item.gold_doc_ids and item.expect != Expect.REFUSE:
-            cited = {c.doc_id for c in answer.citations}
-            if not cited & set(item.gold_doc_ids):
-                problems.append("gold doc not cited")
-                ok = False
+        cited = {c.doc_id for c in answer.citations}
+        ok, problems = score(item, answer.text, answer.route, cited)
         rows.append(
             {
                 "id": item.id,

@@ -1,0 +1,99 @@
+# Weekly full test of the live site: every eval question, AI answers included, scored like the
+# offline eval (irminsul-canary --full). The daily live check after a publish only asks the
+# questions that need no AI; this one also measures the answers the model writes.
+#
+# IRMINSUL_DEMO_KEY (a GitHub secret Ray sets, the same value as the Space secret) lifts the
+# personal AI allowance for this run. Without it the run still works: answers past the free
+# allowance are counted as not scored, so the pass rate covers fewer answers.
+#
+# A pass rate under 85% opens one issue (or comments on the open one): that's a code, model
+# or platform problem for HEX, never a request to edit content.
+name: Weekly live eval
+
+on:
+  schedule:
+    - cron: "23 4 * * 1" # Mondays 04:23 UTC: a quiet hour, after Sunday's daily checks
+  workflow_dispatch:
+
+permissions: {} # granted per job below
+
+concurrency:
+  group: live-eval
+  cancel-in-progress: false
+
+env:
+  HF_DATASET: MukulRay/irminsul-corpus
+  HF_TOKEN: ${{ secrets.HF_TOKEN }}
+  SITE: https://mukulray-irminsul.hf.space
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      issues: write # the failure issue
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: astral-sh/setup-uv@d4b2f3b6ecc6e67c4457f6d3e41ec42d3d0fcb86 # v5.4.2
+        with:
+          enable-cache: true
+
+      - name: Install
+        run: uv sync --locked --python 3.12
+
+      # The live build's records, notices and docs: answers that change with the game are
+      # looked up in them, exactly as the site sees them
+      - name: The build the site serves
+        run: |
+          mkdir -p live
+          uv run irminsul-publish fetch-manifest --repo "$HF_DATASET" --out live
+
+      - name: Ask the live site every eval question
+        env:
+          IRMINSUL_DEMO_KEY: ${{ secrets.IRMINSUL_DEMO_KEY }}
+        run: |
+          if [ -z "$IRMINSUL_DEMO_KEY" ]; then
+            echo "::notice::No IRMINSUL_DEMO_KEY secret: AI answers past the free allowance won't be scored"
+          fi
+          uv run irminsul-canary --full --site "$SITE" --build live --out live-eval.json
+
+      - name: Summary
+        if: always()
+        run: |
+          [ -f live-eval.json ] || exit 0
+          uv run python -c "
+          import json
+          r = json.load(open('live-eval.json'))
+          print(f\"### Live eval: {r['passed']}/{r['scored']} passed ({r['pass_rate']:.1%})\")
+          print(f\"Asked {r['asked']}, not scored {r['not_scored']}, errors {r['errors']}.\")
+          for f in r['failures'][:30]:
+              print(f\"- {f['id']}: {f.get('problems') or f.get('error') or f.get('route')}\")
+          " >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: live-eval-${{ github.run_number }}
+          path: live-eval.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Open an issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          open="$(gh issue list --state open --search 'Weekly live eval failed in:title' \
+            --json number --jq '.[0].number')"
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "Failed again: $run"
+          else
+            gh issue create --title "Weekly live eval failed ($(date -u +%F))" \
+              --body "Run: $run
+          The live site's pass rate fell below 85%, or the run couldn't reach it. The run summary
+          lists the failing questions. This is a code, model or platform problem to fix."
+          fi

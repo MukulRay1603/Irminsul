@@ -10,6 +10,11 @@ Usage:
 
 Exit 1 when the site never serves the build, or answers clearly worse than the same build
 does offline. The workflow then rolls the dataset back and opens one issue.
+
+`--full` (weekly, live-eval.yml): every eval question, AI answers included, scored like the
+offline eval. The owner's demo key (IRMINSUL_DEMO_KEY, a GitHub secret) lifts the personal AI
+allowance; answers that hit the shared daily budget anyway are counted as not scored. Exit 1
+when the live pass rate falls below MIN_FULL.
 """
 
 import argparse
@@ -112,14 +117,72 @@ def check(site: str, build: Path, timeout_s: int = 1200, pause_s: float = 2.5) -
     return report
 
 
+MIN_FULL = 0.85  # live pass rate a weekly run must keep (21 Nov: 95.1%)
+
+
+def full_check(site: str, build: Path, pause_s: float = 3.0) -> dict:
+    """Ask the live site every eval question and score it like the offline eval."""
+    import os
+
+    from irminsul.engine.evaluate import NOT_SCORED, score
+
+    headers = {"user-agent": "irminsul-live-eval"}
+    if key := os.environ.get("IRMINSUL_DEMO_KEY"):
+        headers["x-irminsul-demo"] = key
+    items, set_aside = resolve(load(), build)
+    rows = []
+    with httpx.Client(headers=headers) as client:
+        for item in items:
+            body = {"question": item.question, "story_until": item.story_until}
+            try:
+                r = client.post(f"{site}/ask", json=body, timeout=120)
+                r.raise_for_status()
+                got = r.json()
+            except (httpx.HTTPError, ValueError) as exc:
+                rows.append({"id": item.id, "status": "error", "error": type(exc).__name__})
+                time.sleep(pause_s)
+                continue
+            route = got.get("route", "")
+            if route in NOT_SCORED:
+                rows.append({"id": item.id, "status": "not_scored", "route": route})
+            else:
+                cited = {c.get("doc_id") for c in got.get("citations", [])}
+                ok, problems = score(item, got.get("answer", ""), route, cited)
+                row = {"id": item.id, "status": "pass" if ok else "fail", "route": route}
+                rows.append(row | ({} if ok else {"problems": problems}))
+            time.sleep(pause_s)
+    scored = [r for r in rows if r["status"] in ("pass", "fail")]
+    passed = sum(r["status"] == "pass" for r in scored)
+    rate = passed / len(scored) if scored else 0.0
+    report = {
+        "site": site,
+        "asked": len(rows),
+        "scored": len(scored),
+        "passed": passed,
+        "pass_rate": round(rate, 3),
+        "not_scored": sum(r["status"] == "not_scored" for r in rows),
+        "errors": sum(r["status"] == "error" for r in rows),
+        "failures": [r for r in rows if r["status"] in ("fail", "error")],
+        "set_aside": set_aside,
+        "ok": bool(scored) and rate >= MIN_FULL,
+    }
+    if not report["ok"]:
+        report["problem"] = (
+            f"live pass rate {rate:.1%} on {len(scored)} answers, below {MIN_FULL:.0%}"
+        )
+    return report
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--site", required=True)
     parser.add_argument("--build", type=Path, default=Path("data/build"))
     parser.add_argument("--timeout", type=int, default=1200, help="seconds to wait for restart")
     parser.add_argument("--out", type=Path, default=None)
+    parser.add_argument("--full", action="store_true", help="every eval question (weekly)")
     args = parser.parse_args()
-    report = check(args.site.rstrip("/"), args.build, args.timeout)
+    site = args.site.rstrip("/")
+    report = full_check(site, args.build) if args.full else check(site, args.build, args.timeout)
     text = json.dumps(report, indent=2)
     if args.out:
         args.out.write_text(text, encoding="utf-8")

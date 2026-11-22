@@ -25,7 +25,9 @@ DAILY = 60
 ABYSS = 800  # 16th of each month
 THEATER = 800  # 1st of each month
 PER_VERSION = {
-    "update compensation": 600,  # 300 + 300, official notices 7.0 to 7.2
+    # Read from the newest Update Details notice at boot (use_calendar); this is only the value
+    # until then
+    "update compensation": 600,
     "livestream codes": 300,
     "Stygian": 450,
     "trials": 80,
@@ -35,10 +37,6 @@ PER_VERSION = {
 TYPICAL_VERSION = {"events and quests": 2880, "exploration": 900, "achievements": 240}
 SHOP_FATES = 5  # Paimon's Bargains, 1st of each month, for Masterless Stardust
 
-# The income figures above were last compared with the official notices for this version;
-# the freshness check asks for a look once a newer version is live (no feed publishes them)
-INCOME_CHECKED_FOR = (7, 2)
-
 CADENCE_DAYS = 42
 # Used only until the official calendar is loaded (use_calendar): the last start date known
 # when this was written. Every date after it comes from the notices or the cadence.
@@ -46,6 +44,7 @@ ANCHOR_VERSION = (7, 2)
 ANCHOR_DATE = date(2026, 11, 4)
 MINORS_PER_MAJOR = 8  # x.0 to x.7 since 5.x
 PHASE_DAYS = 21
+UPDATE_COMPENSATION = PER_VERSION["update compensation"]  # until a notice says otherwise
 
 # The official calendar: each version's start (its Update Details notice) and each phase-2
 # start (its wish notice), from the build's banners.json. Loaded at boot by use_calendar().
@@ -62,12 +61,17 @@ def use_calendar(feed: dict | None) -> None:
     """Take version and phase dates from the official notices instead of the cadence."""
     _STARTS.clear()
     _PHASE2.clear()
+    PER_VERSION["update compensation"] = UPDATE_COMPENSATION
     for version, day in ((feed or {}).get("versions") or {}).items():
         if (v := _key(version)) and day:
             _STARTS[v] = date.fromisoformat(day)
     for banner in (feed or {}).get("banners") or []:
         if banner.get("phase") == 2 and banner.get("start") and (v := _key(banner["version"])):
             _PHASE2[v] = date.fromisoformat(banner["start"])
+    # What the newest update notice gives as compensation is what the next one will likely give
+    given = {_key(v): n for v, n in ((feed or {}).get("compensation") or {}).items() if _key(v)}
+    if given:
+        PER_VERSION["update compensation"] = given[max(given)]
 
 
 def anchor() -> tuple[tuple[int, int], date]:
