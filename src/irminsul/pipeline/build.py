@@ -36,6 +36,7 @@ from irminsul.pipeline.render import (
 )
 from irminsul.schema import (
     SCHEMA_VERSION,
+    BaseStats,
     Character,
     Doc,
     Release,
@@ -118,6 +119,30 @@ class Official:
     videos: list[Video]
     skipped_beta: list[str]
     weapons: list[Weapon] = field(default_factory=list)
+    # Where Yatta's game data and HoYoWiki disagree on a number (cross_check): the official
+    # page's value is used, and the change log says so
+    disagreements: list[dict] = field(default_factory=list)
+
+
+STAT_FIELDS = ("hp", "atk", "defense", "bonus_value")
+STAT_TOLERANCE = 0.005  # half a percent: the two round differently
+
+
+def cross_check(character: Character, official: BaseStats | None) -> list[dict]:
+    """Level-90 base stats from Yatta against the official HoYoWiki page. Where they disagree
+    beyond rounding, the official value replaces Yatta's on the record."""
+    mine = character.base_stats
+    if mine is None or official is None:
+        return []
+    found = []
+    for name in STAT_FIELDS:
+        a, b = getattr(mine, name), getattr(official, name)
+        if a is None or b is None:
+            continue
+        if abs(a - b) > STAT_TOLERANCE * max(abs(a), abs(b), 1e-9):
+            found.append({"id": character.id, "field": name, "yatta": a, "hoyowiki": b})
+            setattr(mine, name, b)
+    return found
 
 
 def fetch_official(
@@ -144,6 +169,7 @@ def fetch_official(
         "artifact_sets": wiki.entries(hoyowiki.MENU_ARTIFACTS),
     }
     live_ids = {normalise_name(c.name): c.id for c in live}
+    by_key = {normalise_name(c.name): c for c in live}
     official = Official({k: {e.name for e in v} for k, v in entries.items()}, [], [], [])
     sampled = 0
     for entry in entries["characters"]:
@@ -168,6 +194,8 @@ def fetch_official(
             live_ids[key] = character.id
         entity_id = live_ids.get(key, f"character/{slugify(entry.name)}")
         official.videos += hoyowiki.parse_videos(page, entity_id, now)
+        if not is_new and (mine := by_key.get(key)) is not None:
+            official.disagreements += cross_check(mine, hoyowiki.base_stats(page))
     known = {normalise_name(w.name) for w in live_weapons or []}
     proven_gear = {normalise_name(k): v for k, v in (proven_gear or {}).items()}
     for entry in entries["weapons"]:
@@ -482,6 +510,7 @@ def build(
     changelog: Changelog | None = None
     live: str | None = None
     failed: set[str] = set()  # sources that fell back to their last published docs
+    cross: list[dict] = []  # Yatta vs HoYoWiki disagreements (cross_check)
 
     if "yatta" in sources:
         client = PoliteClient(cache_dir=cache)
@@ -532,6 +561,7 @@ def build(
         finally:
             wiki_client.close()
         fetched["characters"] += official.announced
+        cross = official.disagreements
         fetched["weapons"] += official.weapons
         source_info["hoyowiki"] = {"official_names": {k: len(v) for k, v in official.names.items()}}
         log.info(
@@ -762,6 +792,7 @@ def build(
         "unverified": unverified,
         "skipped_beta": official.skipped_beta,
         "fallbacks": fallbacks_since(previous, failed, now),
+        "cross_check": cross,
     }
     (out / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     return manifest

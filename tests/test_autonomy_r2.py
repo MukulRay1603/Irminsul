@@ -109,11 +109,22 @@ def test_a_newer_hand_check_wins_over_the_machine():
     assert "Pity is 90" in parse_facts(rechecked, NOW, (7, 2), checks=checks).docs[0].text
 
 
-def test_hidden_facts_raise_one_freshness_problem_naming_only_pages(tmp_path):
+def test_hidden_facts_ask_nobody_and_come_back_by_themselves(tmp_path):
     checks = recheck(lines(), {}, (7, 2), NOW, FakeClient({URL: PAGE}))
     (tmp_path / "fact_checks.json").write_text(json.dumps(checks))
+    assert freshness.fact_problems(tmp_path, NOW) == []  # hidden is not a job for a person
+    week_later = NOW.replace(day=29)
+    fixed = PAGE + " Pity is 90 wishes. " * 5
+    again = recheck(lines(), checks, (7, 2), week_later, FakeClient({URL: fixed}))
+    assert again["counts"] == {OK: 3}  # the page says it again: the line is back
+    assert recheck(lines(), checks, (7, 2), NOW, FakeClient({}))["counts"][CHANGED] == 1
+
+
+def test_a_page_unreadable_for_a_week_is_a_reader_problem(tmp_path):
+    down = recheck(lines(), {}, (7, 2), NOW.replace(day=10), FakeClient({URL: FetchError("x")}))
+    (tmp_path / "fact_checks.json").write_text(json.dumps(down))
     (problem,) = freshness.fact_problems(tmp_path, NOW)
-    assert "1 team fact lines are hidden" in problem and URL in problem and "Pity" not in problem
+    assert "can't read" in problem and URL in problem
 
 
 # ---- B2: topic tags instead of doc ids ----------------------------------------------------
@@ -184,24 +195,35 @@ def test_without_the_calendar_the_last_known_date_counts_on(calendar):
     assert pulls.version_start((7, 3)) == date(2026, 12, 16)
 
 
-def test_income_figures_ask_for_a_look_once_a_newer_version_is_live(tmp_path):
-    wish = {
-        "version": "7.3",
-        "kind": "character",
-        "start": "2026-11-20",
-        "end": "2026-12-10",
-        "five_stars": [],
-        "four_stars": [],
-        "name": "w",
-        "phase": 1,
-        "source": "",
-    }
-    feed = {"versions": {"7.3": "2026-11-20"}, "banners": [wish]}
-    (tmp_path / "banners.json").write_text(json.dumps(feed))
-    (tmp_path / "characters.jsonl").write_text("")
-    manifest = {"deep_at": NOW.isoformat(), "sources": {"yatta": {"game_version": "73F1"}}}
-    (tmp_path / "manifest.json").write_text(json.dumps(manifest))
-    assert any("free-Primogem figures" in p for p in freshness.check(tmp_path, NOW))
+def test_update_compensation_comes_from_the_newest_notice(calendar):
+    calendar({"versions": {}, "compensation": {"7.1": 600, "7.2": 900}, "banners": []})
+    assert pulls.PER_VERSION["update compensation"] == 900
+    calendar(None)
+    assert pulls.PER_VERSION["update compensation"] == pulls.UPDATE_COMPENSATION
+
+
+def test_compensation_is_read_from_update_details_notices():
+    from irminsul.schema import Doc
+    from irminsul.sources.banners import compensation
+
+    notice = Doc.model_validate(
+        {
+            "doc_id": "notice/1",
+            "entity_id": None,
+            "kind": "official_notice",
+            "title": '"Hour of Ruin" Version 7.2 Update Details',
+            "text": "Compensation Details\nMaintenance Compensation: Primogems ×300 (60 per hour)"
+            "\nIssue Fix Compensation: Primogems ×300 (see mail)\n",
+            "release": {"status": "released"},
+            "source": {
+                "source": "notices",
+                "url": "https://x.test",
+                "tier": "official",
+                "fetched_at": "2026-11-21T00:00:00Z",
+            },
+        }
+    )
+    assert compensation([notice]) == {"7.2": 600}
 
 
 # ---- B4: words and nicknames learned from the data ---------------------------------------

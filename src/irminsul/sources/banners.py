@@ -16,6 +16,8 @@ VERSION_CADENCE_DAYS = 42
 _NOTICE = re.compile(r"Version (\d\.\d) Event Wishes Notice\s*-\s*Phase (I{1,2})\b", re.I)
 _UPDATE = re.compile(r"Version (\d\.\d) Update Details", re.I)
 _UPDATE_START = re.compile(r"Update maintenance begins (\d{4})/(\d{2})/(\d{2})")
+# "Maintenance Compensation: Primogems ×300", "Issue Fix Compensation: Primogems ×300"
+_COMPENSATION = re.compile(r"(?m)^[^\n:]*Compensation:\s*Primogems\s*[×x]\s*([\d,]+)")
 _SECTION = re.compile(r'(?m)^(?:Event Wish|Chronicled Wish) "([^"]+)"')
 _AFTER = re.compile(r"After the Version (\d\.\d) update\s*[—–-]\s*(\d{4}/\d{2}/\d{2})")
 _RANGE = re.compile(r"(\d{4}/\d{2}/\d{2}) \d{2}:\d{2}\s*[—–-]\s*(\d{4}/\d{2}/\d{2})")
@@ -88,6 +90,17 @@ def version_starts(notices: list[Doc]) -> dict[str, str]:
     return starts
 
 
+def compensation(notices: list[Doc]) -> dict[str, int]:
+    """Version -> Primogems its Update Details notice gives every player as compensation."""
+    out = {}
+    for doc in notices:
+        if title := _UPDATE.search(doc.title):
+            found = [int(n.replace(",", "")) for n in _COMPENSATION.findall(doc.text)]
+            if found:
+                out[title.group(1)] = sum(found)
+    return out
+
+
 def _estimate_start(version: str, starts: dict[str, str]) -> str:
     """A version with no Update Details yet: the one before it, plus the usual 42 days."""
     earlier = [v for v in starts if v < version]
@@ -113,7 +126,11 @@ def parse_banners(notices: list[Doc]) -> dict:
             if banner := _section(body[a:b], version, phase, known, doc.source.url):
                 banners.append(banner)
     banners.sort(key=lambda x: (x.start, x.name), reverse=True)
-    return {"versions": starts, "banners": [asdict(b) for b in banners]}
+    return {
+        "versions": starts,
+        "compensation": compensation(notices),
+        "banners": [asdict(b) for b in banners],
+    }
 
 
 def proven_live(feed: dict, now: datetime) -> dict[str, str]:

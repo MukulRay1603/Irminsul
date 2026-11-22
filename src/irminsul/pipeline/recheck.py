@@ -4,9 +4,9 @@ Every team fact and build line carries the game version it was checked for. Once
 game is newer, the build re-reads that line's source page and looks for what the line says:
 its numbers and its names.
 - Found: the line is re-stamped for the live version (`fact_checks.json`), no person needed.
-- Not found: the line is hidden from answers and the freshness check opens one issue. It comes
-  back by itself once its page says it again, or when the team re-checks it by hand (a newer
-  "checked" date in the curated file wins over the machine's verdict).
+- Not found: the line is hidden from answers. Its page is read again every week, and the line
+  comes back by itself once the page says it again (or when the curated file gets a newer
+  "checked" date). Nobody is asked to do anything: the counts go in the manifest.
 - Page unreadable (down, blocked, or rendered only in a browser): the line keeps its own
   "checked" date, which answers already show, and is tried again on the next run.
 
@@ -28,6 +28,7 @@ log = logging.getLogger("irminsul.recheck")
 
 OK, UNSURE, CHANGED = "ok", "unsure", "changed"
 UNREADABLE, UNCHECKABLE = "unreadable", "uncheckable"
+RETRY_DAYS = 7  # a hidden line's page is read again this often, so it returns on its own
 MIN_PAGE_CHARS = 500  # less than this is a shell page that needs a browser to fill it
 NAME_SHARE = 0.75  # this share of a line's names must be on the page (numbers: all of them)
 
@@ -123,6 +124,10 @@ class Line:
     @property
     def key(self) -> str:
         return hashlib.sha1(f"{self.url}\n{self.fact}".encode()).hexdigest()[:16]
+
+
+def _older_than(day: str, now: datetime, days: int) -> bool:
+    return (now.date() - datetime.fromisoformat(day).date()).days >= days
 
 
 def newest_version(text: str) -> tuple[int, int] | None:
@@ -314,6 +319,7 @@ def recheck(
             and before.get("version") == version
             and before.get("status") != UNREADABLE
             and before.get("on", "") >= line.checked
+            and not (before.get("status") == CHANGED and _older_than(before["on"], now, RETRY_DAYS))
         ):
             facts[line.key] = before
             continue
