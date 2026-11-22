@@ -54,12 +54,21 @@ class EvalItem(BaseModel):
     note: str | None = None
     # Asked in story-safe mode: the player's story point (a key of story.STORY_POINTS).
     story_until: str | None = None
+    # Answers that change with the game are looked up in the build when the test runs, never
+    # typed in (see livetests.py): e.g. {"entity": "character/mitya", "field": "element"}.
+    live: dict | None = None
+    # The last game version this item is true for; after it, the item is set aside, not failed.
+    valid_while: str | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> "EvalItem":
         if self.expect == Expect.REFUSE and self.gold_doc_ids:
             raise ValueError(f"{self.id}: refusal items cannot have gold docs")
-        if self.expect != Expect.REFUSE and not (self.must_include or self.gold_doc_ids):
+        if (
+            self.live is None
+            and self.expect != Expect.REFUSE
+            and not (self.must_include or self.gold_doc_ids)
+        ):
             raise ValueError(f"{self.id}: answerable items need must_include or gold docs")
         if any(not group for group in self.must_include):
             raise ValueError(f"{self.id}: empty must_include group")

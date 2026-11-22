@@ -154,7 +154,7 @@ def main() -> None:
             from irminsul.retrieval.index import HybridIndex
 
             index = HybridIndex.load(args.index)
-        report = evaluate(Engine(EntityStore.load(args.build), index, None, cfg))
+        report = evaluate(Engine(EntityStore.load(args.build), index, None, cfg), args.build)
     except Exception as exc:  # the gate holds the build rather than crash the job
         print(f"offline eval failed: {exc}", file=sys.stderr)
     decision = decide(old, args.build, datetime.now(UTC), report, args.max_new)

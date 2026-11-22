@@ -175,15 +175,42 @@ def artifact_items(sets: list[dict], rng: random.Random, n: int) -> list[EvalIte
     return items
 
 
+def newest(records: list[dict]) -> list[dict]:
+    """Released records from the latest version (or release day) in the build: a patch's new
+    characters and weapons always get questions, whatever the seeded sample picks."""
+    released = [r for r in records if r["release"]["status"] == "released"]
+    if any(r.get("revealed_in") for r in released):
+        top = max((r["revealed_in"] for r in released if r.get("revealed_in")), key=_version)
+        return [r for r in released if r.get("revealed_in") == top]
+    days = [r["release"].get("released_at") or "" for r in released]
+    top_day = max(days, default="")[:10]
+    return [r for r, d in zip(released, days, strict=True) if top_day and d[:10] == top_day]
+
+
+def _version(v: str) -> tuple[int, ...]:
+    return tuple(int(x) for x in v.split(".") if x.isdigit())
+
+
 def generate(build: Path, seed: int = 7) -> list[EvalItem]:
     rng = random.Random(seed)
     chars = _read(build / "characters.jsonl")
-    return (
+    weapons = _read(build / "weapons.jsonl")
+    sampled = (
         character_items(chars, rng, 12)
         + constellation_items(chars, rng, 8)
-        + weapon_items(_read(build / "weapons.jsonl"), rng, 12)
+        + weapon_items(weapons, rng, 12)
         + artifact_items(_read(build / "artifact_sets.jsonl"), rng, 8)
     )
+    # A separate generator, so adding new records never changes the seeded sample above
+    fresh_rng = random.Random(seed)
+    new_chars, new_weapons = newest(chars), newest(weapons)
+    fresh = (
+        character_items(new_chars, fresh_rng, len(new_chars))
+        + constellation_items(new_chars, fresh_rng, len(new_chars))
+        + weapon_items(new_weapons, fresh_rng, len(new_weapons))
+    )
+    seen = {i.id for i in sampled}
+    return sampled + [i for i in fresh if i.id not in seen and not seen.add(i.id)]
 
 
 def main() -> None:

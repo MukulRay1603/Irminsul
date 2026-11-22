@@ -23,6 +23,7 @@ from irminsul.pipeline.gate import normalise_name
 from irminsul.sources.banners import active, proven_live, proven_weapons, upcoming
 
 DEEP_RUN_LIMIT = timedelta(days=9)  # weekly, with two days of grace
+FALLBACK_LIMIT = timedelta(days=3)  # a source down this long needs a look; shorter heals itself
 
 
 def check(build: Path, now: datetime) -> list[str]:
@@ -54,6 +55,11 @@ def check(build: Path, now: datetime) -> list[str]:
     deep_at = manifest.get("deep_at")
     if deep_at and now - datetime.fromisoformat(deep_at) > DEEP_RUN_LIMIT:
         problems.append(f"the last deep run was {deep_at[:10]}: quests and guides may be stale")
+    for source, since in manifest.get("fallbacks", {}).items():
+        if now - datetime.fromisoformat(since) > FALLBACK_LIMIT:
+            problems.append(
+                f"{source} has been down since {since[:10]}: serving its last good copy"
+            )
     live = version_from_manifest(manifest.get("sources", {}).get("yatta", {}).get("game_version"))
     today = now.date().isoformat()
     started = [v for v, day in feed.get("versions", {}).items() if day <= today]

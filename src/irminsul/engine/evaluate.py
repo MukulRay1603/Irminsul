@@ -18,6 +18,7 @@ from irminsul.engine.engine import Engine
 from irminsul.engine.entities import EntityStore
 from irminsul.engine.guards import GuardConfig, version_from_manifest
 from irminsul.evals import Expect, load, matches
+from irminsul.livetests import resolve
 
 REFUSE_ROUTES = {
     "refuse_leak",
@@ -32,9 +33,11 @@ REFUSE_ROUTES = {
 }
 
 
-def evaluate(engine: Engine) -> dict:
+def evaluate(engine: Engine, build: Path | None = None) -> dict:
+    """Score every item; with a build, items that look answers up read them from it first."""
     rows = []
-    for item in load():
+    items, set_aside = resolve(load(), build)
+    for item in items:
         answer = engine.ask(item.question, story_until=item.story_until)
         if answer.route in ("no_llm", "no_index"):
             rows.append(
@@ -84,6 +87,7 @@ def evaluate(engine: Engine) -> dict:
             for route in sorted({r["route"] for r in rows})
         },
         "failures": [r for r in scored if r["status"] == "fail"],
+        "set_aside": set_aside,
     }
 
 
@@ -113,7 +117,7 @@ def main() -> None:
         from irminsul.engine.llm import Router
 
         llm = Router.from_config()
-    report = evaluate(Engine(store, index, llm, cfg))
+    report = evaluate(Engine(store, index, llm, cfg), args.build)
     text = json.dumps(report, indent=2)
     if args.out:
         args.out.write_text(text, encoding="utf-8")
